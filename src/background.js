@@ -1,3 +1,32 @@
+chrome.contextMenus.removeAll();
+
+//親メニュー
+var parentId = chrome.contextMenus.create({
+    "title": "syncTabClipper",
+    "type": "normal",
+    "contexts": ["all"],
+});
+//サブ１
+chrome.contextMenus.create({
+    "title": "サブ１",
+    "parentId": parentId,
+    "type": "normal",
+    "contexts": ["all"],
+    "onclick": function (info) {
+        alert("クリックされました");
+    } //ここまでonclick
+});
+//サブ２
+chrome.contextMenus.create({
+    "title": "サブ２",
+    "parentId": parentId,
+    "type": "normal",
+    "contexts": ["all"],
+    "onclick": function (info) {
+        alert("クリックされました");
+    } //ここまでonclick
+});
+
 chrome.browserAction.onClicked.addListener(function (tab) {
     var json = {
         created_at: new Date(),
