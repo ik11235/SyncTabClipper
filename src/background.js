@@ -22,6 +22,11 @@ chrome.contextMenus.create({
     }
 });
 
+function isEmpty(obj) {
+    return !Object.keys(obj).length;
+}
+
+
 chrome.contextMenus.create({
     "title": "サブ２",
     "parentId": parentId,
@@ -33,20 +38,30 @@ chrome.contextMenus.create({
 });
 
 chrome.browserAction.onClicked.addListener(function (tab) {
-    var json = {
-        created_at: new Date().getTime(),
-        tabs: []
-    };
-
-    chrome.tabs.query({currentWindow: true}, function (tabs) {
-        for (var i = 0; i < tabs.length; i++) {
-            const tab_data = {
-                url: tabs[i].url,
-                title: tabs[i].title
-            };
-            json.tabs.push(tab_data);
+    chrome.storage.sync.get(['tab_datas'], function (result) {
+        if (isEmpty(result)) {
+            result.tab_datas = [];
+        } else {
+            result = result.tab_datas;
         }
-        chrome.storage.sync.set({'tab_data': json}, function () {
+
+        var json = {
+            created_at: new Date().getTime(),
+            tabs: []
+        };
+
+        chrome.tabs.query({currentWindow: true}, function (tabs) {
+            for (var i = 0; i < tabs.length; i++) {
+                const tab_data = {
+                    url: tabs[i].url,
+                    title: tabs[i].title
+                };
+                json.tabs.push(tab_data);
+            }
+
+            result.tab_datas.push(json);
+            chrome.storage.sync.set({'tab_datas': result}, function () {
+            });
         });
     });
 });
