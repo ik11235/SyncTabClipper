@@ -15,6 +15,7 @@ chrome.browserAction.onClicked.addListener(function (tab) {
         }
         console.log('現在開いているタブの数は[' + tabs.length + ']個です');
         console.log(json);
+        chrome.storage.sync.set({'tab_data': json}, function () {
+        });
     });
-
 });
