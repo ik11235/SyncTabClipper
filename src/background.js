@@ -35,7 +35,7 @@ chrome.contextMenus.create({
 
 chrome.browserAction.onClicked.addListener(function (tab) {
     var json = {
-        created_at: new Date(),
+        created_at: new Date().getTime(),
         tabs: []
     };
 
