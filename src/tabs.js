@@ -10,7 +10,8 @@ window.onload = function () {
 
         const links = result.tab_data.tabs.map(function (page_data) {
             var domain = getDomein(page_data.url);
-            var str = `<li><img src="http://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/><a href="${page_data.url}">${page_data.title}</a></li>`;
+            // target="_blank"じゃなくて、データ削除する→newtab開くの専用関数でもいいかも
+            var str = `<li><img src="http://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/><a href="${page_data.url}" target="_blank">${page_data.title}</a></li>`;
             console.log(str);
             return str;
         }).join("\n");
