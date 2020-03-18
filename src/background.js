@@ -6,17 +6,23 @@ var parentId = chrome.contextMenus.create({
     "type": "normal",
     "contexts": ["all"],
 });
-//サブ１
+
 chrome.contextMenus.create({
-    "title": "サブ１",
+    "title": "tabページを開く",
     "parentId": parentId,
     "type": "normal",
     "contexts": ["all"],
     "onclick": function (info) {
-        alert("クリックされました");
-    } //ここまでonclick
+        // https://gist.github.com/syoichi/3747507
+        var id = chrome.runtime.id;
+        var url = chrome.runtime.getURL('tabs.html');
+        chrome.tabs.create({
+            selected: true,
+            url: url
+        });
+    }
 });
-//サブ２
+
 chrome.contextMenus.create({
     "title": "サブ２",
     "parentId": parentId,
@@ -24,7 +30,7 @@ chrome.contextMenus.create({
     "contexts": ["all"],
     "onclick": function (info) {
         alert("クリックされました");
-    } //ここまでonclick
+    }
 });
 
 chrome.browserAction.onClicked.addListener(function (tab) {
