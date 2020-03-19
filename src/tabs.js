@@ -51,20 +51,26 @@ function deleteLink(target) {
     li.parentNode.removeChild(li);
 
     const id = parentDiv.id;
-    var json = jsonFromHtml(parentDiv);
+    const json = jsonFromHtml(parentDiv);
     if (json.tabs.length <= 0) {
-        json = {};
+        chrome.storage.sync.remove(id, function () {
+            var error = chrome.runtime.lastError;
+            if (error) {
+                alert(error.message);
+            }
+        });
+    } else {
+        var save_obj = {};
+        save_obj[id] = json;
+        console.dir(save_obj);
+        chrome.storage.sync.set(save_obj, function () {
+            var error = chrome.runtime.lastError;
+            if (error) {
+                alert(error.message);
+            }
+        });
     }
 
-    var save_obj = {};
-    save_obj[id] = json;
-    console.dir(save_obj);
-    chrome.storage.sync.set(save_obj, function () {
-        var error = chrome.runtime.lastError;
-        if (error) {
-            alert(error.message);
-        }
-    });
 }
 
 function clickLinkByEventListener() {
@@ -114,3 +120,5 @@ window.onload = function () {
         }
     });
 };
+
+chrome.storage.sync.get( function (result) {console.dir(result)});
