@@ -51,7 +51,10 @@ function deleteLink(target) {
     li.parentNode.removeChild(li);
 
     const id = parentDiv.id;
-    const json = jsonFromHtml(parentDiv);
+    var json = jsonFromHtml(parentDiv);
+    if (json.tabs.length <= 0) {
+        json = {};
+    }
 
     var save_obj = {};
     save_obj[id] = json;
