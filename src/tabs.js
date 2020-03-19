@@ -88,37 +88,41 @@ window.onload = function () {
 
     chrome.storage.sync.get(["tab_length"], function (result) {
         const tab_length = gettabLengthOrZero(result);
-        if (tab_length <= 0) {
-            main.insertAdjacentHTML('afterbegin', `<div class="tabs">no item</div>`);
-        } else {
-            for (var i = 0; i < tab_length; i++) {
-                const cnt = i;
-                console.log(cnt);
+        var tab_cnt = 0;
+        for (var i = 0; i < tab_length; i++) {
+            const cnt = i;
+            console.log(cnt);
 
-                chrome.storage.sync.get([`tab_datas_${i}`], function (result) {
-                    const main = document.getElementById('main');
-                    if (!isEmpty(result)) {
-                        const tab_datas = result["tab_datas_" + cnt];
-                        const created_at = tab_datas.created_at;
-                        const tabs = tab_datas.tabs.map(function (page_data) {
-                            var domain = getDomein(page_data.url);
-                            // target="_blank"じゃなくて、データ削除する→newtab開くの専用関数でもいいかも
-                            var str = `<li><img src="https://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/><a href="#" class="tab_link" data-url="${page_data.url}" data-title="${page_data.title}">${page_data.title}</a></li>`;
-                            console.log(str);
-                            return str;
-                        }).join("\n");
+            chrome.storage.sync.get([`tab_datas_${i}`], function (result) {
+                const main = document.getElementById('main');
+                if (!isEmpty(result)) {
+                    const tab_datas = result["tab_datas_" + cnt];
+                    const created_at = tab_datas.created_at;
+                    const tabs = tab_datas.tabs.map(function (page_data) {
+                        var domain = getDomein(page_data.url);
+                        // target="_blank"じゃなくて、データ削除する→newtab開くの専用関数でもいいかも
+                        var str = `<li><img src="https://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/><a href="#" class="tab_link" data-url="${page_data.url}" data-title="${page_data.title}">${page_data.title}</a></li>`;
+                        console.log(str);
+                        return str;
+                    }).join("\n");
 
-                        main.insertAdjacentHTML('afterbegin', `<div id="tab_datas_${cnt}" class="tabs" data-created-at="${created_at}"><ul>${tabs}</ul></div>`);
+                    main.insertAdjacentHTML('afterbegin', `<div id="tab_datas_${cnt}" class="tabs" data-created-at="${created_at}"><ul>${tabs}</ul></div>`);
 
-                        const linkDoms = main.getElementsByClassName('tab_link');
-                        for (var j = 0; j < linkDoms.length; j++) {
-                            linkDoms[j].addEventListener('click', clickLinkByEventListener);
-                        }
+                    const linkDoms = main.getElementsByClassName('tab_link');
+                    for (var j = 0; j < linkDoms.length; j++) {
+                        linkDoms[j].addEventListener('click', clickLinkByEventListener);
                     }
-                });
-            }
+
+                    tab_cnt++;
+                    console.log(tab_cnt);
+                }
+            });
         }
+        console.log(tab_cnt);
+        // TODO: 非同期なのでここの分岐はうまく動かない 要修正
+        if (tab_cnt <= 0) {
+            main.insertAdjacentHTML('afterbegin', `<div class="no-tabs">no item</div>`);
+        }
+
     });
 };
-
-chrome.storage.sync.get( function (result) {console.dir(result)});
