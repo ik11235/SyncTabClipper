@@ -59,7 +59,7 @@ chrome.browserAction.onClicked.addListener(function (tab) {
                 json.tabs.push(tab_data);
             }
 
-            result.tab_datas.push(json);
+            result.tab_datas.unshift(json);
             chrome.storage.sync.set({'tab_datas': result}, function () {
                 var error = chrome.runtime.lastError;
                 if (error) {
