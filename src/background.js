@@ -26,31 +26,22 @@ function isEmpty(obj) {
     return !Object.keys(obj).length;
 }
 
-
-chrome.contextMenus.create({
-    "title": "サブ２",
-    "parentId": parentId,
-    "type": "normal",
-    "contexts": ["all"],
-    "onclick": function (info) {
-        alert("クリックされました");
+function gettabLengthOrZero(result) {
+    if (Number.isInteger(result.tab_length)) {
+        return result.tab_length;
+    } else {
+        return 0;
     }
-});
+}
 
 chrome.browserAction.onClicked.addListener(function (tab) {
-    chrome.storage.sync.get(['tab_datas'], function (result) {
-        if (isEmpty(result)) {
-            result.tab_datas = [];
-        } else {
-            result = result.tab_datas;
-        }
-
-        var json = {
-            created_at: new Date().getTime(),
-            tabs: []
-        };
-
+    chrome.storage.sync.get(["tab_length"], function (result) {
+        const tab_length = gettabLengthOrZero(result);
         chrome.tabs.query({currentWindow: true}, function (tabs) {
+            var json = {
+                created_at: new Date().getTime(),
+                tabs: []
+            };
             for (var i = 0; i < tabs.length; i++) {
                 const tab_data = {
                     url: tabs[i].url,
@@ -58,24 +49,34 @@ chrome.browserAction.onClicked.addListener(function (tab) {
                 };
                 json.tabs.push(tab_data);
             }
-
-            result.tab_datas.unshift(json);
-            chrome.storage.sync.set({'tab_datas': result}, function () {
+            const key_str = `tab_datas_${tab_length}`;
+            var save_obj = {};
+            save_obj[key_str] = json;
+            chrome.storage.sync.set(save_obj, function () {
                 var error = chrome.runtime.lastError;
                 if (error) {
                     alert(error.message);
                 } else {
-                    // errorでないときのみタブを閉じる
-                    chrome.tabs.query({currentWindow: true}, function (tabs) {
-                        chrome.tabs.create({url: chrome.runtime.getURL('tabs.html')}, function () {
-                            for (var i = 0; i < tabs.length; i++) {
-                                chrome.tabs.remove(tabs[i].id, function () {
+                    chrome.storage.sync.set({tab_length: tab_length + 1}, function () {
+                        var error = chrome.runtime.lastError;
+                        if (error) {
+                            alert(error.message);
+                        } else {
+                            // errorでないときのみタブを閉じる
+                            chrome.tabs.query({currentWindow: true}, function (tabs) {
+                                chrome.tabs.create({url: chrome.runtime.getURL('tabs.html')}, function () {
+                                    for (var i = 0; i < tabs.length; i++) {
+                                        chrome.tabs.remove(tabs[i].id, function () {
+                                        });
+                                    }
                                 });
-                            }
-                        });
+                            });
+                        }
                     });
                 }
             });
         });
     });
 });
+
+//chrome.storage.sync.get(function (result) {console.log(result)});
