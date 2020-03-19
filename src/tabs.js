@@ -7,11 +7,20 @@ function isEmpty(obj) {
     return !Object.keys(obj).length;
 }
 
+function allClear() {
+    chrome.storage.sync.clear(function () {
+        alert('すべてのデータを削除しました');
+    });
+}
+
 window.onload = function () {
+    const all_clear = document.getElementById('all_clear');
+    all_clear.addEventListener('click', allClear);
+
     chrome.storage.sync.get(['tab_datas'], function (result) {
         const main = document.getElementById('main');
         if (!isEmpty(result)) {
-            const tab_datas =  result.tab_datas;
+            const tab_datas = result.tab_datas;
             console.dir(result);
 
             const tabs = tab_datas.tab_datas.map(function (tab) {
