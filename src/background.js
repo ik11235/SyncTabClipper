@@ -61,14 +61,20 @@ chrome.browserAction.onClicked.addListener(function (tab) {
 
             result.tab_datas.push(json);
             chrome.storage.sync.set({'tab_datas': result}, function () {
-                chrome.tabs.query({currentWindow: true}, function (tabs) {
-                    chrome.tabs.create({url: chrome.runtime.getURL('tabs.html')}, function () {
-                        for (var i = 0; i < tabs.length; i++) {
-                            chrome.tabs.remove(tabs[i].id, function () {
-                            });
-                        }
+                var error = chrome.runtime.lastError;
+                if (error) {
+                    alert(error.message);
+                } else {
+                    // errorでないときのみタブを閉じる
+                    chrome.tabs.query({currentWindow: true}, function (tabs) {
+                        chrome.tabs.create({url: chrome.runtime.getURL('tabs.html')}, function () {
+                            for (var i = 0; i < tabs.length; i++) {
+                                chrome.tabs.remove(tabs[i].id, function () {
+                                });
+                            }
+                        });
                     });
-                });
+                }
             });
         });
     });
