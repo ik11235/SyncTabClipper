@@ -141,7 +141,10 @@ window.onload = function () {
         Promise.all(promiseArray).then((result) => {
             const is_tabs_exists = (result.filter(flag => flag === true).length > 0);
             if (!is_tabs_exists) {
-                main.insertAdjacentHTML('afterbegin', `<div class="no-tabs">no item</div>`);
+                main.insertAdjacentHTML('afterbegin', `
+<div class="uk-eader">
+<h3 class="uk-title uk-margin-remove-bottom no-tabs">保存済みのタブはありません。</h3></div>
+`);
             }
         });
     });
