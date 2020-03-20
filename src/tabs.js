@@ -84,6 +84,11 @@ function clickLinkByEventListener() {
     });
 }
 
+function deleteLinkByEventListener() {
+    const target = this;
+    deleteLink(target);
+}
+
 function setLinkDom(key) {
     return new Promise(function (resolve) {
         chrome.storage.sync.get([key], function (result) {
@@ -94,7 +99,11 @@ function setLinkDom(key) {
                 const tabs = tab_datas.tabs.map(function (page_data) {
                     var domain = getDomein(page_data.url);
                     // target="_blank"じゃなくて、データ削除する→newtab開くの専用関数でもいいかも
-                    var str = `<li><img src="https://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/><a href="#" class="tab_link" data-url="${page_data.url}" data-title="${page_data.title}">${page_data.title}</a></li>`;
+                    var str = `<li>
+<img src="https://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/>
+<a href="#" class="tab_link" data-url="${page_data.url}" data-title="${page_data.title}">${page_data.title}</a>
+<a href="#" class="tab_close"><span class="uk-icon-link" uk-icon="icon: close; ratio: 0.9"></span></a>
+</li>`;
                     console.log(str);
                     return str;
                 }).join("\n");
@@ -116,6 +125,12 @@ function setLinkDom(key) {
                 for (var j = 0; j < linkDoms.length; j++) {
                     linkDoms[j].addEventListener('click', clickLinkByEventListener);
                 }
+
+                const deleteLinkDoms = main.getElementsByClassName('tab_close');
+                for (var j = 0; j < deleteLinkDoms.length; j++) {
+                    deleteLinkDoms[j].addEventListener('click', deleteLinkByEventListener);
+                }
+
                 resolve(true);
             } else {
                 resolve(false);
