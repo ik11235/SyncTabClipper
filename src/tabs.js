@@ -58,6 +58,8 @@ function deleteLink(target) {
             if (error) {
                 alert(error.message);
             }
+            // タブが0になった場合、現在表示中のdomも削除する
+            parentDiv.parentNode.removeChild(parentDiv);
         });
     } else {
         var save_obj = {};
