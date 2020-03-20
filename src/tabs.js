@@ -23,6 +23,41 @@ function allClear() {
     }
 }
 
+function getSyncStorage(key) {
+    return new Promise((resolve) => {
+        chrome.storage.sync.get([key], (item) => {
+            resolve(item[key]);
+        });
+    });
+}
+
+
+function exportJson(export_text_dom) {
+    console.log("start export");
+
+    export_text_dom = document.getElementById("export_body");
+    chrome.storage.sync.get(["tab_length"], function (result) {
+        const tab_length = gettabLengthOrZero(result);
+        let promiseArray = [];
+
+        for (var x = 0; x < tab_length; x++) {
+            const key = `tab_datas_${x}`;
+            promiseArray.push(getSyncStorage(key))
+        }
+
+        Promise.all(promiseArray).then((result) => {
+            console.dir(result);
+
+            const sort_result = result.filter(Boolean).filter(data => (data.tabs.length > 0)).sort(function (a, b) {
+                return b.created_at - a.created_at;
+            });
+            console.dir(sort_result);
+
+            export_text_dom.value = JSON.stringify(sort_result);
+        });
+    });
+}
+
 function jsonFromHtml(dom) {
     const created_at = dom.getAttribute("data-created-at");
 
@@ -139,6 +174,8 @@ function setLinkDom(key) {
 window.onload = function () {
     const all_clear = document.getElementById('all_clear');
     all_clear.addEventListener('click', allClear);
+    const export_link = document.getElementById('export_link');
+    export_link.addEventListener('click', exportJson);
 
     chrome.storage.sync.get(["tab_length"], function (result) {
         const tab_length = gettabLengthOrZero(result);
