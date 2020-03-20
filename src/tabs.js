@@ -98,8 +98,19 @@ function setLinkDom(key) {
                     console.log(str);
                     return str;
                 }).join("\n");
-
-                main.insertAdjacentHTML('afterbegin', `<div id="${key}" class="tabs" data-created-at="${created_at}"><ul>${tabs}</ul></div>`);
+                const created_date = new Date(created_at);
+                console.log(created_date);
+                const insertHtml = `
+<div id="${key}" class="tabs uk-card-default" data-created-at="${created_at}">
+<div class="uk-card-header">
+<h3 class="uk-card-title uk-margin-remove-bottom">${tab_datas.tabs.length}個のタブ</h3>
+<p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="${created_date.toISOString()}">${created_date}</time></p>
+</div>
+<div class="uk-card-body">
+<ul>${tabs}</ul>
+</div>
+</div>`;
+                main.insertAdjacentHTML('afterbegin', insertHtml);
 
                 const linkDoms = main.getElementsByClassName('tab_link');
                 for (var j = 0; j < linkDoms.length; j++) {
