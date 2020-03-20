@@ -44,9 +44,7 @@ function jsonFromHtml(dom) {
 }
 
 function deleteLink(target) {
-    console.dir(target);
     const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
-    //console.dir(parentDiv);
     // 先にsyncに保存済みのデータを消したいがDom→JSONがやりにくくなる
     // いったん、DOM消しを先にする
     const li = target.parentNode;
@@ -64,7 +62,6 @@ function deleteLink(target) {
     } else {
         var save_obj = {};
         save_obj[id] = json;
-        console.dir(save_obj);
         chrome.storage.sync.set(save_obj, function () {
             var error = chrome.runtime.lastError;
             if (error) {
@@ -77,7 +74,6 @@ function deleteLink(target) {
 
 function clickLinkByEventListener() {
     const target = this;
-    console.dir(target);
     var url = target.getAttribute("data-url");
     chrome.tabs.create({url: url, active: false}, function () {
         deleteLink(target);
@@ -104,11 +100,9 @@ function setLinkDom(key) {
 <a href="#" class="tab_link" data-url="${page_data.url}" data-title="${page_data.title}">${page_data.title}</a>
 <a href="#" class="tab_close"><span class="uk-icon-link" uk-icon="icon: close; ratio: 0.9"></span></a>
 </li>`;
-                    console.log(str);
                     return str;
                 }).join("\n");
                 const created_date = new Date(parseInt(created_at));
-                console.log(created_date);
                 const insertHtml = `
 <div id="${key}" class="tabs uk-card-default" data-created-at="${created_at}">
 <div class="uk-card-header">

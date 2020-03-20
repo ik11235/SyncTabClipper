@@ -78,5 +78,3 @@ chrome.browserAction.onClicked.addListener(function (tab) {
         });
     });
 });
-
-//chrome.storage.sync.get(function (result) {console.log(result)});
