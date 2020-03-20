@@ -98,7 +98,7 @@ function setLinkDom(key) {
                     console.log(str);
                     return str;
                 }).join("\n");
-                const created_date = new Date(created_at);
+                const created_date = new Date(parseInt(created_at));
                 console.log(created_date);
                 const insertHtml = `
 <div id="${key}" class="tabs uk-card-default" data-created-at="${created_at}">
