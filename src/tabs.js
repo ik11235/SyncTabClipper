@@ -16,9 +16,11 @@ function gettabLengthOrZero(result) {
 }
 
 function allClear() {
-    chrome.storage.sync.clear(function () {
-        alert('すべてのデータを削除しました');
-    });
+    if (window.confirm('保存したすべてのタブを削除します。よろしいですか？')) {
+        chrome.storage.sync.clear(function () {
+            alert('すべてのデータを削除しました');
+        });
+    }
 }
 
 function jsonFromHtml(dom) {
