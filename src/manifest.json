@@ -2,7 +2,7 @@
   "name": "SyncTabClipper",
   "version": "0.0.2",
   "manifest_version": 2,
-  "description": "chromeのタブを1つにまとめて、メモリ消費を抑えます。さらにchromeのアカウントに紐付いてデータを保存するため、複数の端末で同じように保存・保存したデータの読み込みができます。",
+  "description": "開いているタブを1つにまとめて、メモリ消費を抑えます。アカウントごとにデータは同期して複数端末で同じ記録を使えます。",
   "permissions": [
     "tabs",
     "storage",
