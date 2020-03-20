@@ -5,15 +5,42 @@
     <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
     <title>syncTabCliper</title>
     <script type="text/javascript" src="./tabs.js"></script>
+    <link rel="stylesheet" href="css/uikit.min.css"/>
+    <script src="js/uikit.min.js"></script>
+    <script src="js/uikit-icons.min.js"></script>
 </head>
 <body>
-<div id="header">
-    メニュー
-    <a href="#" id="all_clear">すべてのデータを削除する</a>
-</div>
-<div id="main">
+<div class="uk-container">
+    <div class="uk-grid">
+        <div class="uk-width-1-1">
+            <div id="header">
+                <h1 class='uk-heading-primary uk-heading-divider'>
+                    <img src="images/icon.svg" width="32" height="32"/>
+                    SyncTabClipper
+                </h1>
+            </div>
+        </div>
+    </div>
 
+    <div class="uk-grid main-contents">
+        <div class="uk-width-expand" id="main"></div>
+        <aside class="uk-width-auto">
+            <div class="uk-card uk-card-default uk-card-body">
+                <ul class="uk-nav-default uk-nav-parent-icon" uk-nav>
+                    <li class="uk-nav-header">メニュー</li>
+                    <li>
+                        <a href="#" id="all_clear"><span class="uk-margin-small-right" uk-icon="icon: trash"></span>
+                            すべてのデータを削除する
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <a href="#"></a>
+        </aside>
+    </div>
 </div>
+
 <div id="footer"></div>
 </body>
 </html>
