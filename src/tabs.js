@@ -84,47 +84,54 @@ function clickLinkByEventListener() {
     });
 }
 
+function setLinkDom(key) {
+    return new Promise(function (resolve) {
+        chrome.storage.sync.get([key], function (result) {
+            const main = document.getElementById('main');
+            if (!isEmpty(result)) {
+                const tab_datas = result[key];
+                const created_at = tab_datas.created_at;
+                const tabs = tab_datas.tabs.map(function (page_data) {
+                    var domain = getDomein(page_data.url);
+                    // target="_blank"じゃなくて、データ削除する→newtab開くの専用関数でもいいかも
+                    var str = `<li><img src="https://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/><a href="#" class="tab_link" data-url="${page_data.url}" data-title="${page_data.title}">${page_data.title}</a></li>`;
+                    console.log(str);
+                    return str;
+                }).join("\n");
+
+                main.insertAdjacentHTML('afterbegin', `<div id="${key}" class="tabs" data-created-at="${created_at}"><ul>${tabs}</ul></div>`);
+
+                const linkDoms = main.getElementsByClassName('tab_link');
+                for (var j = 0; j < linkDoms.length; j++) {
+                    linkDoms[j].addEventListener('click', clickLinkByEventListener);
+                }
+                resolve(true);
+            } else {
+                resolve(false);
+            }
+        });
+    });
+}
+
+
 window.onload = function () {
     const all_clear = document.getElementById('all_clear');
     all_clear.addEventListener('click', allClear);
 
     chrome.storage.sync.get(["tab_length"], function (result) {
         const tab_length = gettabLengthOrZero(result);
-        var tab_cnt = 0;
+        let promiseArray = [];
+
         for (var i = 0; i < tab_length; i++) {
-            const cnt = i;
-            console.log(cnt);
-
-            chrome.storage.sync.get([`tab_datas_${i}`], function (result) {
-                const main = document.getElementById('main');
-                if (!isEmpty(result)) {
-                    const tab_datas = result["tab_datas_" + cnt];
-                    const created_at = tab_datas.created_at;
-                    const tabs = tab_datas.tabs.map(function (page_data) {
-                        var domain = getDomein(page_data.url);
-                        // target="_blank"じゃなくて、データ削除する→newtab開くの専用関数でもいいかも
-                        var str = `<li><img src="https://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/><a href="#" class="tab_link" data-url="${page_data.url}" data-title="${page_data.title}">${page_data.title}</a></li>`;
-                        console.log(str);
-                        return str;
-                    }).join("\n");
-
-                    main.insertAdjacentHTML('afterbegin', `<div id="tab_datas_${cnt}" class="tabs" data-created-at="${created_at}"><ul>${tabs}</ul></div>`);
-
-                    const linkDoms = main.getElementsByClassName('tab_link');
-                    for (var j = 0; j < linkDoms.length; j++) {
-                        linkDoms[j].addEventListener('click', clickLinkByEventListener);
-                    }
-
-                    tab_cnt++;
-                    console.log(tab_cnt);
-                }
-            });
-        }
-        console.log(tab_cnt);
-        // TODO: 非同期なのでここの分岐はうまく動かない 要修正
-        if (tab_cnt <= 0) {
-            main.insertAdjacentHTML('afterbegin', `<div class="no-tabs">no item</div>`);
+            const key = `tab_datas_${i}`;
+            promiseArray.push(setLinkDom(key))
         }
 
+        Promise.all(promiseArray).then((result) => {
+            const is_tabs_exists = (result.filter(flag => flag === true).length > 0);
+            if (!is_tabs_exists) {
+                main.insertAdjacentHTML('afterbegin', `<div class="no-tabs">no item</div>`);
+            }
+        });
     });
 };
