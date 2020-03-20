@@ -45,7 +45,7 @@ function jsonFromHtml(dom) {
 
 function deleteLink(target) {
     console.dir(target);
-    const parentDiv = target.parentNode.parentNode.parentNode;
+    const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
     //console.dir(parentDiv);
     // 先にsyncに保存済みのデータを消したいがDom→JSONがやりにくくなる
     // いったん、DOM消しを先にする
