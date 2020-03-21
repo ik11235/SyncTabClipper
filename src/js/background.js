@@ -46,7 +46,7 @@ chrome.browserAction.onClicked.addListener(function (tab) {
                     alert(error.message);
                 } else {
                     chrome.storage.sync.set({tab_length: tab_length + 1}, function () {
-                        var error = chrome.runtime.lastError;
+                        const error = chrome.runtime.lastError;
                         if (error) {
                             alert(error.message);
                         } else {

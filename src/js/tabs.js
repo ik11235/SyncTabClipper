@@ -126,7 +126,7 @@ window.onload = function () {
         const json = jsonFromHtml(parentDiv);
         if (json.tabs.length <= 0) {
             chrome.storage.sync.remove(id, function () {
-                var error = chrome.runtime.lastError;
+                const error = chrome.runtime.lastError;
                 if (error) {
                     alert(error.message);
                 }
@@ -137,7 +137,7 @@ window.onload = function () {
             var save_obj = {};
             save_obj[id] = json;
             chrome.storage.sync.set(save_obj, function () {
-                var error = chrome.runtime.lastError;
+                const error = chrome.runtime.lastError;
                 if (error) {
                     alert(error.message);
                 }

@@ -30,7 +30,7 @@ function allClear() {
 function getSyncStorage(key) {
     return new Promise((resolve, reject) => {
         chrome.storage.sync.get([key], (item) => {
-            var error = chrome.runtime.lastError;
+            const error = chrome.runtime.lastError;
             if (error) {
                 reject(error);
             } else {
@@ -45,7 +45,7 @@ function setSyncStorage(key, value) {
     set_obj[key] = value;
     return new Promise((resolve, reject) => {
         chrome.storage.sync.set(set_obj, (item) => {
-            var error = chrome.runtime.lastError;
+            const error = chrome.runtime.lastError;
             if (error) {
                 reject(error);
             } else {
