@@ -22,18 +22,6 @@ chrome.contextMenus.create({
     }
 });
 
-function isEmpty(obj) {
-    return !Object.keys(obj).length;
-}
-
-function gettabLengthOrZero(result) {
-    if (Number.isInteger(result.tab_length)) {
-        return result.tab_length;
-    } else {
-        return 0;
-    }
-}
-
 chrome.browserAction.onClicked.addListener(function (tab) {
     chrome.storage.sync.get(["tab_length"], function (result) {
         const tab_length = gettabLengthOrZero(result);
