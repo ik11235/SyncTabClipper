@@ -48,6 +48,19 @@ function getSyncStorage(key) {
     });
 }
 
+function createTabs(properties) {
+    return new Promise((resolve, reject) => {
+        chrome.tabs.create(properties, () => {
+            const error = chrome.runtime.lastError;
+            if (error) {
+                reject(error);
+            } else {
+                resolve();
+            }
+        });
+    });
+}
+
 function setSyncStorage(key, value) {
     let set_obj = {};
     set_obj[key] = value;
