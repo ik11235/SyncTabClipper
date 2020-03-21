@@ -1,26 +1,29 @@
-chrome.contextMenus.removeAll();
+(function () {
+    // contextMenusに関する操作
+    chrome.contextMenus.removeAll();
 
-//親メニュー
-const parentId = chrome.contextMenus.create({
-    "title": "syncTabClipper",
-    "type": "normal",
-    "contexts": ["all"],
-});
+    //親メニュー
+    const parentId = chrome.contextMenus.create({
+        "title": "syncTabClipper",
+        "type": "normal",
+        "contexts": ["all"],
+    });
 
-chrome.contextMenus.create({
-    "title": "tabページを開く",
-    "parentId": parentId,
-    "type": "normal",
-    "contexts": ["all"],
-    "onclick": function () {
-        // https://gist.github.com/syoichi/3747507
-        const url = chrome.runtime.getURL('tabs.html');
-        chrome.tabs.create({
-            selected: true,
-            url: url
-        });
-    }
-});
+    chrome.contextMenus.create({
+        "title": "tabページを開く",
+        "parentId": parentId,
+        "type": "normal",
+        "contexts": ["all"],
+        "onclick": function () {
+            // https://gist.github.com/syoichi/3747507
+            const url = chrome.runtime.getURL('tabs.html');
+            chrome.tabs.create({
+                selected: true,
+                url: url
+            });
+        }
+    });
+}());
 
 chrome.browserAction.onClicked.addListener(function () {
     chrome.storage.sync.get(["tab_length"], function (result) {
