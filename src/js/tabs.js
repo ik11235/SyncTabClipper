@@ -57,27 +57,28 @@ window.onload = function () {
                         const created_at = toNumber(tab_datas.created_at);
                         const tabs = tab_datas.tabs.map(function (page_data) {
                             const domain = getDomein(page_data.url);
-                            return `<li>
-<img src="https://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/>
-<a href="#" class="tab_link" data-url="${page_data.url}" data-title="${page_data.title}">${page_data.title}</a>
-<a href="#" class="tab_close"><span class="uk-icon-link" uk-icon="icon: close; ratio: 0.9"></span></a>
+                            return `
+<li>
+    <img src="https://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/>
+    <a href="#" class="tab_link" data-url="${page_data.url}" data-title="${page_data.title}">${page_data.title}</a>
+    <a href="#" class="tab_close"><span class="uk-icon-link" uk-icon="icon: close; ratio: 0.9"></span></a>
 </li>`;
                         }).join("\n");
                         const created_date = new Date(created_at);
                         const insertHtml = `
 <div id="${key}" class="tabs uk-card-default" data-created-at="${created_at}">
-<div class="uk-card-header">
-<h3 class="uk-card-title uk-margin-remove-bottom">${tab_datas.tabs.length}個のタブ</h3>
-<p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="${created_date.toISOString()}">${created_date}</time></p>
-<div class="uk-grid">
-        <a href="#" class="all_tab_link" class="uk-width-expand">すべてのリンクを開く</a>
-        <a href="#" class="all_tab_delete" class="uk-width-expand">すべてのリンクを閉じる</a>
-        <div class="uk-width-4-10"></div>
-</div>
-</div>
-<div class="uk-card-body">
-<ul>${tabs}</ul>
-</div>
+    <div class="uk-card-header">
+        <h3 class="uk-card-title uk-margin-remove-bottom">${tab_datas.tabs.length}個のタブ</h3>
+        <p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="${created_date.toISOString()}">${created_date}</time></p>
+        <div class="uk-grid">
+            <a href="#" class="all_tab_link" class="uk-width-expand">すべてのリンクを開く</a>
+            <a href="#" class="all_tab_delete" class="uk-width-expand">すべてのリンクを閉じる</a>
+            <div class="uk-width-4-10"></div>
+        </div>
+    </div>
+    <div class="uk-card-body">
+        <ul>${tabs}</ul>
+    </div>
 </div>`;
                         main.insertAdjacentHTML('afterbegin', insertHtml);
                         const this_card_dom = document.getElementById(key);
@@ -225,7 +226,8 @@ window.onload = function () {
             if (!is_tabs_exists) {
                 main.insertAdjacentHTML('afterbegin', `
 <div class="uk-eader">
-<h3 class="uk-title uk-margin-remove-bottom no-tabs">保存済みのタブはありません。</h3></div>
+    <h3 class="uk-title uk-margin-remove-bottom no-tabs">保存済みのタブはありません。</h3>
+</div>
 `);
             }
         });
