@@ -12,7 +12,7 @@ chrome.contextMenus.create({
     "parentId": parentId,
     "type": "normal",
     "contexts": ["all"],
-    "onclick": function (info) {
+    "onclick": function () {
         // https://gist.github.com/syoichi/3747507
         const url = chrome.runtime.getURL('tabs.html');
         chrome.tabs.create({
@@ -22,7 +22,7 @@ chrome.contextMenus.create({
     }
 });
 
-chrome.browserAction.onClicked.addListener(function (tab) {
+chrome.browserAction.onClicked.addListener(function () {
     chrome.storage.sync.get(["tab_length"], function (result) {
         const tab_length = gettabLengthOrZero(result);
         chrome.tabs.query({currentWindow: true}, function (tabs) {
