@@ -8,7 +8,11 @@ function isEmpty(obj) {
 }
 
 function gettabLengthOrZero(result) {
-    if (Number.isInteger(result.tab_length)) {
+    if (!result) {
+        return 0;
+    } else if (Number.isInteger(result)) {
+        return result;
+    } else if (Number.isInteger(result.tab_length)) {
         return result.tab_length;
     } else {
         return 0;
@@ -21,6 +25,83 @@ function allClear() {
             alert('すべてのデータを削除しました');
         });
     }
+}
+
+function getSyncStorage(key) {
+    return new Promise((resolve, reject) => {
+        chrome.storage.sync.get([key], (item) => {
+            var error = chrome.runtime.lastError;
+            if (error) {
+                reject(error);
+            } else {
+                resolve(item[key]);
+            }
+        });
+    });
+}
+
+function setSyncStorage(key, value) {
+    var set_obj = {};
+    set_obj[key] = value;
+    return new Promise((resolve, reject) => {
+        chrome.storage.sync.set(set_obj, (item) => {
+            var error = chrome.runtime.lastError;
+            if (error) {
+                reject(error);
+            } else {
+                resolve(true);
+            }
+        });
+    });
+}
+
+function exportJson() {
+    export_text_dom = document.getElementById("export_body");
+    chrome.storage.sync.get(["tab_length"], function (result) {
+        const tab_length = gettabLengthOrZero(result);
+        let promiseArray = [];
+
+        for (var x = 0; x < tab_length; x++) {
+            const key = `tab_datas_${x}`;
+            promiseArray.push(getSyncStorage(key))
+        }
+
+        Promise.all(promiseArray).then((result) => {
+            console.dir(result);
+
+            const sort_result = result.filter(Boolean).filter(data => (data.tabs.length > 0)).sort(function (a, b) {
+                return b.created_at - a.created_at;
+            });
+            console.dir(sort_result);
+
+            export_text_dom.value = JSON.stringify(sort_result);
+        });
+    });
+}
+
+function importJson() {
+    import_text_dom = document.getElementById("import_body");
+    const json = JSON.parse(import_text_dom.value);
+    (async () => {
+        const tab_length_result = await getSyncStorage("tab_length");
+        const tab_length = gettabLengthOrZero(tab_length_result);
+        let promiseArray = [];
+        var idx = tab_length;
+        json.reverse().forEach((json_arr) => {
+            const key = `tab_datas_${idx}`;
+            promiseArray.push(setSyncStorage(key, json_arr));
+            idx += 1;
+        });
+
+        Promise.all(promiseArray).then((result) => {
+            chrome.storage.sync.set({tab_length: tab_length + json.length}, function () {
+                chrome.tabs.reload({bypassCache: true}, function () {
+                });
+            });
+        }).catch(function (reason) {
+            alert("データのインポートに失敗しました。" + reason);
+        });
+    })();
 }
 
 function jsonFromHtml(dom) {
@@ -138,6 +219,10 @@ function setLinkDom(key) {
 window.onload = function () {
     const all_clear = document.getElementById('all_clear');
     all_clear.addEventListener('click', allClear);
+    const export_link = document.getElementById('export_link');
+    export_link.addEventListener('click', exportJson);
+    const import_link = document.getElementById('import_link');
+    import_link.addEventListener('click', importJson);
 
     chrome.storage.sync.get(["tab_length"], function (result) {
         const tab_length = gettabLengthOrZero(result);
