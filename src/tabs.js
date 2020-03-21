@@ -67,12 +67,9 @@ function exportJson() {
         }
 
         Promise.all(promiseArray).then((result) => {
-            console.dir(result);
-
             const sort_result = result.filter(Boolean).filter(data => (data.tabs.length > 0)).sort(function (a, b) {
                 return b.created_at - a.created_at;
             });
-            console.dir(sort_result);
 
             export_text_dom.value = JSON.stringify(sort_result);
         });
