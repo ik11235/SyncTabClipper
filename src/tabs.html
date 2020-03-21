@@ -33,14 +33,13 @@
                         </a>
                     </li>
                     <li>
-                        <a href="#" id="export_link"><span class="uk-margin-small-right"
-                                                                                    uk-icon="icon: pull"></span>
-                            export
-                        </a>
-                        <label for="export_body"></label>
-                        <textarea readonly id="export_body"></textarea>
+                    <li class="uk-parent">
+                        <a href="#"><span class="uk-margin-small-right" uk-icon="icon: pull"></span>export</a>
+                        <ul class="uk-nav-sub">
+                            <li><label for="export_body"></label><textarea readonly id="export_body"></textarea></li>
+                            <li><button id="export_link">export実行</button></li>
+                        </ul>
                     </li>
-
                 </ul>
             </div>
 
