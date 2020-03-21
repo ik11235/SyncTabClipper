@@ -96,7 +96,6 @@ function setLinkDom(key) {
                 const created_at = tab_datas.created_at;
                 const tabs = tab_datas.tabs.map(function (page_data) {
                     var domain = getDomein(page_data.url);
-                    // target="_blank"じゃなくて、データ削除する→newtab開くの専用関数でもいいかも
                     var str = `<li>
 <img src="https://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/>
 <a href="#" class="tab_link" data-url="${page_data.url}" data-title="${page_data.title}">${page_data.title}</a>
