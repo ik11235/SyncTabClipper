@@ -41,7 +41,7 @@ function getSyncStorage(key) {
 }
 
 function setSyncStorage(key, value) {
-    var set_obj = {};
+    let set_obj = {};
     set_obj[key] = value;
     return new Promise((resolve, reject) => {
         chrome.storage.sync.set(set_obj, (item) => {

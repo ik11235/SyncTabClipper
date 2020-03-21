@@ -26,7 +26,7 @@ chrome.browserAction.onClicked.addListener(function (tab) {
     chrome.storage.sync.get(["tab_length"], function (result) {
         const tab_length = gettabLengthOrZero(result);
         chrome.tabs.query({currentWindow: true}, function (tabs) {
-            var json = {
+            let json = {
                 created_at: new Date().getTime(),
                 tabs: []
             };
@@ -38,10 +38,10 @@ chrome.browserAction.onClicked.addListener(function (tab) {
                 json.tabs.push(tab_data);
             }
             const key_str = `tab_datas_${tab_length}`;
-            var save_obj = {};
+            let save_obj = {};
             save_obj[key_str] = json;
             chrome.storage.sync.set(save_obj, function () {
-                var error = chrome.runtime.lastError;
+                const error = chrome.runtime.lastError;
                 if (error) {
                     alert(error.message);
                 } else {
