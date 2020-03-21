@@ -225,7 +225,7 @@ window.onload = function () {
             const main = document.getElementById('main');
             if (!is_tabs_exists) {
                 main.insertAdjacentHTML('afterbegin', `
-<div class="uk-eader">
+<div class="uk-header">
     <h3 class="uk-title uk-margin-remove-bottom no-tabs">保存済みのタブはありません。</h3>
 </div>
 `);
