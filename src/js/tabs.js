@@ -30,14 +30,14 @@ window.onload = function () {
             const tab_length_result = await getSyncStorage("tab_length");
             const tab_length = gettabLengthOrZero(tab_length_result);
             let promiseArray = [];
-            var idx = tab_length;
+            let idx = tab_length;
             json.reverse().forEach((json_arr) => {
                 const key = `tab_datas_${idx}`;
                 promiseArray.push(setSyncStorage(key, json_arr));
                 idx += 1;
             });
 
-            Promise.all(promiseArray).then((result) => {
+            Promise.all(promiseArray).then(() => {
                 chrome.storage.sync.set({tab_length: tab_length + json.length}, function () {
                     chrome.tabs.reload({bypassCache: true}, function () {
                     });
@@ -97,7 +97,7 @@ window.onload = function () {
     function jsonFromHtml(dom) {
         const created_at = toNumber(dom.getAttribute("data-created-at"));
 
-        var json = {
+        let json = {
             created_at: created_at,
             tabs: []
         };
@@ -133,7 +133,7 @@ window.onload = function () {
                 parentDiv.parentNode.removeChild(parentDiv);
             });
         } else {
-            var save_obj = {};
+            let save_obj = {};
             save_obj[id] = json;
             chrome.storage.sync.set(save_obj, function () {
                 const error = chrome.runtime.lastError;
@@ -147,7 +147,7 @@ window.onload = function () {
 
     function clickLinkByEventListener() {
         const target = this;
-        var url = target.getAttribute("data-url");
+        const url = target.getAttribute("data-url");
         chrome.tabs.create({url: url, active: false}, function () {
             deleteLink(target);
         });
