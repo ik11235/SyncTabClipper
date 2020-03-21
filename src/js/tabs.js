@@ -3,7 +3,7 @@ window.onload = function () {
     document.getElementsByTagName("h1")[0].innerHTML = document.getElementsByTagName("h1")[0].innerHTML.replace("SyncTabClipper", extension_name);
 
     function exportJson() {
-        export_text_dom = document.getElementById("export_body");
+        const export_text_dom = document.getElementById("export_body");
         chrome.storage.sync.get(["tab_length"], function (result) {
             const tab_length = gettabLengthOrZero(result);
             let promiseArray = [];
@@ -24,7 +24,7 @@ window.onload = function () {
     }
 
     function importJson() {
-        import_text_dom = document.getElementById("import_body");
+        const import_text_dom = document.getElementById("import_body");
         const json = JSON.parse(import_text_dom.value);
         (async () => {
             const tab_length_result = await getSyncStorage("tab_length");
@@ -56,13 +56,12 @@ window.onload = function () {
                     const tab_datas = result[key];
                     const created_at = toNumber(tab_datas.created_at);
                     const tabs = tab_datas.tabs.map(function (page_data) {
-                        var domain = getDomein(page_data.url);
-                        var str = `<li>
+                        const domain = getDomein(page_data.url);
+                        return `<li>
 <img src="https://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/>
 <a href="#" class="tab_link" data-url="${page_data.url}" data-title="${page_data.title}">${page_data.title}</a>
 <a href="#" class="tab_close"><span class="uk-icon-link" uk-icon="icon: close; ratio: 0.9"></span></a>
 </li>`;
-                        return str;
                     }).join("\n");
                     const created_date = new Date(created_at);
                     const insertHtml = `
@@ -177,6 +176,7 @@ window.onload = function () {
 
         Promise.all(promiseArray).then((result) => {
             const is_tabs_exists = (result.filter(flag => flag === true).length > 0);
+            const main = document.getElementById('main');
             if (!is_tabs_exists) {
                 main.insertAdjacentHTML('afterbegin', `
 <div class="uk-eader">
