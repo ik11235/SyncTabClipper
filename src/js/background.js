@@ -30,7 +30,7 @@ chrome.browserAction.onClicked.addListener(function (tab) {
                 created_at: new Date().getTime(),
                 tabs: []
             };
-            for (var i = 0; i < tabs.length; i++) {
+            for (let i = 0; i < tabs.length; i++) {
                 const tab_data = {
                     url: tabs[i].url,
                     title: tabs[i].title
@@ -53,7 +53,7 @@ chrome.browserAction.onClicked.addListener(function (tab) {
                             // errorでないときのみタブを閉じる
                             chrome.tabs.query({currentWindow: true}, function (tabs) {
                                 chrome.tabs.create({url: chrome.runtime.getURL('tabs.html')}, function () {
-                                    for (var i = 0; i < tabs.length; i++) {
+                                    for (let i = 0; i < tabs.length; i++) {
                                         chrome.tabs.remove(tabs[i].id, function () {
                                         });
                                     }

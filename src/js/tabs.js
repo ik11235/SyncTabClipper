@@ -8,7 +8,7 @@ window.onload = function () {
             const tab_length = gettabLengthOrZero(result);
             let promiseArray = [];
 
-            for (var x = 0; x < tab_length; x++) {
+            for (let x = 0; x < tab_length; x++) {
                 const key = `tab_datas_${x}`;
                 promiseArray.push(getSyncStorage(key))
             }
@@ -78,12 +78,12 @@ window.onload = function () {
                     main.insertAdjacentHTML('afterbegin', insertHtml);
 
                     const linkDoms = main.getElementsByClassName('tab_link');
-                    for (var j = 0; j < linkDoms.length; j++) {
+                    for (let j = 0; j < linkDoms.length; j++) {
                         linkDoms[j].addEventListener('click', clickLinkByEventListener);
                     }
 
                     const deleteLinkDoms = main.getElementsByClassName('tab_close');
-                    for (var j = 0; j < deleteLinkDoms.length; j++) {
+                    for (let j = 0; j < deleteLinkDoms.length; j++) {
                         deleteLinkDoms[j].addEventListener('click', deleteLinkByEventListener);
                     }
 
@@ -104,7 +104,7 @@ window.onload = function () {
         };
 
         const linkDoms = dom.getElementsByClassName('tab_link');
-        for (var j = 0; j < linkDoms.length; j++) {
+        for (let j = 0; j < linkDoms.length; j++) {
             const tab_data = {
                 url: linkDoms[j].getAttribute("data-url"),
                 title: linkDoms[j].getAttribute("data-title")
@@ -170,7 +170,7 @@ window.onload = function () {
         const tab_length = gettabLengthOrZero(result);
         let promiseArray = [];
 
-        for (var i = 0; i < tab_length; i++) {
+        for (let i = 0; i < tab_length; i++) {
             const key = `tab_datas_${i}`;
             promiseArray.push(setLinkDom(key))
         }
