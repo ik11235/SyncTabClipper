@@ -50,48 +50,61 @@ window.onload = function () {
 
     function setLinkDom(key) {
         return new Promise(function (resolve) {
-            chrome.storage.sync.get([key], function (result) {
-                const main = document.getElementById('main');
-                if (!isEmpty(result)) {
-                    const tab_datas = result[key];
-                    const created_at = toNumber(tab_datas.created_at);
-                    const tabs = tab_datas.tabs.map(function (page_data) {
-                        const domain = getDomein(page_data.url);
-                        return `<li>
-<img src="https://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/>
-<a href="#" class="tab_link" data-url="${page_data.url}" data-title="${page_data.title}">${page_data.title}</a>
-<a href="#" class="tab_close"><span class="uk-icon-link" uk-icon="icon: close; ratio: 0.9"></span></a>
+                chrome.storage.sync.get([key], function (result) {
+                    const main = document.getElementById('main');
+                    if (!isEmpty(result)) {
+                        const tab_datas = result[key];
+                        const created_at = toNumber(tab_datas.created_at);
+                        const tabs = tab_datas.tabs.map(function (page_data) {
+                            const domain = getDomein(page_data.url);
+                            return `
+<li>
+    <img src="https://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/>
+    <a href="#" class="tab_link" data-url="${page_data.url}" data-title="${page_data.title}">${page_data.title}</a>
+    <a href="#" class="tab_close"><span class="uk-icon-link" uk-icon="icon: close; ratio: 0.9"></span></a>
 </li>`;
-                    }).join("\n");
-                    const created_date = new Date(created_at);
-                    const insertHtml = `
+                        }).join("\n");
+                        const created_date = new Date(created_at);
+                        const insertHtml = `
 <div id="${key}" class="tabs uk-card-default" data-created-at="${created_at}">
-<div class="uk-card-header">
-<h3 class="uk-card-title uk-margin-remove-bottom">${tab_datas.tabs.length}個のタブ</h3>
-<p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="${created_date.toISOString()}">${created_date}</time></p>
-</div>
-<div class="uk-card-body">
-<ul>${tabs}</ul>
-</div>
+    <div class="uk-card-header">
+        <h3 class="uk-card-title uk-margin-remove-bottom">${tab_datas.tabs.length}個のタブ</h3>
+        <p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="${created_date.toISOString()}">${created_date}</time></p>
+        <div class="uk-grid">
+            <a href="#" class="all_tab_link" class="uk-width-expand">すべてのリンクを開く</a>
+            <a href="#" class="all_tab_delete" class="uk-width-expand">すべてのリンクを閉じる</a>
+            <div class="uk-width-4-10"></div>
+        </div>
+    </div>
+    <div class="uk-card-body">
+        <ul>${tabs}</ul>
+    </div>
 </div>`;
-                    main.insertAdjacentHTML('afterbegin', insertHtml);
+                        main.insertAdjacentHTML('afterbegin', insertHtml);
+                        const this_card_dom = document.getElementById(key);
 
-                    const linkDoms = main.getElementsByClassName('tab_link');
-                    for (let j = 0; j < linkDoms.length; j++) {
-                        linkDoms[j].addEventListener('click', clickLinkByEventListener);
+                        const linkDoms = this_card_dom.getElementsByClassName('tab_link');
+                        for (let j = 0; j < linkDoms.length; j++) {
+                            linkDoms[j].addEventListener('click', clickLinkByEventListener);
+                        }
+
+                        const deleteLinkDoms = this_card_dom.getElementsByClassName('tab_close');
+                        for (let j = 0; j < deleteLinkDoms.length; j++) {
+                            deleteLinkDoms[j].addEventListener('click', deleteLinkByEventListener);
+                        }
+
+                        const all_tab_link = this_card_dom.getElementsByClassName('all_tab_link')[0];
+                        all_tab_link.addEventListener('click', allOpenLinkByEventListener);
+                        const all_tab_delete = this_card_dom.getElementsByClassName('all_tab_delete')[0];
+                        all_tab_delete.addEventListener('click', allDeleteLinkByEventListener);
+
+                        resolve(true);
+                    } else {
+                        resolve(false);
                     }
-
-                    const deleteLinkDoms = main.getElementsByClassName('tab_close');
-                    for (let j = 0; j < deleteLinkDoms.length; j++) {
-                        deleteLinkDoms[j].addEventListener('click', deleteLinkByEventListener);
-                    }
-
-                    resolve(true);
-                } else {
-                    resolve(false);
-                }
-            });
-        });
+                });
+            }
+        );
     }
 
     function jsonFromHtml(dom) {
@@ -158,6 +171,39 @@ window.onload = function () {
         deleteLink(target);
     }
 
+    function allOpenLinkByEventListener() {
+        const target = this;
+        const parentDiv = target.parentNode.parentNode.parentNode;
+        const tab_links = parentDiv.getElementsByClassName("tab_link");
+        let promiseArray = [];
+        for (let i = 0; i < tab_links.length; i++) {
+            const url = tab_links[i].getAttribute("data-url");
+            promiseArray.push(createTabs({url: url, active: false}));
+        }
+        Promise.all(promiseArray).then(() => {
+            allDeleteLink(target);
+        });
+    }
+
+    function allDeleteLinkByEventListener() {
+        const target = this;
+        allDeleteLink(target);
+    }
+
+    function allDeleteLink(target) {
+        const parentDiv = target.parentNode.parentNode.parentNode;
+
+        const id = parentDiv.id;
+        chrome.storage.sync.remove(id, function () {
+            const error = chrome.runtime.lastError;
+            if (error) {
+                alert(error.message);
+            }
+
+            parentDiv.parentNode.removeChild(parentDiv);
+        });
+    }
+
     const all_clear = document.getElementById('all_clear');
     all_clear.addEventListener('click', allClear);
     const export_link = document.getElementById('export_link');
@@ -179,10 +225,12 @@ window.onload = function () {
             const main = document.getElementById('main');
             if (!is_tabs_exists) {
                 main.insertAdjacentHTML('afterbegin', `
-<div class="uk-eader">
-<h3 class="uk-title uk-margin-remove-bottom no-tabs">保存済みのタブはありません。</h3></div>
+<div class="uk-header">
+    <h3 class="uk-title uk-margin-remove-bottom no-tabs">保存済みのタブはありません。</h3>
+</div>
 `);
             }
         });
     });
-};
+}
+;
