@@ -54,7 +54,7 @@ window.onload = function () {
                 const main = document.getElementById('main');
                 if (!isEmpty(result)) {
                     const tab_datas = result[key];
-                    const created_at = tab_datas.created_at;
+                    const created_at = toNumber(tab_datas.created_at);
                     const tabs = tab_datas.tabs.map(function (page_data) {
                         var domain = getDomein(page_data.url);
                         var str = `<li>
@@ -64,7 +64,7 @@ window.onload = function () {
 </li>`;
                         return str;
                     }).join("\n");
-                    const created_date = new Date(parseInt(created_at));
+                    const created_date = new Date(created_at);
                     const insertHtml = `
 <div id="${key}" class="tabs uk-card-default" data-created-at="${created_at}">
 <div class="uk-card-header">
@@ -96,7 +96,7 @@ window.onload = function () {
     }
 
     function jsonFromHtml(dom) {
-        const created_at = dom.getAttribute("data-created-at");
+        const created_at = toNumber(dom.getAttribute("data-created-at"));
 
         var json = {
             created_at: created_at,

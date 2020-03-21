@@ -7,6 +7,14 @@ function getDomein(str) {
     return parser.host;
 }
 
+function toNumber(str) {
+    let num = Number(str);
+    if (isNaN(num)) {
+        throw new Error('to Number Error: ' + str);
+    }
+    return num;
+}
+
 function gettabLengthOrZero(result) {
     if (!result) {
         return 0;

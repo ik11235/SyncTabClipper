@@ -27,7 +27,7 @@ chrome.browserAction.onClicked.addListener(function () {
         const tab_length = gettabLengthOrZero(result);
         chrome.tabs.query({currentWindow: true}, function (tabs) {
             let json = {
-                created_at: new Date().getTime(),
+                created_at: toNumber(new Date().getTime()),
                 tabs: []
             };
             for (let i = 0; i < tabs.length; i++) {
