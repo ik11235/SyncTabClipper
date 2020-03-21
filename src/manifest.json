@@ -10,6 +10,7 @@
   ],
   "background": {
     "scripts": [
+      "js/util.js",
       "js/background.js"
     ],
     "persistant": false
