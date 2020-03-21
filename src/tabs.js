@@ -214,6 +214,9 @@ function setLinkDom(key) {
 
 
 window.onload = function () {
+    const extension_name = chrome.runtime.getManifest().name;
+    document.getElementsByTagName("h1")[0].innerHTML = document.getElementsByTagName("h1")[0].innerHTML.replace("SyncTabClipper", extension_name);
+
     const all_clear = document.getElementById('all_clear');
     all_clear.addEventListener('click', allClear);
     const export_link = document.getElementById('export_link');
