@@ -66,7 +66,7 @@ window.onload = function () {
 <li>
     <img src="https://www.google.com/s2/favicons?domain=${encode_domain}" alt="${encode_title}"/>
     <a href="${encode_url}" class="tab_link" data-url="${encode_url}" data-title="${encode_title}">${encode_title}</a>
-    <a href="javascript:void(0)" class="tab_close"><span class="uk-icon-link" uk-icon="icon: close; ratio: 0.9"></span></a>
+    <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>
 </li>`;
                         }).join("\n");
                         const created_date = new Date(created_at);
@@ -76,9 +76,9 @@ window.onload = function () {
         <h3 class="uk-card-title uk-margin-remove-bottom">${tab_datas.tabs.length}個のタブ</h3>
         <p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="${created_date.toISOString()}">${created_date}</time></p>
         <div class="uk-grid">
-            <a href="javascript:void(0)" class="all_tab_link" class="uk-width-expand">すべてのリンクを開く</a>
-            <a href="javascript:void(0)" class="all_tab_delete" class="uk-width-expand">すべてのリンクを閉じる</a>
-            <div class="uk-width-4-10"></div>
+            <div class="uk-width-auto"><span class="all_tab_link uk-link">すべてのリンクを開く</span></div>
+            <div class="uk-width-auto"><span class="all_tab_delete uk-link">すべてのリンクを閉じる</span></div>
+            <div class="uk-width-expand"></div>
         </div>
     </div>
     <div class="uk-card-body">
@@ -90,7 +90,10 @@ window.onload = function () {
 
                         const linkDoms = this_card_dom.getElementsByClassName('tab_link');
                         for (let j = 0; j < linkDoms.length; j++) {
-                            linkDoms[j].addEventListener('click', clickLinkByEventListener);
+                            linkDoms[j].addEventListener('click', function (e) {
+                                e.preventDefault();
+                                clickLinkByEventListener(e.toElement);
+                            });
                         }
 
                         const deleteLinkDoms = this_card_dom.getElementsByClassName('tab_close');
@@ -163,8 +166,8 @@ window.onload = function () {
 
     }
 
-    function clickLinkByEventListener() {
-        const target = this;
+    function clickLinkByEventListener(e) {
+        const target = e;
         const url = target.getAttribute("data-url");
         chrome.tabs.create({url: url, active: false}, function () {
             deleteLink(target);
@@ -178,7 +181,7 @@ window.onload = function () {
 
     function allOpenLinkByEventListener() {
         const target = this;
-        const parentDiv = target.parentNode.parentNode.parentNode;
+        const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
         const tab_links = parentDiv.getElementsByClassName("tab_link");
         let promiseArray = [];
         for (let i = 0; i < tab_links.length; i++) {
@@ -196,7 +199,7 @@ window.onload = function () {
     }
 
     function allDeleteLink(target) {
-        const parentDiv = target.parentNode.parentNode.parentNode;
+        const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
 
         const id = parentDiv.id;
         chrome.storage.sync.remove(id, function () {
