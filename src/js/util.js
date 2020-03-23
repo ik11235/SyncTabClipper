@@ -3,8 +3,33 @@ function isEmpty(obj) {
 }
 
 function getDomein(str) {
-    const parser = new URL(str);
-    return parser.host;
+    try {
+        const parser = new URL(str);
+        return parser.hostname;
+    } catch (e) {
+        if (e instanceof TypeError) {
+            return "";
+        } else {
+            throw e;
+        }
+    }
+}
+
+function escape_html(string) {
+    // https://qiita.com/saekis/items/c2b41cd8940923863791
+    if (typeof string !== 'string') {
+        return string;
+    }
+    return string.replace(/[&'`"<>]/g, function (match) {
+        return {
+            '&': '&amp;',
+            "'": '&#x27;',
+            '`': '&#x60;',
+            '"': '&quot;',
+            '<': '&lt;',
+            '>': '&gt;',
+        }[match]
+    });
 }
 
 function toNumber(str) {
