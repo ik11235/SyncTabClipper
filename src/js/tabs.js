@@ -66,7 +66,7 @@ window.onload = function () {
 <li>
     <img src="https://www.google.com/s2/favicons?domain=${encode_domain}" alt="${encode_title}"/>
     <a href="${encode_url}" class="tab_link" data-url="${encode_url}" data-title="${encode_title}">${encode_title}</a>
-    <a href="#" class="tab_close"><span class="uk-icon-link" uk-icon="icon: close; ratio: 0.9"></span></a>
+    <a href="javascript:void(0)" class="tab_close"><span class="uk-icon-link" uk-icon="icon: close; ratio: 0.9"></span></a>
 </li>`;
                         }).join("\n");
                         const created_date = new Date(created_at);
@@ -76,8 +76,8 @@ window.onload = function () {
         <h3 class="uk-card-title uk-margin-remove-bottom">${tab_datas.tabs.length}個のタブ</h3>
         <p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="${created_date.toISOString()}">${created_date}</time></p>
         <div class="uk-grid">
-            <a href="#" class="all_tab_link" class="uk-width-expand">すべてのリンクを開く</a>
-            <a href="#" class="all_tab_delete" class="uk-width-expand">すべてのリンクを閉じる</a>
+            <a href="javascript:void(0)" class="all_tab_link" class="uk-width-expand">すべてのリンクを開く</a>
+            <a href="javascript:void(0)" class="all_tab_delete" class="uk-width-expand">すべてのリンクを閉じる</a>
             <div class="uk-width-4-10"></div>
         </div>
     </div>
