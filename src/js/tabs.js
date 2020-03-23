@@ -57,10 +57,15 @@ window.onload = function () {
                         const created_at = toNumber(tab_datas.created_at);
                         const tabs = tab_datas.tabs.map(function (page_data) {
                             const domain = getDomein(page_data.url);
+                            // URLパースに失敗した場合、""を返す
+                            // そのままだと、https://www.google.com/s2/faviconsが400になるので、空文字を渡す
+                            const encode_domain = (domain === "") ? encodeURI(" ") : encodeURI(domain);
+                            const encode_url = escape_html(page_data.url);
+                            const encode_title = escape_html(page_data.title);
                             return `
 <li>
-    <img src="https://www.google.com/s2/favicons?domain=${domain}" alt="${page_data.title}"/>
-    <a href="#" class="tab_link" data-url="${page_data.url}" data-title="${page_data.title}">${page_data.title}</a>
+    <img src="https://www.google.com/s2/favicons?domain=${encode_domain}" alt="${encode_title}"/>
+    <a href="${encode_url}" class="tab_link" data-url="${encode_url}" data-title="${encode_title}">${encode_title}</a>
     <a href="#" class="tab_close"><span class="uk-icon-link" uk-icon="icon: close; ratio: 0.9"></span></a>
 </li>`;
                         }).join("\n");
