@@ -10,6 +10,9 @@
   ],
   "background": {
     "scripts": [
+      "js/zlib.js",
+      "js/zlib-deflate.js",
+      "js/zlib-inflate.js",
       "js/util.js",
       "js/background.js"
     ],
