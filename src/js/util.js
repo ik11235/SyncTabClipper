@@ -45,8 +45,8 @@ function gettabLengthOrZero(result) {
         return 0;
     } else if (Number.isInteger(result)) {
         return result;
-    } else if (Number.isInteger(result.tab_length)) {
-        return result.tab_length;
+    } else if (Number.isInteger(result[gettabLengthKey()])) {
+        return result[gettabLengthKey()];
     } else {
         return 0;
     }
@@ -99,4 +99,11 @@ function setSyncStorage(key, value) {
             }
         });
     });
+}
+
+function getTabKey(index) {
+    return `td_${index}`;
+}
+function gettabLengthKey() {
+    return "t_len";
 }
