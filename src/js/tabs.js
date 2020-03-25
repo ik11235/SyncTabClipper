@@ -14,7 +14,9 @@ window.onload = function () {
             }
 
             Promise.all(promiseArray).then((result) => {
-                const sort_result = result.filter(Boolean).filter(data => (JSON.parse(data).tabs.length > 0)).sort(function (a, b) {
+                let obj_result = result.map(data => JSON.parse(data));
+
+                const sort_result = obj_result.filter(Boolean).filter(data => (data.tabs.length > 0)).sort(function (a, b) {
                     return b.created_at - a.created_at;
                 });
 
