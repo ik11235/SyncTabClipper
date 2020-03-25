@@ -4,12 +4,12 @@ window.onload = function () {
 
     function exportJson() {
         const export_text_dom = document.getElementById("export_body");
-        chrome.storage.sync.get(["tab_length"], function (result) {
+        chrome.storage.sync.get([gettabLengthKey()], function (result) {
             const tab_length = gettabLengthOrZero(result);
             let promiseArray = [];
 
             for (let x = 0; x < tab_length; x++) {
-                const key = `tab_datas_${x}`;
+                const key = getTabKey(x);
                 promiseArray.push(getSyncStorage(key))
             }
 
@@ -27,18 +27,20 @@ window.onload = function () {
         const import_text_dom = document.getElementById("import_body");
         const json = JSON.parse(import_text_dom.value);
         (async () => {
-            const tab_length_result = await getSyncStorage("tab_length");
+            const tab_length_result = await getSyncStorage(gettabLengthKey());
             const tab_length = gettabLengthOrZero(tab_length_result);
             let promiseArray = [];
             let idx = tab_length;
             json.reverse().forEach((json_arr) => {
-                const key = `tab_datas_${idx}`;
+                const key = getTabKey(idx);
                 promiseArray.push(setSyncStorage(key, JSON.stringify(json_arr)));
                 idx += 1;
             });
 
             Promise.all(promiseArray).then(() => {
-                chrome.storage.sync.set({tab_length: tab_length + json.length}, function () {
+                let set_data = {};
+                set_data[gettabLengthKey()] = tab_length + json.length;
+                chrome.storage.sync.set(set_data, function () {
                     chrome.tabs.reload({bypassCache: true}, function () {
                     });
                 });
@@ -219,12 +221,12 @@ window.onload = function () {
     const import_link = document.getElementById('import_link');
     import_link.addEventListener('click', importJson);
 
-    chrome.storage.sync.get(["tab_length"], function (result) {
+    chrome.storage.sync.get([gettabLengthKey()], function (result) {
         const tab_length = gettabLengthOrZero(result);
         let promiseArray = [];
 
         for (let i = 0; i < tab_length; i++) {
-            const key = `tab_datas_${i}`;
+            const key = getTabKey(i);
             promiseArray.push(setLinkDom(key))
         }
 
@@ -242,3 +244,7 @@ window.onload = function () {
     });
 }
 ;
+
+chrome.storage.sync.get(function (result) {
+    console.dir(result);
+});

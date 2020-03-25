@@ -26,7 +26,7 @@
 }());
 
 chrome.browserAction.onClicked.addListener(function () {
-    chrome.storage.sync.get(["tab_length"], function (result) {
+    chrome.storage.sync.get([gettabLengthKey()], function (result) {
         const tab_length = gettabLengthOrZero(result);
         chrome.tabs.query({currentWindow: true}, function (tabs) {
             let json = {
@@ -40,7 +40,7 @@ chrome.browserAction.onClicked.addListener(function () {
                 };
                 json.tabs.push(tab_data);
             }
-            const key_str = `tab_datas_${tab_length}`;
+            const key_str = getTabKey(tab_length);
             let save_obj = {};
             save_obj[key_str] = JSON.stringify(json);
             chrome.storage.sync.set(save_obj, function () {
@@ -48,7 +48,9 @@ chrome.browserAction.onClicked.addListener(function () {
                 if (error) {
                     alert(error.message);
                 } else {
-                    chrome.storage.sync.set({tab_length: tab_length + 1}, function () {
+                    let set_data = {};
+                    set_data[gettabLengthKey()] = tab_length + 1;
+                    chrome.storage.sync.set(set_data, function () {
                         const error = chrome.runtime.lastError;
                         if (error) {
                             alert(error.message);
