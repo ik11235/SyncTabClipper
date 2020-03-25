@@ -47,7 +47,7 @@ window.onload = function () {
                     });
                 });
             }).catch(function (reason) {
-                alert("データのインポートに失敗しました。" + reason);
+                alert("データのインポートに失敗しました。" + reason.message);
             });
         })();
     }
