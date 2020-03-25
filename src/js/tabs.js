@@ -14,7 +14,7 @@ window.onload = function () {
             }
 
             Promise.all(promiseArray).then((result) => {
-                const sort_result = result.filter(Boolean).filter(data => (data.tabs.length > 0)).sort(function (a, b) {
+                const sort_result = result.filter(Boolean).filter(data => (JSON.parse(data).tabs.length > 0)).sort(function (a, b) {
                     return b.created_at - a.created_at;
                 });
 
@@ -33,7 +33,7 @@ window.onload = function () {
             let idx = tab_length;
             json.reverse().forEach((json_arr) => {
                 const key = `tab_datas_${idx}`;
-                promiseArray.push(setSyncStorage(key, json_arr));
+                promiseArray.push(setSyncStorage(key, JSON.stringify(json_arr)));
                 idx += 1;
             });
 
@@ -53,7 +53,7 @@ window.onload = function () {
                 chrome.storage.sync.get([key], function (result) {
                     const main = document.getElementById('main');
                     if (!isEmpty(result)) {
-                        const tab_datas = result[key];
+                        const tab_datas = JSON.parse(result[key]);
                         const created_at = toNumber(tab_datas.created_at);
                         const tabs = tab_datas.tabs.map(function (page_data) {
                             const domain = getDomein(page_data.url);

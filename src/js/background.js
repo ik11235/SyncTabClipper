@@ -42,7 +42,7 @@ chrome.browserAction.onClicked.addListener(function () {
             }
             const key_str = `tab_datas_${tab_length}`;
             let save_obj = {};
-            save_obj[key_str] = json;
+            save_obj[key_str] = JSON.stringify(json);
             chrome.storage.sync.set(save_obj, function () {
                 const error = chrome.runtime.lastError;
                 if (error) {
