@@ -14,7 +14,7 @@ window.onload = function () {
             }
 
             Promise.all(promiseArray).then((result) => {
-                let obj_result = result.map(data => JSON.parse(data));
+                const obj_result = result.filter(Boolean).filter(str => str.toString().length > 0).map(data => JSON.parse(data));
 
                 const sort_result = obj_result.filter(Boolean).filter(data => (data.tabs.length > 0)).sort(function (a, b) {
                     return b.created_at - a.created_at;
