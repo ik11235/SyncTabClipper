@@ -104,25 +104,44 @@ function setSyncStorage(key, value) {
 function getTabKey(index) {
     return `td_${index}`;
 }
+
 function gettabLengthKey() {
     return "t_len";
 }
 
-//https://setchi.hatenablog.com/entry/2013/11/09/114432
-// 圧縮関数 (要deflate.js)
-// そのまま同梱したらGPL汚染っぽい
-// 配布してるURL見つけてそこからimportさせたい
 function deflate(val) {
-    val = encodeURIComponent(val); // UTF16 → UTF8
+    val = encodeURIComponent(val);
     let z_stream = ZLIB.deflateInit({level: 9});
     let encoded_string = z_stream.deflate(val);
-    return btoa(encoded_string); // base64エンコード
+    return btoa(encoded_string);
 }
 
-// 復号関数 (要inflate.js)
 function inflate(val) {
-    val = atob(val); // base64デコード
+    val = atob(val);
     let z_stream = ZLIB.inflateInit();
     let decoded_string = z_stream.inflate(val);
-    return decodeURIComponent(decoded_string); // UTF8 → UTF16
+    return decodeURIComponent(decoded_string);
+}
+
+function deflateJson(str) {
+    const deflateStr = deflate(str);
+    if (deflateStr.length < str.length) {
+        return deflateStr;
+    } else {
+        return str;
+    }
+}
+
+function inflateJson(val) {
+    try {
+        return JSON.parse(val);
+    } catch (e) {
+        if (e instanceof SyntaxError) {
+            const jsonStr = inflate(val);
+            console.log(jsonStr);
+            return JSON.parse(jsonStr);
+        } else {
+            throw e;
+        }
+    }
 }
