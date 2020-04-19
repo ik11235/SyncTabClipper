@@ -104,6 +104,43 @@ function setSyncStorage(key, value) {
 function getTabKey(index) {
     return `td_${index}`;
 }
+
 function gettabLengthKey() {
     return "t_len";
+}
+
+function deflate(val) {
+    const encodeVal = encodeURIComponent(val);
+    const z_stream = ZLIB.deflateInit({level: 9});
+    const encoded_string = z_stream.deflate(encodeVal);
+    return btoa(encoded_string);
+}
+
+function inflate(val) {
+    const tobVal = atob(val);
+    const z_stream = ZLIB.inflateInit();
+    const decoded_string = z_stream.inflate(tobVal);
+    return decodeURIComponent(decoded_string);
+}
+
+function deflateJson(str) {
+    const deflateStr = deflate(str);
+    if (deflateStr.length < str.length) {
+        return deflateStr;
+    } else {
+        return str;
+    }
+}
+
+function inflateJson(val) {
+    try {
+        return JSON.parse(val);
+    } catch (e) {
+        if (e instanceof SyntaxError) {
+            const jsonStr = inflate(val);
+            return JSON.parse(jsonStr);
+        } else {
+            throw e;
+        }
+    }
 }
