@@ -27,6 +27,14 @@
 
 この拡張のアプリアイコンは[ICOON MONO様](https://icooon-mono.com/)の[「手帳のアイコン素材」](https://icooon-mono.com/11138-%e6%89%8b%e5%b8%b3%e3%81%ae%e3%82%a2%e3%82%a4%e3%82%b3%e3%83%b3%e7%b4%a0%e6%9d%90/)を使用しています。
 
+## 使用しているライブラリ
+
+- [UIkit](https://getuikit.com/)
+- [zlib-js](http://www33146ue.sakura.ne.jp/staff/iz/release/zlib-js/zlib-js.html)
+
+
+- [使用ライブラリのライセンスクレジット一覧](CREDITS)
+
 ## リリース作業
 
 1. 以下のコマンドでzipファイル作成
