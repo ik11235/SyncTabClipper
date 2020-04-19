@@ -56,20 +56,7 @@ window.onload = function () {
         return new Promise(function (resolve) {
                 chrome.storage.sync.get([key], function (result) {
                     const main = document.getElementById('main');
-                    //const deflate_str = deflate(JSON.stringify(result));
 
-                    //const inflate_str = inflate(deflate_str);
-                    /*
-                    console.dir({
-                        key: key,
-                        deflate:deflate_str,
-                        deflate_length:deflate_str.length,
-                        inflate:inflate_str,
-                        inflate_length:inflate_str.length,
-                    });
-*/
-
-                    //console.log(JSON.stringify(deflate(result)));
                     if (!isEmpty(result)) {
                         const tab_datas = inflateJson(result[key]);
                         const created_at = toNumber(tab_datas.created_at);
@@ -260,7 +247,3 @@ window.onload = function () {
     });
 }
 ;
-
-chrome.storage.sync.get(function (result) {
-    console.dir(result);
-});

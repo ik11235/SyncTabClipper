@@ -110,16 +110,16 @@ function gettabLengthKey() {
 }
 
 function deflate(val) {
-    val = encodeURIComponent(val);
-    let z_stream = ZLIB.deflateInit({level: 9});
-    let encoded_string = z_stream.deflate(val);
+    const encodeVal = encodeURIComponent(val);
+    const z_stream = ZLIB.deflateInit({level: 9});
+    const encoded_string = z_stream.deflate(encodeVal);
     return btoa(encoded_string);
 }
 
 function inflate(val) {
-    val = atob(val);
-    let z_stream = ZLIB.inflateInit();
-    let decoded_string = z_stream.inflate(val);
+    const tobVal = atob(val);
+    const z_stream = ZLIB.inflateInit();
+    const decoded_string = z_stream.inflate(tobVal);
     return decodeURIComponent(decoded_string);
 }
 
@@ -138,7 +138,6 @@ function inflateJson(val) {
     } catch (e) {
         if (e instanceof SyntaxError) {
             const jsonStr = inflate(val);
-            console.log(jsonStr);
             return JSON.parse(jsonStr);
         } else {
             throw e;
