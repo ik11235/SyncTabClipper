@@ -1,6 +1,6 @@
 {
   "name": "SyncTabClipper",
-  "version": "0.0.9",
+  "version": "0.1.0",
   "manifest_version": 2,
   "description": "開いているタブを1つにまとめて、メモリ消費を抑えます。アカウントごとにデータは同期して複数端末で同じ記録を使えます。",
   "permissions": [
