@@ -17,11 +17,11 @@
 
 ## ライセンス
 
-[MIT](https://github.com/ik11235/SyncTabClipper/blob/master/LICENSE)
+[MIT](LICENSE)
 
 ## チェンジログ
 
-[CHANGELOG](https://github.com/ik11235/SyncTabClipper/blob/master/CHANGELOG.md)
+[CHANGELOG](CHANGELOG.md)
 
 ## アイコンについて
 
