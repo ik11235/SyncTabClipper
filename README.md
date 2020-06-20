@@ -1,5 +1,5 @@
 # SyncTabClipper
-![icon128](https://user-images.githubusercontent.com/1401147/77155751-59807c80-6ae1-11ea-8441-3d892eb15769.png)
+![icon128](https://github.com/ik11235/SyncTabClipper/raw/master/src/images/icon128.png)
 
 # about
 
