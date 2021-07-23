@@ -8,8 +8,6 @@ import Icons from 'uikit/dist/js/uikit-icons';
 UIkit.use(Icons);
 
 const util = require('./util');
-require('./uikit.min.js')
-require('./uikit-icons.min.js')
 
 window.onload = function () {
     const extension_name = chrome.runtime.getManifest().name;
