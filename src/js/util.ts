@@ -1,5 +1,4 @@
-// @ts-ignore
-export function isEmpty(obj) {
+export function isEmpty(obj: object): boolean {
     return !Object.keys(obj).length;
 }
 
@@ -77,8 +76,7 @@ export function getSyncStorage(key) {
     });
 }
 
-// @ts-ignore
-export function createTabs(properties) {
+export function createTabs(properties: chrome.tabs.CreateProperties) {
     return new Promise((resolve, reject) => {
         chrome.tabs.create(properties, () => {
             const error = chrome.runtime.lastError;
@@ -92,10 +90,8 @@ export function createTabs(properties) {
     });
 }
 
-// @ts-ignore
-export function setSyncStorage(key, value) {
-    let set_obj = {};
-    // @ts-ignore
+export function setSyncStorage(key: string, value: string) {
+    let set_obj: { [key: string]: string; } = {};
     set_obj[key] = value;
     return new Promise((resolve, reject) => {
         chrome.storage.sync.set(set_obj, () => {
@@ -118,27 +114,25 @@ export function getTabLengthKey(): string {
 }
 
 
-// @ts-ignore
-export function deflate(val) {
+export function deflate(val: string) {
     const encodeVal = encodeURIComponent(val);
+    // 既存のzlib.jsをtypeScriptでimportする方法がわからないので一旦直接呼び出す そのため、@ts-ignoreを指定している
     // @ts-ignore
     const z_stream = ZLIB.deflateInit({level: 9});
     const encoded_string = z_stream.deflate(encodeVal);
     return window.btoa(encoded_string);
 }
 
-// @ts-ignore
-export function inflate(val) {
-    console.log(val);
+export function inflate(val: string) {
     const tobVal = window.atob(val);
+    // 既存のzlib.jsをtypeScriptでimportする方法がわからないので一旦直接呼び出す そのため、@ts-ignoreを指定している
     // @ts-ignore
     const z_stream = ZLIB.inflateInit();
     const decoded_string = z_stream.inflate(tobVal);
     return decodeURIComponent(decoded_string);
 }
 
-// @ts-ignore
-export function deflateJson(str) {
+export function deflateJson(str: string) {
     const deflateStr = deflate(str);
     if (deflateStr.length < str.length) {
         return deflateStr;
@@ -147,8 +141,7 @@ export function deflateJson(str) {
     }
 }
 
-// @ts-ignore
-export function inflateJson(val) {
+export function inflateJson(val: string) {
     try {
         return JSON.parse(val);
     } catch (e) {
