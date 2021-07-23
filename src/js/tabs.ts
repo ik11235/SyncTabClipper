@@ -1,7 +1,4 @@
 // @ts-ignore
-import {deflateJson} from "./util";
-
-// @ts-ignore
 import UIkit from 'uikit';
 // @ts-ignore
 import Icons from 'uikit/dist/js/uikit-icons';
@@ -194,7 +191,7 @@ window.onload = function () {
         } else {
             let save_obj = {};
             // @ts-ignore
-            save_obj[id] = deflateJson(JSON.stringify(json));
+            save_obj[id] = util.deflateJson(JSON.stringify(json));
             chrome.storage.sync.set(save_obj, function () {
                 const error = chrome.runtime.lastError;
                 if (error) {
