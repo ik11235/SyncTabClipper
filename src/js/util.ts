@@ -1,7 +1,4 @@
 // @ts-ignore
-declare module "./zlib";
-
-// @ts-ignore
 export function isEmpty(obj) {
     return !Object.keys(obj).length;
 }
