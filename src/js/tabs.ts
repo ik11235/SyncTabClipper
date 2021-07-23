@@ -13,8 +13,8 @@ window.onload = function () {
 
     function exportJson() {
         const export_text_dom = document.getElementById("export_body");
-        chrome.storage.sync.get([util.gettabLengthKey()], function (result) {
-            const tab_length = util.gettabLengthOrZero(result);
+        chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
+            const tab_length = util.getTabLengthOrZero(result);
             let promiseArray = [];
 
             for (let x = 0; x < tab_length; x++) {
@@ -40,8 +40,8 @@ window.onload = function () {
         // @ts-ignore
         const json = JSON.parse(import_text_dom.value);
         (async () => {
-            const tab_length_result = await util.getSyncStorage(util.gettabLengthKey());
-            const tab_length = util.gettabLengthOrZero(tab_length_result);
+            const tab_length_result = await util.getSyncStorage(util.getTabLengthKey());
+            const tab_length = util.getTabLengthOrZero(tab_length_result);
             // @ts-ignore
             let promiseArray = [];
             let idx = tab_length;
@@ -56,7 +56,7 @@ window.onload = function () {
             Promise.all(promiseArray).then(() => {
                 let set_data = {};
                 // @ts-ignore
-                set_data[util.gettabLengthKey()] = tab_length + json.length;
+                set_data[util.getTabLengthKey()] = tab_length + json.length;
                 chrome.storage.sync.set(set_data, function () {
                     chrome.tabs.reload({bypassCache: true}, function () {
                     });
@@ -78,7 +78,7 @@ window.onload = function () {
                         const created_at = util.toNumber(tab_datas.created_at);
                         // @ts-ignore
                         const tabs = tab_datas.tabs.map(function (page_data) {
-                            const domain = util.getDomein(page_data.url);
+                            const domain = util.getDomain(page_data.url);
                             // URLパースに失敗した場合、""を返す
                             // そのままだと、https://www.google.com/s2/faviconsが400になるので、空文字を渡す
                             const encode_domain = (domain === "") ? encodeURI(" ") : encodeURI(domain);
@@ -263,8 +263,8 @@ window.onload = function () {
     // @ts-ignore
     import_link.addEventListener('click', importJson);
 
-    chrome.storage.sync.get([util.gettabLengthKey()], function (result) {
-        const tab_length = util.gettabLengthOrZero(result);
+    chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
+        const tab_length = util.getTabLengthOrZero(result);
         let promiseArray = [];
 
         for (let i = 0; i < tab_length; i++) {

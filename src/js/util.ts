@@ -19,12 +19,11 @@ export function getDomain(str: string): string {
     }
 }
 
-// @ts-ignore
-export function escape_html(string) {
-    // https://qiita.com/saekis/items/c2b41cd8940923863791
-    if (typeof string !== 'string') {
-        return string;
-    }
+/**
+ * https://qiita.com/saekis/items/c2b41cd8940923863791
+ * @param string
+ */
+export function escape_html(string: string): string {
     // @ts-ignore
     return string.replace(/[&'`"<>]/g, function (match) {
         return {
@@ -38,8 +37,7 @@ export function escape_html(string) {
     });
 }
 
-// @ts-ignore
-export function toNumber(str) {
+export function toNumber(str: string): number {
     let num = Number(str);
     if (isNaN(num)) {
         throw new Error('to Number Error: ' + str);
@@ -48,19 +46,19 @@ export function toNumber(str) {
 }
 
 // @ts-ignore
-export function gettabLengthOrZero(result) {
+export function getTabLengthOrZero(result) {
     if (!result) {
         return 0;
     } else if (Number.isInteger(result)) {
         return result;
-    } else if (Number.isInteger(result[gettabLengthKey()])) {
-        return result[gettabLengthKey()];
+    } else if (Number.isInteger(result[getTabLengthKey()])) {
+        return result[getTabLengthKey()];
     } else {
         return 0;
     }
 }
 
-export function allClear() {
+export function allClear(): void {
     if (window.confirm('保存したすべてのタブを削除します。よろしいですか？')) {
         chrome.storage.sync.clear(function () {
             alert('すべてのデータを削除しました');
@@ -114,12 +112,11 @@ export function setSyncStorage(key, value) {
     });
 }
 
-// @ts-ignore
-export function getTabKey(index) {
+export function getTabKey(index: number): string {
     return `td_${index}`;
 }
 
-export function gettabLengthKey() {
+export function getTabLengthKey(): string {
     return "t_len";
 }
 

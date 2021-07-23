@@ -29,8 +29,8 @@ const util = require('./util');
 }());
 
 chrome.browserAction.onClicked.addListener(function () {
-    chrome.storage.sync.get([util.gettabLengthKey()], function (result) {
-        const tab_length = util.gettabLengthOrZero(result);
+    chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
+        const tab_length = util.getTabLengthOrZero(result);
         chrome.tabs.query({currentWindow: true}, function (tabs) {
             let json = {
                 created_at: util.toNumber(new Date().getTime()),
@@ -57,7 +57,7 @@ chrome.browserAction.onClicked.addListener(function () {
                 } else {
                     let set_data = {};
                     // @ts-ignore
-                    set_data[util.gettabLengthKey()] = tab_length + 1;
+                    set_data[util.getTabLengthKey()] = tab_length + 1;
                     chrome.storage.sync.set(set_data, function () {
                         const error = chrome.runtime.lastError;
                         if (error) {
