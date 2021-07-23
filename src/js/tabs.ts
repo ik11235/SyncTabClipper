@@ -1,7 +1,7 @@
-// @ts-ignore
 import UIkit from 'uikit';
 // @ts-ignore
 import Icons from 'uikit/dist/js/uikit-icons';
+// @ts-ignore
 UIkit.use(Icons);
 
 const util = require('./util');
