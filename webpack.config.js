@@ -43,7 +43,7 @@ module.exports = {
                 },
                 {
                     context: "src/css",
-                    from: "*",
+                    from: "uikit.min.css",
                     to: path.join(__dirname, "dist/css/"),
                 },
             ],
