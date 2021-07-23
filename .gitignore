@@ -1,2 +1,5 @@
 src/images/dev.png
 src.zip
+
+# npm
+node_modules/
