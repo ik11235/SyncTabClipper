@@ -1,14 +1,18 @@
 {
   "compilerOptions": {
     "target": "ES2019",
-    "module": "commonjs",
+    "module": "ES2015",
     "sourceMap": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "moduleResolution": "node",
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
-  }
+    "forceConsistentCasingInFileNames": true,
+    "typeRoots": [ "node_modules/@types"],
+  },
+  "exclude": [
+    "node_modules"
+  ]
 }
 

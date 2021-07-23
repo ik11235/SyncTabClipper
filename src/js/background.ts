@@ -1,3 +1,6 @@
+// @ts-ignore
+const util = require('./util');
+
 (function () {
     // contextMenusに関する操作
     chrome.contextMenus.removeAll();
@@ -26,30 +29,35 @@
 }());
 
 chrome.browserAction.onClicked.addListener(function () {
-    chrome.storage.sync.get([gettabLengthKey()], function (result) {
-        const tab_length = gettabLengthOrZero(result);
+    chrome.storage.sync.get([util.gettabLengthKey()], function (result) {
+        const tab_length = util.gettabLengthOrZero(result);
         chrome.tabs.query({currentWindow: true}, function (tabs) {
             let json = {
-                created_at: toNumber(new Date().getTime()),
+                created_at: util.toNumber(new Date().getTime()),
                 tabs: []
             };
             for (let i = 0; i < tabs.length; i++) {
                 const tab_data = {
+                    // @ts-ignore
                     url: tabs[i].url,
+                    // @ts-ignore
                     title: tabs[i].title
                 };
+                // @ts-ignore
                 json.tabs.push(tab_data);
             }
-            const key_str = getTabKey(tab_length);
+            const key_str = util.getTabKey(tab_length);
             let save_obj = {};
-            save_obj[key_str] = deflateJson(JSON.stringify(json));
+            // @ts-ignore
+            save_obj[key_str] = util.deflateJson(JSON.stringify(json));
             chrome.storage.sync.set(save_obj, function () {
                 const error = chrome.runtime.lastError;
                 if (error) {
                     alert(error.message);
                 } else {
                     let set_data = {};
-                    set_data[gettabLengthKey()] = tab_length + 1;
+                    // @ts-ignore
+                    set_data[util.gettabLengthKey()] = tab_length + 1;
                     chrome.storage.sync.set(set_data, function () {
                         const error = chrome.runtime.lastError;
                         if (error) {
@@ -59,6 +67,7 @@ chrome.browserAction.onClicked.addListener(function () {
                             chrome.tabs.query({currentWindow: true}, function (tabs) {
                                 chrome.tabs.create({url: chrome.runtime.getURL('tabs.html')}, function () {
                                     for (let i = 0; i < tabs.length; i++) {
+                                        // @ts-ignore
                                         chrome.tabs.remove(tabs[i].id, function () {
                                         });
                                     }

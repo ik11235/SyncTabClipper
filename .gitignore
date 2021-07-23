@@ -3,3 +3,6 @@ src.zip
 
 # npm
 node_modules/
+
+# webpack
+dist/
