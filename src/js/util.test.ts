@@ -5,4 +5,8 @@ describe('util', (): void => {
         const res = util.getDomain("https://jestjs.io/ja/docs/getting-started")
         expect(res).toBe('jestjs.io');
     });
+    test('getDomain URLでない文字列は空文字を返す', (): void => {
+        const res = util.getDomain("test@example.com")
+        expect(res).toBe('');
+    });
 })

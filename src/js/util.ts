@@ -7,7 +7,7 @@ export function getDomain(str: string): string {
         const parser = new URL(str);
         return parser.hostname;
     } catch (e) {
-        if (e instanceof TypeError) {
+        if (e.code === "ERR_INVALID_URL") {
             return "";
         } else {
             throw e;
