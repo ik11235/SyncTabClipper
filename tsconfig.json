@@ -9,7 +9,16 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "typeRoots": [ "node_modules/@types"],
+    "baseUrl": "./",
+    "paths": {
+      "interface": [
+        "types/interface"
+      ]
+    },
+    "typeRoots": [
+      "node_modules/@types",
+      "types"
+    ]
   },
   "exclude": [
     "node_modules"

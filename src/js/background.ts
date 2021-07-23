@@ -1,5 +1,5 @@
-// @ts-ignore
-const util = require('./util');
+import * as util from './util';
+import {model} from "./types/interface";
 
 (function () {
     // contextMenusに関する操作
@@ -31,32 +31,28 @@ const util = require('./util');
 chrome.browserAction.onClicked.addListener(function () {
     chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
         const tab_length = util.getTabLengthOrZero(result);
-        chrome.tabs.query({currentWindow: true}, function (tabs) {
-            let json = {
-                created_at: util.toNumber(new Date().getTime()),
+        chrome.tabs.query({currentWindow: true}, function (tabs: chrome.tabs.Tab[]) {
+            let block: model.Block = {
+                created_at: new Date(),
                 tabs: []
-            };
-            for (let i = 0; i < tabs.length; i++) {
-                const tab_data = {
-                    // @ts-ignore
-                    url: tabs[i].url,
-                    // @ts-ignore
-                    title: tabs[i].title
-                };
-                // @ts-ignore
-                json.tabs.push(tab_data);
             }
+            tabs.forEach(tab => {
+                const tab_data: model.Tab = {
+                    url: tab.url!,
+                    title: tab.title!,
+                }
+                block.tabs.push(tab_data);
+            });
+
             const key_str = util.getTabKey(tab_length);
-            let save_obj = {};
-            // @ts-ignore
-            save_obj[key_str] = util.deflateJson(JSON.stringify(json));
+            let save_obj: { [key: string]: string; } = {};
+            save_obj[key_str] = util.deflateJson(util.blockToJson(block));
             chrome.storage.sync.set(save_obj, function () {
                 const error = chrome.runtime.lastError;
                 if (error) {
                     alert(error.message);
                 } else {
-                    let set_data = {};
-                    // @ts-ignore
+                    let set_data: { [key: string]: string; } = {};
                     set_data[util.getTabLengthKey()] = tab_length + 1;
                     chrome.storage.sync.set(set_data, function () {
                         const error = chrome.runtime.lastError;
@@ -66,11 +62,10 @@ chrome.browserAction.onClicked.addListener(function () {
                             // errorでないときのみタブを閉じる
                             chrome.tabs.query({currentWindow: true}, function (tabs) {
                                 chrome.tabs.create({url: chrome.runtime.getURL('tabs.html')}, function () {
-                                    for (let i = 0; i < tabs.length; i++) {
-                                        // @ts-ignore
-                                        chrome.tabs.remove(tabs[i].id, function () {
+                                    tabs.forEach(tab => {
+                                        chrome.tabs.remove(tab.id!, function () {
                                         });
-                                    }
+                                    });
                                 });
                             });
                         }
