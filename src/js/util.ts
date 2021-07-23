@@ -6,8 +6,7 @@ export function isEmpty(obj) {
     return !Object.keys(obj).length;
 }
 
-// @ts-ignore
-export function getDomein(str) {
+export function getDomain(str: string): string {
     try {
         const parser = new URL(str);
         return parser.hostname;
