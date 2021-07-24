@@ -145,8 +145,8 @@ window.onload = function () {
         li.parentNode.removeChild(li);
 
         const id = parentDiv.id;
-        const json = jsonFromHtml(parentDiv);
-        if (json.tabs.length <= 0) {
+        const block = blockService.htmlToBlock(parentDiv)
+        if (block.tabs.length <= 0) {
             chrome.storage.sync.remove(id, function () {
                 const error = chrome.runtime.lastError;
                 if (error) {
@@ -156,9 +156,8 @@ window.onload = function () {
                 parentDiv.parentNode.removeChild(parentDiv);
             });
         } else {
-            let save_obj = {};
-            // @ts-ignore
-            save_obj[id] = util.deflateJson(JSON.stringify(json));
+            let save_obj: { [key: string]: string; } = {};
+            save_obj[id] = util.deflateJson(blockService.blockToJson(block));
             chrome.storage.sync.set(save_obj, function () {
                 const error = chrome.runtime.lastError;
                 if (error) {

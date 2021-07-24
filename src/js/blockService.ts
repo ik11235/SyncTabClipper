@@ -94,4 +94,38 @@ export namespace blockService {
     </div>
 </div>`;
     }
+
+    export function htmlToBlock(htmldom: HTMLElement): model.Block {
+        const meyBeCreatedAtElement = htmldom.getAttribute("data-created-at")
+        if (meyBeCreatedAtElement === null) {
+            throw "data-created-at is null."
+        }
+
+        const created_at = new Date(util.toNumber(meyBeCreatedAtElement))
+
+        let tabs: model.Tab[] = []
+        const linkDoms = htmldom.getElementsByClassName('tab_link')!
+        for (let j = 0; j < linkDoms.length; j++) {
+            const nowDom = linkDoms[j]
+            if (nowDom === undefined) {
+                throw "nowDom undefined."
+
+            }
+            const url = nowDom.getAttribute("data-url")
+            const title = nowDom.getAttribute("data-title")
+            if (url === null || title === null) {
+                throw "data-url or data-title is null."
+            }
+
+            tabs.push({
+                url: url,
+                title: title,
+            });
+        }
+
+        return {
+            created_at: created_at,
+            tabs: tabs
+        };
+    }
 }
