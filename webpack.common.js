@@ -7,7 +7,7 @@ module.exports = {
         tabs: path.join(__dirname, "src/js/tabs.ts"),
     },
     output: {
-        path: path.join(__dirname, "dist/js"),
+        path: path.join(__dirname, "dist/"),
         filename: "[name].js",
     },
     module: {
