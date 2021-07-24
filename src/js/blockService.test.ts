@@ -123,7 +123,7 @@ describe('blockService', (): void => {
 <div id="123" class="tabs uk-card-default" data-created-at="1609556645678">
     <div class="uk-card-header">
         <h3 class="uk-card-title uk-margin-remove-bottom">2個のタブ</h3>
-        <p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="2021-01-02T03:04:05.678Z">Sat Jan 02 2021 12:04:05 GMT+0900 (Japan Standard Time)</time></p>
+        <p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="2021-01-02T03:04:05.678Z">${block.created_at}</time></p>
         <div class="uk-grid">
             <div class="uk-width-auto"><span class="all_tab_link uk-link">すべてのリンクを開く</span></div>
             <div class="uk-width-auto"><span class="all_tab_delete uk-link">すべてのリンクを閉じる</span></div>
