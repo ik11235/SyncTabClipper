@@ -63,7 +63,7 @@ export function allClear(): void {
     }
 }
 
-export function getSyncStorage(key: string) {
+export function getSyncStorage(key: string): Promise<string> {
     return new Promise((resolve, reject) => {
         chrome.storage.sync.get([key], (item) => {
             const error = chrome.runtime.lastError;
@@ -76,21 +76,20 @@ export function getSyncStorage(key: string) {
     });
 }
 
-export function createTabs(properties: chrome.tabs.CreateProperties) {
+export function createTabs(properties: chrome.tabs.CreateProperties): Promise<void> {
     return new Promise((resolve, reject) => {
         chrome.tabs.create(properties, () => {
             const error = chrome.runtime.lastError;
             if (error) {
                 reject(error);
             } else {
-                // @ts-ignore
                 resolve();
             }
         });
     });
 }
 
-export function setSyncStorage(key: string, value: string) {
+export function setSyncStorage(key: string, value: string): Promise<void> {
     let set_obj: { [key: string]: string; } = {};
     set_obj[key] = value;
     return new Promise((resolve, reject) => {
@@ -99,7 +98,7 @@ export function setSyncStorage(key: string, value: string) {
             if (error) {
                 reject(error);
             } else {
-                resolve(true);
+                resolve();
             }
         });
     });

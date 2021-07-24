@@ -15,7 +15,7 @@ window.onload = function () {
         const export_text_dom = document.getElementById("export_body");
         chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
             const tab_length = util.getTabLengthOrZero(result);
-            let promiseArray = [];
+            let promiseArray: Promise<string>[] = [];
 
             for (let x = 0; x < tab_length; x++) {
                 const key = util.getTabKey(x);
@@ -23,7 +23,7 @@ window.onload = function () {
             }
 
             Promise.all(promiseArray).then((result) => {
-                const obj_result = result.filter(Boolean).filter(str => str.toString().length > 0).map(data => util.inflateJson(data));
+                const obj_result = result.filter(Boolean).filter(str => str.length > 0).map(data => util.inflateJson(data));
 
                 const sort_result = obj_result.filter(Boolean).filter(data => (data.tabs.length > 0)).sort(function (a, b) {
                     return b.created_at - a.created_at;
@@ -42,8 +42,7 @@ window.onload = function () {
         (async () => {
             const tab_length_result = await util.getSyncStorage(util.getTabLengthKey());
             const tab_length = util.getTabLengthOrZero(tab_length_result);
-            // @ts-ignore
-            let promiseArray = [];
+            let promiseArray: Promise<void>[] = [];
             let idx = tab_length;
             // @ts-ignore
             json.reverse().forEach((json_arr) => {
@@ -52,10 +51,8 @@ window.onload = function () {
                 idx += 1;
             });
 
-            // @ts-ignore
             Promise.all(promiseArray).then(() => {
-                let set_data = {};
-                // @ts-ignore
+                let set_data: { [key: string]: number; } = {};
                 set_data[util.getTabLengthKey()] = tab_length + json.length;
                 chrome.storage.sync.set(set_data, function () {
                     chrome.tabs.reload({bypassCache: true}, function () {
