@@ -35,13 +35,24 @@
 
 - [使用ライブラリのライセンスクレジット一覧](CREDITS)
 
+## build
+
+```bash
+npm i
+npm run build
+```
+
+`dist/` にビルド成果物が生成されるので、そのディレクトリを (Chrome拡張機能管理ページ)[chrome://extensions/] の `
+パッケージ化されていない拡張機能を読み込む` から読み込む
+
+
 ## リリース作業
 
 1. 以下のコマンドでzipファイル作成
 
 ```sh
-git archive HEAD src --output=src.zip
+npm run build:prod
 ```
-1. [Developer Dashboard](https://chrome.google.com/webstore/devconsole/) から、対象の拡張を選択、「パッケージ」→「新しいパッケージのアップロード」で作成したzipファイルをアップロード
+1. [Developer Dashboard](https://chrome.google.com/webstore/devconsole/) から、対象の拡張を選択、「パッケージ」→「新しいパッケージのアップロード」で作成された `archive.zip` をアップロード
 
 1. 入力事項を更新(optional)して、「アイテムを公開」
