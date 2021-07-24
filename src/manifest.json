@@ -17,6 +17,13 @@
     "48": "images/icon48.png",
     "128": "images/icon128.png"
   },
+  "web_accessible_resources": [
+    {
+      "resources": [ "tabs.html", "test2.png" ],
+      "extensions": "*"
+    }
+  ],
+
   "action": {
     "default_icon": {
       "16": "images/icon16.png"
