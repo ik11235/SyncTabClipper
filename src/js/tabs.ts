@@ -115,28 +115,6 @@ window.onload = function () {
     }
 
     // @ts-ignore
-    function jsonFromHtml(dom) {
-        const created_at = util.toNumber(dom.getAttribute("data-created-at"));
-
-        let json = {
-            created_at: created_at,
-            tabs: []
-        };
-
-        const linkDoms = dom.getElementsByClassName('tab_link');
-        for (let j = 0; j < linkDoms.length; j++) {
-            const tab_data = {
-                url: linkDoms[j].getAttribute("data-url"),
-                title: linkDoms[j].getAttribute("data-title")
-            };
-            // @ts-ignore
-            json.tabs.push(tab_data);
-        }
-
-        return json;
-    }
-
-    // @ts-ignore
     function deleteLink(target) {
         const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
         // 先にsyncに保存済みのデータを消したいがDom→JSONがやりにくくなる
