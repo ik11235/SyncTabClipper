@@ -1,5 +1,3 @@
-import {model} from "./types/interface";
-
 export function isEmpty(obj: object): boolean {
     return !Object.keys(obj).length;
 }
@@ -152,32 +150,3 @@ export function inflateJson(val: string) {
         }
     }
 }
-
-export function blockToJson(block: model.Block): string {
-    let a = {
-        // 既存のcreated_atがgetTimeで渡した数字を入れている(互換性) & 文字列としてTimeの方が短いため、Json上ではTimeを入れる
-        created_at: block.created_at.getTime(),
-        tabs: block.tabs
-    }
-
-    return JSON.stringify(a);
-}
-
-export function jsonToBlock(json: string): model.Block {
-    let js = JSON.parse(json);
-
-    const tabs: model.Tab[] = []
-
-    js.tabs.forEach((json_arr: any) => {
-        tabs.push({
-            url: json_arr.url,
-            title: json_arr.title,
-        });
-    });
-
-    return {
-        created_at: new Date(js.created_at),
-        tabs: tabs,
-    }
-}
-
