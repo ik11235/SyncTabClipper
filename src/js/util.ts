@@ -43,14 +43,13 @@ export function toNumber(str: string | number): number {
     return num;
 }
 
-// @ts-ignore
-export function getTabLengthOrZero(result) {
+export function getTabLengthOrZero(result: any): number {
     if (!result) {
         return 0;
     } else if (Number.isInteger(result)) {
-        return result;
+        return Number(result);
     } else if (Number.isInteger(result[getTabLengthKey()])) {
-        return result[getTabLengthKey()];
+        return Number(result[getTabLengthKey()]);
     } else {
         return 0;
     }
@@ -64,8 +63,7 @@ export function allClear(): void {
     }
 }
 
-// @ts-ignore
-export function getSyncStorage(key) {
+export function getSyncStorage(key: string) {
     return new Promise((resolve, reject) => {
         chrome.storage.sync.get([key], (item) => {
             const error = chrome.runtime.lastError;

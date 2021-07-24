@@ -52,7 +52,7 @@ chrome.browserAction.onClicked.addListener(function () {
                 if (error) {
                     alert(error.message);
                 } else {
-                    let set_data: { [key: string]: string; } = {};
+                    let set_data: { [key: string]: number; } = {};
                     set_data[util.getTabLengthKey()] = tab_length + 1;
                     chrome.storage.sync.set(set_data, function () {
                         const error = chrome.runtime.lastError;
