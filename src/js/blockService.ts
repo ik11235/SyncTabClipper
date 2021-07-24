@@ -1,4 +1,5 @@
 import {model} from "./types/interface";
+import * as util from "./util"
 
 export namespace blockService {
     export function createBlock(tabs: chrome.tabs.Tab[], created_at: Date): model.Block {
@@ -43,6 +44,19 @@ export namespace blockService {
         return {
             created_at: new Date(js.created_at),
             tabs: tabs,
+        }
+    }
+
+    export function inflateJson(jsonStr: string): model.Block {
+        try {
+            return jsonToBlock(jsonStr);
+        } catch (e) {
+            if (e instanceof SyntaxError) {
+                const jsonStr2 = util.inflate(jsonStr);
+                return jsonToBlock(jsonStr2);
+            } else {
+                throw e;
+            }
         }
     }
 }

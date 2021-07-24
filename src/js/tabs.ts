@@ -1,6 +1,7 @@
 import UIkit from 'uikit';
 // @ts-ignore
 import Icons from 'uikit/dist/js/uikit-icons';
+import {blockService} from "./blockService";
 // @ts-ignore
 UIkit.use(Icons);
 
@@ -23,10 +24,10 @@ window.onload = function () {
             }
 
             Promise.all(promiseArray).then((result) => {
-                const obj_result = result.filter(Boolean).filter(str => str.length > 0).map(data => util.inflateJson(data));
+                const obj_result = result.filter(Boolean).filter(str => str.length > 0).map(data => blockService.inflateJson(data));
 
                 const sort_result = obj_result.filter(Boolean).filter(data => (data.tabs.length > 0)).sort(function (a, b) {
-                    return b.created_at - a.created_at;
+                    return b.created_at.getTime() - a.created_at.getTime();
                 });
 
                 // @ts-ignore
@@ -71,8 +72,8 @@ window.onload = function () {
                     const main = document.getElementById('main');
 
                     if (!util.isEmpty(result)) {
-                        const tab_datas = util.inflateJson(result[key]);
-                        const created_at = util.toNumber(tab_datas.created_at);
+                        const tab_datas = blockService.inflateJson(result[key]);
+                        const created_at = tab_datas.created_at;
                         // @ts-ignore
                         const tabs = tab_datas.tabs.map(function (page_data) {
                             const domain = util.getDomain(page_data.url);
@@ -88,12 +89,11 @@ window.onload = function () {
     <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>
 </li>`;
                         }).join("\n");
-                        const created_date = new Date(created_at);
                         const insertHtml = `
-<div id="${key}" class="tabs uk-card-default" data-created-at="${created_at}">
+<div id="${key}" class="tabs uk-card-default" data-created-at="${created_at.getTime()}">
     <div class="uk-card-header">
         <h3 class="uk-card-title uk-margin-remove-bottom">${tab_datas.tabs.length}個のタブ</h3>
-        <p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="${created_date.toISOString()}">${created_date}</time></p>
+        <p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="${created_at.toISOString()}">${created_at}</time></p>
         <div class="uk-grid">
             <div class="uk-width-auto"><span class="all_tab_link uk-link">すべてのリンクを開く</span></div>
             <div class="uk-width-auto"><span class="all_tab_delete uk-link">すべてのリンクを閉じる</span></div>
