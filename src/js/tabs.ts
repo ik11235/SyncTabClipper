@@ -72,38 +72,8 @@ window.onload = function () {
                     const main = document.getElementById('main');
 
                     if (!util.isEmpty(result)) {
-                        const tab_datas = blockService.inflateJson(result[key]);
-                        const created_at = tab_datas.created_at;
-                        // @ts-ignore
-                        const tabs = tab_datas.tabs.map(function (page_data) {
-                            const domain = util.getDomain(page_data.url);
-                            // URLパースに失敗した場合、""を返す
-                            // そのままだと、https://www.google.com/s2/faviconsが400になるので、空文字を渡す
-                            const encode_domain = (domain === "") ? encodeURI(" ") : encodeURI(domain);
-                            const encode_url = util.escape_html(page_data.url);
-                            const encode_title = util.escape_html(page_data.title);
-                            return `
-<li>
-    <img src="https://www.google.com/s2/favicons?domain=${encode_domain}" alt="${encode_title}"/>
-    <a href="${encode_url}" class="tab_link" data-url="${encode_url}" data-title="${encode_title}">${encode_title}</a>
-    <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>
-</li>`;
-                        }).join("\n");
-                        const insertHtml = `
-<div id="${key}" class="tabs uk-card-default" data-created-at="${created_at.getTime()}">
-    <div class="uk-card-header">
-        <h3 class="uk-card-title uk-margin-remove-bottom">${tab_datas.tabs.length}個のタブ</h3>
-        <p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="${created_at.toISOString()}">${created_at}</time></p>
-        <div class="uk-grid">
-            <div class="uk-width-auto"><span class="all_tab_link uk-link">すべてのリンクを開く</span></div>
-            <div class="uk-width-auto"><span class="all_tab_delete uk-link">すべてのリンクを閉じる</span></div>
-            <div class="uk-width-expand"></div>
-        </div>
-    </div>
-    <div class="uk-card-body">
-        <ul>${tabs}</ul>
-    </div>
-</div>`;
+                        const block = blockService.inflateJson(result[key]);
+                        const insertHtml = blockService.blockToHtml(block, key);
                         // @ts-ignore
                         main.insertAdjacentHTML('afterbegin', insertHtml);
                         const this_card_dom = document.getElementById(key);
