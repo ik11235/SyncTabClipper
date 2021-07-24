@@ -1,7 +1,7 @@
 {
   "name": "SyncTabClipper",
   "version": "0.1.1",
-  "manifest_version": 2,
+  "manifest_version": 3,
   "description": "開いているタブを1つにまとめて、メモリ消費を抑えます。アカウントごとにデータは同期して複数端末で同じ記録を使えます。",
   "permissions": [
     "tabs",
@@ -9,13 +9,7 @@
     "contextMenus"
   ],
   "background": {
-    "scripts": [
-      "js/zlib.js",
-      "js/zlib-deflate.js",
-      "js/zlib-inflate.js",
-      "js/background.js"
-    ],
-    "persistant": false
+    "service_worker": "background.js"
   },
   "icons": {
     "16": "images/icon16.png",
@@ -23,7 +17,7 @@
     "48": "images/icon48.png",
     "128": "images/icon128.png"
   },
-  "browser_action": {
+  "action": {
     "default_icon": {
       "16": "images/icon16.png"
     }

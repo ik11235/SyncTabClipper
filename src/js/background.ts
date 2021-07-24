@@ -1,6 +1,11 @@
 import * as util from './util';
 import {blockService} from "./blockService";
 
+//  manifest_version3から複数ファイルのbackground.scripts指定ができなくなったので、直接importする
+importScripts("js/zlib.js");
+importScripts("js/zlib-deflate.js");
+importScripts("js/zlib-inflate.js");
+
 (function () {
     // contextMenusに関する操作
     chrome.contextMenus.removeAll();
@@ -28,7 +33,7 @@ import {blockService} from "./blockService";
     });
 }());
 
-chrome.browserAction.onClicked.addListener(function () {
+chrome.action.onClicked.addListener(function () {
     chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
         const tab_length = util.getTabLengthOrZero(result);
         chrome.tabs.query({currentWindow: true}, function (tabs: chrome.tabs.Tab[]) {
