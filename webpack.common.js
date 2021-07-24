@@ -28,11 +28,6 @@ module.exports = {
                 {from: "src/tabs.html", to: path.join(__dirname, "dist/")},
                 {from: "src/manifest.json", to: path.join(__dirname, "dist/")},
                 {
-                    context: "src/images",
-                    from: "*",
-                    to: path.join(__dirname, "dist/images/"),
-                },
-                {
                     context: "src/js",
                     from: "zlib*.js",
                     to: path.join(__dirname, "dist/js/"),

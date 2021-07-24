@@ -11,7 +11,7 @@ module.exports = merge(common, {
         new CopyPlugin({
             patterns: [
                 {
-                    context: "src/images",
+                    context: "src/images/dev",
                     from: "*",
                     to: path.join(__dirname, "dist/images/"),
                 },
