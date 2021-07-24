@@ -1,25 +1,35 @@
+import UIkit from 'uikit';
+// @ts-ignore
+import Icons from 'uikit/dist/js/uikit-icons';
+// @ts-ignore
+UIkit.use(Icons);
+
+const util = require('./util');
+
 window.onload = function () {
     const extension_name = chrome.runtime.getManifest().name;
+    // @ts-ignore
     document.getElementsByTagName("h1")[0].innerHTML = document.getElementsByTagName("h1")[0].innerHTML.replace("SyncTabClipper", extension_name);
 
     function exportJson() {
         const export_text_dom = document.getElementById("export_body");
-        chrome.storage.sync.get([gettabLengthKey()], function (result) {
-            const tab_length = gettabLengthOrZero(result);
+        chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
+            const tab_length = util.getTabLengthOrZero(result);
             let promiseArray = [];
 
             for (let x = 0; x < tab_length; x++) {
-                const key = getTabKey(x);
-                promiseArray.push(getSyncStorage(key))
+                const key = util.getTabKey(x);
+                promiseArray.push(util.getSyncStorage(key))
             }
 
             Promise.all(promiseArray).then((result) => {
-                const obj_result = result.filter(Boolean).filter(str => str.toString().length > 0).map(data => inflateJson(data));
+                const obj_result = result.filter(Boolean).filter(str => str.toString().length > 0).map(data => util.inflateJson(data));
 
                 const sort_result = obj_result.filter(Boolean).filter(data => (data.tabs.length > 0)).sort(function (a, b) {
                     return b.created_at - a.created_at;
                 });
 
+                // @ts-ignore
                 export_text_dom.value = JSON.stringify(sort_result);
             });
         });
@@ -27,21 +37,26 @@ window.onload = function () {
 
     function importJson() {
         const import_text_dom = document.getElementById("import_body");
+        // @ts-ignore
         const json = JSON.parse(import_text_dom.value);
         (async () => {
-            const tab_length_result = await getSyncStorage(gettabLengthKey());
-            const tab_length = gettabLengthOrZero(tab_length_result);
+            const tab_length_result = await util.getSyncStorage(util.getTabLengthKey());
+            const tab_length = util.getTabLengthOrZero(tab_length_result);
+            // @ts-ignore
             let promiseArray = [];
             let idx = tab_length;
+            // @ts-ignore
             json.reverse().forEach((json_arr) => {
-                const key = getTabKey(idx);
-                promiseArray.push(setSyncStorage(key, deflateJson(JSON.stringify(json_arr))));
+                const key = util.getTabKey(idx);
+                promiseArray.push(util.setSyncStorage(key, util.deflateJson(JSON.stringify(json_arr))));
                 idx += 1;
             });
 
+            // @ts-ignore
             Promise.all(promiseArray).then(() => {
                 let set_data = {};
-                set_data[gettabLengthKey()] = tab_length + json.length;
+                // @ts-ignore
+                set_data[util.getTabLengthKey()] = tab_length + json.length;
                 chrome.storage.sync.set(set_data, function () {
                     chrome.tabs.reload({bypassCache: true}, function () {
                     });
@@ -52,21 +67,23 @@ window.onload = function () {
         })();
     }
 
+    // @ts-ignore
     function setLinkDom(key) {
         return new Promise(function (resolve) {
                 chrome.storage.sync.get([key], function (result) {
                     const main = document.getElementById('main');
 
-                    if (!isEmpty(result)) {
-                        const tab_datas = inflateJson(result[key]);
-                        const created_at = toNumber(tab_datas.created_at);
+                    if (!util.isEmpty(result)) {
+                        const tab_datas = util.inflateJson(result[key]);
+                        const created_at = util.toNumber(tab_datas.created_at);
+                        // @ts-ignore
                         const tabs = tab_datas.tabs.map(function (page_data) {
-                            const domain = getDomein(page_data.url);
+                            const domain = util.getDomain(page_data.url);
                             // URLパースに失敗した場合、""を返す
                             // そのままだと、https://www.google.com/s2/faviconsが400になるので、空文字を渡す
                             const encode_domain = (domain === "") ? encodeURI(" ") : encodeURI(domain);
-                            const encode_url = escape_html(page_data.url);
-                            const encode_title = escape_html(page_data.title);
+                            const encode_url = util.escape_html(page_data.url);
+                            const encode_title = util.escape_html(page_data.title);
                             return `
 <li>
     <img src="https://www.google.com/s2/favicons?domain=${encode_domain}" alt="${encode_title}"/>
@@ -90,25 +107,35 @@ window.onload = function () {
         <ul>${tabs}</ul>
     </div>
 </div>`;
+                        // @ts-ignore
                         main.insertAdjacentHTML('afterbegin', insertHtml);
                         const this_card_dom = document.getElementById(key);
 
+                        // @ts-ignore
                         const linkDoms = this_card_dom.getElementsByClassName('tab_link');
                         for (let j = 0; j < linkDoms.length; j++) {
+                            // @ts-ignore
                             linkDoms[j].addEventListener('click', function (e) {
                                 e.preventDefault();
-                                clickLinkByEventListener(e.toElement);
+                                // @ts-ignore
+                                clickLinkByEventListener(e.srcElement);
                             });
                         }
 
+                        // @ts-ignore
                         const deleteLinkDoms = this_card_dom.getElementsByClassName('tab_close');
                         for (let j = 0; j < deleteLinkDoms.length; j++) {
+                            // @ts-ignore
                             deleteLinkDoms[j].addEventListener('click', deleteLinkByEventListener);
                         }
 
+                        // @ts-ignore
                         const all_tab_link = this_card_dom.getElementsByClassName('all_tab_link')[0];
+                        // @ts-ignore
                         all_tab_link.addEventListener('click', allOpenLinkByEventListener);
+                        // @ts-ignore
                         const all_tab_delete = this_card_dom.getElementsByClassName('all_tab_delete')[0];
+                        // @ts-ignore
                         all_tab_delete.addEventListener('click', allDeleteLinkByEventListener);
 
                         resolve(true);
@@ -120,8 +147,9 @@ window.onload = function () {
         );
     }
 
+    // @ts-ignore
     function jsonFromHtml(dom) {
-        const created_at = toNumber(dom.getAttribute("data-created-at"));
+        const created_at = util.toNumber(dom.getAttribute("data-created-at"));
 
         let json = {
             created_at: created_at,
@@ -134,12 +162,14 @@ window.onload = function () {
                 url: linkDoms[j].getAttribute("data-url"),
                 title: linkDoms[j].getAttribute("data-title")
             };
+            // @ts-ignore
             json.tabs.push(tab_data);
         }
 
         return json;
     }
 
+    // @ts-ignore
     function deleteLink(target) {
         const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
         // 先にsyncに保存済みのデータを消したいがDom→JSONがやりにくくなる
@@ -160,7 +190,8 @@ window.onload = function () {
             });
         } else {
             let save_obj = {};
-            save_obj[id] = json;
+            // @ts-ignore
+            save_obj[id] = util.deflateJson(JSON.stringify(json));
             chrome.storage.sync.set(save_obj, function () {
                 const error = chrome.runtime.lastError;
                 if (error) {
@@ -171,27 +202,30 @@ window.onload = function () {
 
     }
 
-    function clickLinkByEventListener(e) {
+    function clickLinkByEventListener(e: HTMLElement) {
         const target = e;
         const url = target.getAttribute("data-url");
+        // @ts-ignore
         chrome.tabs.create({url: url, active: false}, function () {
             deleteLink(target);
         });
     }
 
     function deleteLinkByEventListener() {
+        // @ts-ignore
         const target = this;
         deleteLink(target);
     }
 
     function allOpenLinkByEventListener() {
+        // @ts-ignore
         const target = this;
         const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
         const tab_links = parentDiv.getElementsByClassName("tab_link");
         let promiseArray = [];
         for (let i = 0; i < tab_links.length; i++) {
             const url = tab_links[i].getAttribute("data-url");
-            promiseArray.push(createTabs({url: url, active: false}));
+            promiseArray.push(util.createTabs({url: url, active: false}));
         }
         Promise.all(promiseArray).then(() => {
             allDeleteLink(target);
@@ -199,10 +233,12 @@ window.onload = function () {
     }
 
     function allDeleteLinkByEventListener() {
+        // @ts-ignore
         const target = this;
         allDeleteLink(target);
     }
 
+    // @ts-ignore
     function allDeleteLink(target) {
         const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
 
@@ -218,18 +254,21 @@ window.onload = function () {
     }
 
     const all_clear = document.getElementById('all_clear');
-    all_clear.addEventListener('click', allClear);
+    // @ts-ignore
+    all_clear.addEventListener('click', util.allClear);
     const export_link = document.getElementById('export_link');
+    // @ts-ignore
     export_link.addEventListener('click', exportJson);
     const import_link = document.getElementById('import_link');
+    // @ts-ignore
     import_link.addEventListener('click', importJson);
 
-    chrome.storage.sync.get([gettabLengthKey()], function (result) {
-        const tab_length = gettabLengthOrZero(result);
+    chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
+        const tab_length = util.getTabLengthOrZero(result);
         let promiseArray = [];
 
         for (let i = 0; i < tab_length; i++) {
-            const key = getTabKey(i);
+            const key = util.getTabKey(i);
             promiseArray.push(setLinkDom(key))
         }
 
@@ -237,6 +276,7 @@ window.onload = function () {
             const is_tabs_exists = (result.filter(flag => flag === true).length > 0);
             const main = document.getElementById('main');
             if (!is_tabs_exists) {
+                // @ts-ignore
                 main.insertAdjacentHTML('afterbegin', `
 <div class="uk-header">
     <h3 class="uk-title uk-margin-remove-bottom no-tabs">保存済みのタブはありません。</h3>

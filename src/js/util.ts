@@ -1,13 +1,15 @@
-function isEmpty(obj) {
+import {model} from "./types/interface";
+
+export function isEmpty(obj: object): boolean {
     return !Object.keys(obj).length;
 }
 
-function getDomein(str) {
+export function getDomain(str: string): string {
     try {
         const parser = new URL(str);
         return parser.hostname;
     } catch (e) {
-        if (e instanceof TypeError) {
+        if (e.code === "ERR_INVALID_URL") {
             return "";
         } else {
             throw e;
@@ -15,11 +17,12 @@ function getDomein(str) {
     }
 }
 
-function escape_html(string) {
-    // https://qiita.com/saekis/items/c2b41cd8940923863791
-    if (typeof string !== 'string') {
-        return string;
-    }
+/**
+ * https://qiita.com/saekis/items/c2b41cd8940923863791
+ * @param string
+ */
+export function escape_html(string: string): string {
+    // @ts-ignore
     return string.replace(/[&'`"<>]/g, function (match) {
         return {
             '&': '&amp;',
@@ -32,7 +35,7 @@ function escape_html(string) {
     });
 }
 
-function toNumber(str) {
+export function toNumber(str: string | number): number {
     let num = Number(str);
     if (isNaN(num)) {
         throw new Error('to Number Error: ' + str);
@@ -40,19 +43,20 @@ function toNumber(str) {
     return num;
 }
 
-function gettabLengthOrZero(result) {
+// @ts-ignore
+export function getTabLengthOrZero(result) {
     if (!result) {
         return 0;
     } else if (Number.isInteger(result)) {
         return result;
-    } else if (Number.isInteger(result[gettabLengthKey()])) {
-        return result[gettabLengthKey()];
+    } else if (Number.isInteger(result[getTabLengthKey()])) {
+        return result[getTabLengthKey()];
     } else {
         return 0;
     }
 }
 
-function allClear() {
+export function allClear(): void {
     if (window.confirm('保存したすべてのタブを削除します。よろしいですか？')) {
         chrome.storage.sync.clear(function () {
             alert('すべてのデータを削除しました');
@@ -60,7 +64,8 @@ function allClear() {
     }
 }
 
-function getSyncStorage(key) {
+// @ts-ignore
+export function getSyncStorage(key) {
     return new Promise((resolve, reject) => {
         chrome.storage.sync.get([key], (item) => {
             const error = chrome.runtime.lastError;
@@ -73,21 +78,22 @@ function getSyncStorage(key) {
     });
 }
 
-function createTabs(properties) {
+export function createTabs(properties: chrome.tabs.CreateProperties) {
     return new Promise((resolve, reject) => {
         chrome.tabs.create(properties, () => {
             const error = chrome.runtime.lastError;
             if (error) {
                 reject(error);
             } else {
+                // @ts-ignore
                 resolve();
             }
         });
     });
 }
 
-function setSyncStorage(key, value) {
-    let set_obj = {};
+export function setSyncStorage(key: string, value: string) {
+    let set_obj: { [key: string]: string; } = {};
     set_obj[key] = value;
     return new Promise((resolve, reject) => {
         chrome.storage.sync.set(set_obj, () => {
@@ -101,29 +107,34 @@ function setSyncStorage(key, value) {
     });
 }
 
-function getTabKey(index) {
+export function getTabKey(index: number): string {
     return `td_${index}`;
 }
 
-function gettabLengthKey() {
+export function getTabLengthKey(): string {
     return "t_len";
 }
 
-function deflate(val) {
+
+export function deflate(val: string) {
     const encodeVal = encodeURIComponent(val);
+    // 既存のzlib.jsをtypeScriptでimportする方法がわからないので一旦直接呼び出す そのため、@ts-ignoreを指定している
+    // @ts-ignore
     const z_stream = ZLIB.deflateInit({level: 9});
     const encoded_string = z_stream.deflate(encodeVal);
-    return btoa(encoded_string);
+    return window.btoa(encoded_string);
 }
 
-function inflate(val) {
-    const tobVal = atob(val);
+export function inflate(val: string) {
+    const tobVal = window.atob(val);
+    // 既存のzlib.jsをtypeScriptでimportする方法がわからないので一旦直接呼び出す そのため、@ts-ignoreを指定している
+    // @ts-ignore
     const z_stream = ZLIB.inflateInit();
     const decoded_string = z_stream.inflate(tobVal);
     return decodeURIComponent(decoded_string);
 }
 
-function deflateJson(str) {
+export function deflateJson(str: string) {
     const deflateStr = deflate(str);
     if (deflateStr.length < str.length) {
         return deflateStr;
@@ -132,7 +143,7 @@ function deflateJson(str) {
     }
 }
 
-function inflateJson(val) {
+export function inflateJson(val: string) {
     try {
         return JSON.parse(val);
     } catch (e) {
@@ -144,3 +155,32 @@ function inflateJson(val) {
         }
     }
 }
+
+export function blockToJson(block: model.Block): string {
+    let a = {
+        // 既存のcreated_atがgetTimeで渡した数字を入れている(互換性) & 文字列としてTimeの方が短いため、Json上ではTimeを入れる
+        created_at: block.created_at.getTime(),
+        tabs: block.tabs
+    }
+
+    return JSON.stringify(a);
+}
+
+export function jsonToBlock(json: string): model.Block {
+    let js = JSON.parse(json);
+
+    const tabs: model.Tab[] = []
+
+    js.tabs.forEach((json_arr: any) => {
+        tabs.push({
+            url: json_arr.url,
+            title: json_arr.title,
+        });
+    });
+
+    return {
+        created_at: new Date(js.created_at),
+        tabs: tabs,
+    }
+}
+
