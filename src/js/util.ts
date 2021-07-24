@@ -43,14 +43,13 @@ export function toNumber(str: string | number): number {
     return num;
 }
 
-// @ts-ignore
-export function getTabLengthOrZero(result) {
+export function getTabLengthOrZero(result: any): number {
     if (!result) {
         return 0;
     } else if (Number.isInteger(result)) {
-        return result;
+        return Number(result);
     } else if (Number.isInteger(result[getTabLengthKey()])) {
-        return result[getTabLengthKey()];
+        return Number(result[getTabLengthKey()]);
     } else {
         return 0;
     }
