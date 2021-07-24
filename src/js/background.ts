@@ -1,5 +1,5 @@
 import * as util from './util';
-import {model} from "./types/interface";
+import {blockService} from "./blockService";
 
 (function () {
     // contextMenusに関する操作
@@ -32,21 +32,11 @@ chrome.browserAction.onClicked.addListener(function () {
     chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
         const tab_length = util.getTabLengthOrZero(result);
         chrome.tabs.query({currentWindow: true}, function (tabs: chrome.tabs.Tab[]) {
-            let block: model.Block = {
-                created_at: new Date(),
-                tabs: []
-            }
-            tabs.forEach(tab => {
-                const tab_data: model.Tab = {
-                    url: tab.url!,
-                    title: tab.title!,
-                }
-                block.tabs.push(tab_data);
-            });
+            const block = blockService.createBlock(tabs, new Date());
 
             const key_str = util.getTabKey(tab_length);
             let save_obj: { [key: string]: string; } = {};
-            save_obj[key_str] = util.deflateJson(util.blockToJson(block));
+            save_obj[key_str] = util.deflateJson(blockService.blockToJson(block));
             chrome.storage.sync.set(save_obj, function () {
                 const error = chrome.runtime.lastError;
                 if (error) {

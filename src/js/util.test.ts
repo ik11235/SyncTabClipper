@@ -10,46 +10,6 @@ describe('util', (): void => {
         expect(res).toBe('');
     });
 
-    test('blockToJson 正常系', (): void => {
-        let block = {
-            created_at: new Date(`2021-01-02T03:04:05.678Z`),
-            tabs: [
-                {
-                    url: "https://example.com/test",
-                    title: "title-test"
-                },
-                {
-                    url: "http://google.com/test2",
-                    title: "google-test"
-                }
-            ],
-        }
-
-        const res = util.blockToJson(block)
-        expect(res).toBe("{\"created_at\":1609556645678,\"tabs\":[{\"url\":\"https://example.com/test\",\"title\":\"title-test\"},{\"url\":\"http://google.com/test2\",\"title\":\"google-test\"}]}");
-    });
-
-    test('jsonToBlock 正常系', (): void => {
-        let json = "{\"created_at\":1609556645678,\"tabs\":[{\"url\":\"https://example.com/test\",\"title\":\"title-test\"},{\"url\":\"http://google.com/test2\",\"title\":\"google-test\"}]}"
-
-        const res = util.jsonToBlock(json)
-        const expected = {
-            created_at: new Date(`2021-01-02T03:04:05.678Z`),
-            tabs: [
-                {
-                    url: "https://example.com/test",
-                    title: "title-test"
-                },
-                {
-                    url: "http://google.com/test2",
-                    title: "google-test"
-                }
-            ],
-        }
-
-        expect(res).toStrictEqual(expected);
-    });
-
     test('getTabLengthOrZero null->0', (): void => {
         const res = util.getTabLengthOrZero(null)
         const expected = 0
