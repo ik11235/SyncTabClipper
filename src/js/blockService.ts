@@ -60,7 +60,7 @@ export namespace blockService {
         }
     }
 
-    function tabToHtml(tab: model.Tab): string {
+    export function tabToHtml(tab: model.Tab): string {
         const domain = util.getDomain(tab.url);
         // URLパースに失敗した場合、""を返す
         // そのままだと、https://www.google.com/s2/faviconsが400になるので、空文字を渡す
