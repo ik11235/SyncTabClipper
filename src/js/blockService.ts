@@ -60,23 +60,25 @@ export namespace blockService {
         }
     }
 
-    export function blockToHtml(block: model.Block, id: string) {
-        const created_at = block.created_at;
-        const tabs = block.tabs.map(function (page_data) {
-            const domain = util.getDomain(page_data.url);
-            // URLパースに失敗した場合、""を返す
-            // そのままだと、https://www.google.com/s2/faviconsが400になるので、空文字を渡す
-            const encode_domain = (domain === "") ? encodeURI(" ") : encodeURI(domain);
-            const encode_url = util.escape_html(page_data.url);
-            const encode_title = util.escape_html(page_data.title);
-            return `
+    function tabToHtml(tab: model.Tab): string {
+        const domain = util.getDomain(tab.url);
+        // URLパースに失敗した場合、""を返す
+        // そのままだと、https://www.google.com/s2/faviconsが400になるので、空文字を渡す
+        const encode_domain = (domain === "") ? encodeURI(" ") : encodeURI(domain);
+        const encode_url = util.escape_html(tab.url);
+        const encode_title = util.escape_html(tab.title);
+        return `
 <li>
     <img src="https://www.google.com/s2/favicons?domain=${encode_domain}" alt="${encode_title}"/>
     <a href="${encode_url}" class="tab_link" data-url="${encode_url}" data-title="${encode_title}">${encode_title}</a>
     <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>
 </li>`;
-        }).join("\n");
-        const insertHtml = `
+    }
+
+    export function blockToHtml(block: model.Block, id: string): string {
+        const created_at = block.created_at;
+        const tabs = block.tabs.map(tab => tabToHtml(tab)).join("\n");
+        return `
 <div id="${id}" class="tabs uk-card-default" data-created-at="${created_at.getTime()}">
     <div class="uk-card-header">
         <h3 class="uk-card-title uk-margin-remove-bottom">${block.tabs.length}個のタブ</h3>
@@ -91,6 +93,5 @@ export namespace blockService {
         <ul>${tabs}</ul>
     </div>
 </div>`;
-        return insertHtml;
     }
 }
