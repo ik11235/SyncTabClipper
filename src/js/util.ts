@@ -63,8 +63,7 @@ export function allClear(): void {
     }
 }
 
-// @ts-ignore
-export function getSyncStorage(key) {
+export function getSyncStorage(key: string) {
     return new Promise((resolve, reject) => {
         chrome.storage.sync.get([key], (item) => {
             const error = chrome.runtime.lastError;
