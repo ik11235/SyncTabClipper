@@ -1,5 +1,6 @@
 import {model} from "./types/interface";
 import * as util from "./util"
+import {zlibWrapper} from "./zlib-wrapper";
 
 export namespace blockService {
     export function createBlock(tabs: chrome.tabs.Tab[], created_at: Date): model.Block {
@@ -60,7 +61,7 @@ export namespace blockService {
             return jsonToBlock(jsonStr);
         } catch (e) {
             if (e instanceof SyntaxError) {
-                const jsonStr2 = util.inflate(jsonStr);
+                const jsonStr2 = zlibWrapper.inflate(jsonStr);
                 return jsonToBlock(jsonStr2);
             } else {
                 throw e;
@@ -70,7 +71,7 @@ export namespace blockService {
 
     export function deflateBlock(block: model.Block): string {
         const blockStr = blockToJson(block)
-        const deflateStr = util.deflate(blockStr);
+        const deflateStr = zlibWrapper.deflate(blockStr);
         if (deflateStr.length < blockStr.length) {
             return deflateStr;
         } else {
