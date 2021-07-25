@@ -9,9 +9,7 @@ import {util} from "./util"
 UIkit.use(Icons);
 
 window.onload = function () {
-    const extension_name = chrome.runtime.getManifest().name;
-    // @ts-ignore
-    document.getElementsByTagName("h1")[0].innerHTML = document.getElementsByTagName("h1")[0].innerHTML.replace("SyncTabClipper", extension_name);
+    util.replacePageTitle(<HTMLElement>document.getElementsByTagName("h1")[0], chrome.runtime.getManifest().name)
 
     function exportJson() {
         const exportTextElement: HTMLInputElement = <HTMLInputElement>document.getElementById('export_body')
