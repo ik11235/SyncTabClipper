@@ -13,27 +13,8 @@ window.onload = function () {
     document.getElementsByTagName("h1")[0].innerHTML = document.getElementsByTagName("h1")[0].innerHTML.replace("SyncTabClipper", extension_name);
 
     function exportJson() {
-        const export_text_dom = document.getElementById("export_body");
-        chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
-            const tab_length = util.getTabLengthOrZero(result);
-            let promiseArray: Promise<string>[] = [];
-
-            for (let x = 0; x < tab_length; x++) {
-                const key = util.getTabKey(x);
-                promiseArray.push(util.getSyncStorage(key))
-            }
-
-            Promise.all(promiseArray).then((result) => {
-                const obj_result = result.filter(Boolean).filter(str => str.length > 0).map(data => blockService.inflateJson(data));
-
-                const sort_result = obj_result.filter(Boolean).filter(data => (data.tabs.length > 0)).sort(function (a, b) {
-                    return b.created_at.getTime() - a.created_at.getTime();
-                });
-
-                // @ts-ignore
-                export_text_dom.value = JSON.stringify(sort_result);
-            });
-        });
+        const exportTextElement: HTMLInputElement = <HTMLInputElement>document.getElementById('export_body')
+        blockService.exportAllDataJson(exportTextElement)
     }
 
     function importJson() {

@@ -19,14 +19,16 @@ export namespace blockService {
         };
     }
 
-    export function blockToJson(block: model.Block): string {
-        let a = {
-            // 既存のcreated_atがgetTimeで渡した数字を入れている(互換性) & 文字列としてTimeの方が短いため、Json上ではTimeを入れる
+    function blockToJsonObj(block: model.Block): object {
+        return {
             created_at: block.created_at.getTime(),
             tabs: block.tabs
         }
+    }
 
-        return JSON.stringify(a);
+
+    export function blockToJson(block: model.Block): string {
+        return JSON.stringify(blockToJsonObj(block));
     }
 
     export function jsonToBlock(json: string): model.Block {
@@ -127,5 +129,28 @@ export namespace blockService {
             created_at: created_at,
             tabs: tabs
         };
+    }
+
+    export function exportAllDataJson(targetElement: HTMLInputElement): void {
+        chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
+            const tab_length = util.getTabLengthOrZero(result);
+            let promiseArray: Promise<string>[] = [];
+
+            for (let x = 0; x < tab_length; x++) {
+                const key = util.getTabKey(x);
+                promiseArray.push(util.getSyncStorage(key))
+            }
+
+            Promise.all(promiseArray).then((result) => {
+                const obj_result = result.filter(Boolean).filter(str => str.length > 0).map(data => blockService.inflateJson(data));
+
+                const sort_result = obj_result.filter(Boolean).filter(data => (data.tabs.length > 0)).sort(function (a, b) {
+                    return b.created_at.getTime() - a.created_at.getTime();
+                });
+
+                targetElement.value = JSON.stringify(sort_result.map(blockToJsonObj))
+            })
+        });
+
     }
 }
