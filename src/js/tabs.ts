@@ -1,6 +1,7 @@
 import UIkit from 'uikit';
 // @ts-ignore
 import Icons from 'uikit/dist/js/uikit-icons';
+import {blockService} from "./blockService";
 // @ts-ignore
 UIkit.use(Icons);
 
@@ -12,56 +13,13 @@ window.onload = function () {
     document.getElementsByTagName("h1")[0].innerHTML = document.getElementsByTagName("h1")[0].innerHTML.replace("SyncTabClipper", extension_name);
 
     function exportJson() {
-        const export_text_dom = document.getElementById("export_body");
-        chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
-            const tab_length = util.getTabLengthOrZero(result);
-            let promiseArray: Promise<string>[] = [];
-
-            for (let x = 0; x < tab_length; x++) {
-                const key = util.getTabKey(x);
-                promiseArray.push(util.getSyncStorage(key))
-            }
-
-            Promise.all(promiseArray).then((result) => {
-                const obj_result = result.filter(Boolean).filter(str => str.length > 0).map(data => util.inflateJson(data));
-
-                const sort_result = obj_result.filter(Boolean).filter(data => (data.tabs.length > 0)).sort(function (a, b) {
-                    return b.created_at - a.created_at;
-                });
-
-                // @ts-ignore
-                export_text_dom.value = JSON.stringify(sort_result);
-            });
-        });
+        const exportTextElement: HTMLInputElement = <HTMLInputElement>document.getElementById('export_body')
+        blockService.exportAllDataJson(exportTextElement)
     }
 
     function importJson() {
-        const import_text_dom = document.getElementById("import_body");
-        // @ts-ignore
-        const json = JSON.parse(import_text_dom.value);
-        (async () => {
-            const tab_length_result = await util.getSyncStorage(util.getTabLengthKey());
-            const tab_length = util.getTabLengthOrZero(tab_length_result);
-            let promiseArray: Promise<void>[] = [];
-            let idx = tab_length;
-            // @ts-ignore
-            json.reverse().forEach((json_arr) => {
-                const key = util.getTabKey(idx);
-                promiseArray.push(util.setSyncStorage(key, util.deflateJson(JSON.stringify(json_arr))));
-                idx += 1;
-            });
-
-            Promise.all(promiseArray).then(() => {
-                let set_data: { [key: string]: number; } = {};
-                set_data[util.getTabLengthKey()] = tab_length + json.length;
-                chrome.storage.sync.set(set_data, function () {
-                    chrome.tabs.reload({bypassCache: true}, function () {
-                    });
-                });
-            }).catch(function (reason) {
-                alert("データのインポートに失敗しました。" + reason.message);
-            });
-        })();
+        const importTextElement: HTMLInputElement = <HTMLInputElement>document.getElementById("import_body");
+        blockService.importAllDataJson(importTextElement.value).catch(error => alert("データのインポートに失敗しました。" + error.message));
     }
 
     // @ts-ignore
@@ -71,39 +29,8 @@ window.onload = function () {
                     const main = document.getElementById('main');
 
                     if (!util.isEmpty(result)) {
-                        const tab_datas = util.inflateJson(result[key]);
-                        const created_at = util.toNumber(tab_datas.created_at);
-                        // @ts-ignore
-                        const tabs = tab_datas.tabs.map(function (page_data) {
-                            const domain = util.getDomain(page_data.url);
-                            // URLパースに失敗した場合、""を返す
-                            // そのままだと、https://www.google.com/s2/faviconsが400になるので、空文字を渡す
-                            const encode_domain = (domain === "") ? encodeURI(" ") : encodeURI(domain);
-                            const encode_url = util.escape_html(page_data.url);
-                            const encode_title = util.escape_html(page_data.title);
-                            return `
-<li>
-    <img src="https://www.google.com/s2/favicons?domain=${encode_domain}" alt="${encode_title}"/>
-    <a href="${encode_url}" class="tab_link" data-url="${encode_url}" data-title="${encode_title}">${encode_title}</a>
-    <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>
-</li>`;
-                        }).join("\n");
-                        const created_date = new Date(created_at);
-                        const insertHtml = `
-<div id="${key}" class="tabs uk-card-default" data-created-at="${created_at}">
-    <div class="uk-card-header">
-        <h3 class="uk-card-title uk-margin-remove-bottom">${tab_datas.tabs.length}個のタブ</h3>
-        <p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="${created_date.toISOString()}">${created_date}</time></p>
-        <div class="uk-grid">
-            <div class="uk-width-auto"><span class="all_tab_link uk-link">すべてのリンクを開く</span></div>
-            <div class="uk-width-auto"><span class="all_tab_delete uk-link">すべてのリンクを閉じる</span></div>
-            <div class="uk-width-expand"></div>
-        </div>
-    </div>
-    <div class="uk-card-body">
-        <ul>${tabs}</ul>
-    </div>
-</div>`;
+                        const block = blockService.inflateJson(result[key]);
+                        const insertHtml = blockService.blockToHtml(block, key);
                         // @ts-ignore
                         main.insertAdjacentHTML('afterbegin', insertHtml);
                         const this_card_dom = document.getElementById(key);
@@ -145,28 +72,6 @@ window.onload = function () {
     }
 
     // @ts-ignore
-    function jsonFromHtml(dom) {
-        const created_at = util.toNumber(dom.getAttribute("data-created-at"));
-
-        let json = {
-            created_at: created_at,
-            tabs: []
-        };
-
-        const linkDoms = dom.getElementsByClassName('tab_link');
-        for (let j = 0; j < linkDoms.length; j++) {
-            const tab_data = {
-                url: linkDoms[j].getAttribute("data-url"),
-                title: linkDoms[j].getAttribute("data-title")
-            };
-            // @ts-ignore
-            json.tabs.push(tab_data);
-        }
-
-        return json;
-    }
-
-    // @ts-ignore
     function deleteLink(target) {
         const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
         // 先にsyncに保存済みのデータを消したいがDom→JSONがやりにくくなる
@@ -175,8 +80,8 @@ window.onload = function () {
         li.parentNode.removeChild(li);
 
         const id = parentDiv.id;
-        const json = jsonFromHtml(parentDiv);
-        if (json.tabs.length <= 0) {
+        const block = blockService.htmlToBlock(parentDiv)
+        if (block.tabs.length <= 0) {
             chrome.storage.sync.remove(id, function () {
                 const error = chrome.runtime.lastError;
                 if (error) {
@@ -186,9 +91,8 @@ window.onload = function () {
                 parentDiv.parentNode.removeChild(parentDiv);
             });
         } else {
-            let save_obj = {};
-            // @ts-ignore
-            save_obj[id] = util.deflateJson(JSON.stringify(json));
+            let save_obj: { [key: string]: string; } = {};
+            save_obj[id] = util.deflateJson(blockService.blockToJson(block));
             chrome.storage.sync.set(save_obj, function () {
                 const error = chrome.runtime.lastError;
                 if (error) {
