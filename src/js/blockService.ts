@@ -147,6 +147,10 @@ export namespace blockService {
         };
     }
 
+    const sortBlock = (a: model.Block, b: model.Block): number => {
+        return b.created_at.getTime() - a.created_at.getTime()
+    }
+
     export function exportAllDataJson(targetElement: HTMLInputElement): void {
         chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
             const tab_length = util.getTabLengthOrZero(result);
@@ -159,10 +163,7 @@ export namespace blockService {
 
             Promise.all(promiseArray).then((result) => {
                 const obj_result = result.filter(Boolean).filter(str => str.length > 0).map(data => blockService.inflateJson(data));
-
-                const sort_result = obj_result.filter(Boolean).filter(data => (data.tabs.length > 0)).sort(function (a, b) {
-                    return b.created_at.getTime() - a.created_at.getTime();
-                });
+                const sort_result = obj_result.filter(Boolean).filter(data => (data.tabs.length > 0)).sort(sortBlock);
 
                 targetElement.value = JSON.stringify(sort_result.map(blockToJsonObj))
             })
@@ -182,9 +183,7 @@ export namespace blockService {
         const json = JSON.parse(jsonStr)
         const blocks = blockListForJsonObject(json)
 
-        blocks.sort(function (a, b) {
-            return a.created_at.getTime() - b.created_at.getTime();
-        }).forEach(block => {
+        blocks.sort(sortBlock).reverse().forEach(block => {
             const key = util.getTabKey(idx);
             promiseArray.push(util.setSyncStorage(key, deflateBlock(block)))
             idx += 1
