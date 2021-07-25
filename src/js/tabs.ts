@@ -72,14 +72,15 @@ window.onload = function () {
 
     // @ts-ignore
     function deleteLink(target) {
-        const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
+        const BlockRootDom = util.searchBlockRootDom(target)
+
         // 先にsyncに保存済みのデータを消したいがDom→JSONがやりにくくなる
         // いったん、DOM消しを先にする
         const li = target.parentNode;
         li.parentNode.removeChild(li);
 
-        const id = parentDiv.id;
-        const block = blockService.htmlToBlock(parentDiv)
+        const id = BlockRootDom.id;
+        const block = blockService.htmlToBlock(BlockRootDom)
         if (block.tabs.length <= 0) {
             chrome.storage.sync.remove(id, function () {
                 const error = chrome.runtime.lastError;
@@ -87,7 +88,7 @@ window.onload = function () {
                     alert(error.message);
                 }
                 // タブが0になった場合、現在表示中のdomも削除する
-                parentDiv.parentNode.removeChild(parentDiv);
+                BlockRootDom.parentNode!.removeChild(BlockRootDom);
             });
         } else {
             let save_obj: { [key: string]: string; } = {};
@@ -120,11 +121,11 @@ window.onload = function () {
     function allOpenLinkByEventListener() {
         // @ts-ignore
         const target = this;
-        const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
-        const tab_links = parentDiv.getElementsByClassName("tab_link");
-        let promiseArray = [];
-        for (let i = 0; i < tab_links.length; i++) {
-            const url = tab_links[i].getAttribute("data-url");
+        const BlockRootDom = util.searchBlockRootDom(target)
+        const tab_links = BlockRootDom.getElementsByClassName("tab_link");
+        let promiseArray: Promise<void>[] = [];
+        for (let tab of tab_links) {
+            const url = tab.getAttribute("data-url")!
             promiseArray.push(chromeService.tab.createTabs({url: url, active: false}));
         }
         Promise.all(promiseArray).then(() => {
@@ -140,16 +141,16 @@ window.onload = function () {
 
     // @ts-ignore
     function allDeleteLink(target) {
-        const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
+        const BlockRootDom = util.searchBlockRootDom(target)
 
-        const id = parentDiv.id;
+        const id = BlockRootDom.id;
         chrome.storage.sync.remove(id, function () {
             const error = chrome.runtime.lastError;
             if (error) {
                 alert(error.message);
             }
 
-            parentDiv.parentNode.removeChild(parentDiv);
+            BlockRootDom.parentNode!.removeChild(BlockRootDom);
         });
     }
 

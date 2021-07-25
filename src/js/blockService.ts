@@ -99,7 +99,7 @@ export namespace blockService {
         const created_at = block.created_at;
         const tabs = block.tabs.map(tab => tabToHtml(tab)).join("\n");
         return `
-<div id="${id}" class="tabs uk-card-default" data-created-at="${created_at.getTime()}">
+<div id="${id}" class="tabs uk-card-default block-root-dom" data-created-at="${created_at.getTime()}">
     <div class="uk-card-header">
         <h3 class="uk-card-title uk-margin-remove-bottom">${block.tabs.length}個のタブ</h3>
         <p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="${created_at.toISOString()}">${created_at}</time></p>

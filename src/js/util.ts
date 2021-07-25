@@ -51,6 +51,13 @@ export namespace util {
      */
     export function replacePageTitle(element: HTMLElement, replaceStr: string): void {
         element.innerHTML = element.innerHTML.replace("SyncTabClipper", replaceStr);
+    }
 
+    export function searchBlockRootDom(element: HTMLElement): HTMLElement {
+        if (element.classList.contains('block-root-dom')) {
+            return element
+        } else {
+            return searchBlockRootDom(<HTMLElement>element.parentElement)
+        }
     }
 }
