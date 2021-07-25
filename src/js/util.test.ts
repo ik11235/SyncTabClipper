@@ -1,4 +1,4 @@
-import * as util from './util';
+import {util} from "./util";
 
 describe('util', (): void => {
     test('getDomain 正常系', (): void => {

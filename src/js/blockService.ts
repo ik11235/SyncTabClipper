@@ -1,5 +1,5 @@
 import {model} from "./types/interface";
-import * as util from "./util"
+import {util} from "./util"
 import {zlibWrapper} from "./zlib-wrapper";
 import {chromeService} from "./chromeService";
 
