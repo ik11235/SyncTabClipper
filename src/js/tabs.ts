@@ -92,7 +92,7 @@ window.onload = function () {
             });
         } else {
             let save_obj: { [key: string]: string; } = {};
-            save_obj[id] = util.deflateJson(blockService.blockToJson(block));
+            save_obj[id] = blockService.deflateBlock(block)
             chrome.storage.sync.set(save_obj, function () {
                 const error = chrome.runtime.lastError;
                 if (error) {
