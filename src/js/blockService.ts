@@ -88,7 +88,7 @@ export namespace blockService {
         const encode_url = util.escape_html(tab.url);
         const encode_title = util.escape_html(tab.title);
         return `
-<li>
+<li class="tab-root-dom">
     <img src="https://www.google.com/s2/favicons?domain=${encode_domain}" alt="${encode_title}"/>
     <a href="${encode_url}" class="tab_link" data-url="${encode_url}" data-title="${encode_title}">${encode_title}</a>
     <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>

@@ -60,4 +60,13 @@ export namespace util {
             return searchBlockRootDom(<HTMLElement>element.parentElement)
         }
     }
+
+    export function searchTabRootDom(element: HTMLElement): HTMLElement {
+        if (element.classList.contains('tab-root-dom')) {
+            return element
+        } else {
+            return searchTabRootDom(<HTMLElement>element.parentElement)
+        }
+    }
+
 }

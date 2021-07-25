@@ -38,10 +38,9 @@ window.onload = function () {
                         const linkDoms = this_card_dom.getElementsByClassName('tab_link');
                         for (let j = 0; j < linkDoms.length; j++) {
                             // @ts-ignore
-                            linkDoms[j].addEventListener('click', function (e) {
+                            linkDoms[j].addEventListener('click', function (e: Event) {
                                 e.preventDefault();
-                                // @ts-ignore
-                                clickLinkByEventListener(e.srcElement);
+                                clickLinkByEventListener(e);
                             });
                         }
 
@@ -76,8 +75,7 @@ window.onload = function () {
 
         // 先にsyncに保存済みのデータを消したいがDom→JSONがやりにくくなる
         // いったん、DOM消しを先にする
-        const li = target.parentNode;
-        li.parentNode.removeChild(li);
+        target.parentNode!.removeChild(target);
 
         const id = BlockRootDom.id;
         const block = blockService.htmlToBlock(BlockRootDom)
@@ -103,24 +101,26 @@ window.onload = function () {
 
     }
 
-    function clickLinkByEventListener(e: HTMLElement) {
-        const target = e;
-        const url = target.getAttribute("data-url");
-        // @ts-ignore
+    function clickLinkByEventListener(e: Event) {
+        const target = <HTMLElement>e.target!;
+        const url = target.getAttribute("data-url")!
+        const tabRootDom = util.searchTabRootDom(target)
+
         chrome.tabs.create({url: url, active: false}, function () {
-            deleteLink(target);
+            deleteLink(tabRootDom);
         });
     }
 
-    function deleteLinkByEventListener() {
-        // @ts-ignore
-        const target = this;
-        deleteLink(target);
+    function deleteLinkByEventListener(e: Event): void {
+        const target = <HTMLElement>e.target!;
+        const tabRootDom = util.searchTabRootDom(target)
+
+        deleteLink(tabRootDom);
     }
 
-    function allOpenLinkByEventListener() {
-        // @ts-ignore
-        const target = this;
+    function allOpenLinkByEventListener(e: Event): void {
+        const target = <HTMLElement>e.target!;
+
         const BlockRootDom = util.searchBlockRootDom(target)
         const tab_links = BlockRootDom.getElementsByClassName("tab_link");
         let promiseArray: Promise<void>[] = [];
@@ -133,9 +133,9 @@ window.onload = function () {
         });
     }
 
-    function allDeleteLinkByEventListener() {
-        // @ts-ignore
-        const target = this;
+    function allDeleteLinkByEventListener(e: Event): void {
+        const target = <HTMLElement>e.target!;
+
         allDeleteLink(target);
     }
 
