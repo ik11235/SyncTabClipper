@@ -21,44 +21,34 @@ window.onload = function () {
         blockService.importAllDataJson(importTextElement.value).catch(error => alert("データのインポートに失敗しました。" + error.message));
     }
 
-    // @ts-ignore
-    function setLinkDom(key) {
+    function setLinkDom(key: string): Promise<boolean> {
         return new Promise(function (resolve) {
                 chrome.storage.sync.get([key], function (result) {
-                    const main = document.getElementById('main');
+                    const main = document.getElementById('main')!
 
                     if (!util.isEmpty(result)) {
                         const block = blockService.inflateJson(result[key]);
                         const insertHtml = blockService.blockToHtml(block, key);
-                        // @ts-ignore
                         main.insertAdjacentHTML('afterbegin', insertHtml);
-                        const this_card_dom = document.getElementById(key);
+                        const BlockRootDom = document.getElementById(key)!
 
-                        // @ts-ignore
-                        const linkDoms = this_card_dom.getElementsByClassName('tab_link');
-                        for (let j = 0; j < linkDoms.length; j++) {
-                            // @ts-ignore
-                            linkDoms[j].addEventListener('click', function (e: Event) {
+                        const linkDoms = BlockRootDom.getElementsByClassName('tab_link');
+                        for (const link of linkDoms) {
+                            link.addEventListener('click', function (e: Event) {
                                 e.preventDefault();
                                 clickLinkByEventListener(e);
                             });
                         }
 
-                        // @ts-ignore
-                        const deleteLinkDoms = this_card_dom.getElementsByClassName('tab_close');
-                        for (let j = 0; j < deleteLinkDoms.length; j++) {
-                            // @ts-ignore
-                            deleteLinkDoms[j].addEventListener('click', deleteLinkByEventListener);
+                        const deleteLinkDoms = BlockRootDom.getElementsByClassName('tab_close')
+                        for (const link of deleteLinkDoms) {
+                            link.addEventListener('click', deleteLinkByEventListener);
                         }
 
-                        // @ts-ignore
-                        const all_tab_link = this_card_dom.getElementsByClassName('all_tab_link')[0];
-                        // @ts-ignore
-                        all_tab_link.addEventListener('click', allOpenLinkByEventListener);
-                        // @ts-ignore
-                        const all_tab_delete = this_card_dom.getElementsByClassName('all_tab_delete')[0];
-                        // @ts-ignore
-                        all_tab_delete.addEventListener('click', allDeleteLinkByEventListener);
+                        const allTabLink = BlockRootDom.getElementsByClassName('all_tab_link')[0]!
+                        allTabLink.addEventListener('click', allOpenLinkByEventListener)
+                        const allTabDelete = BlockRootDom.getElementsByClassName('all_tab_delete')[0]!
+                        allTabDelete.addEventListener('click', allDeleteLinkByEventListener);
 
                         resolve(true);
                     } else {
@@ -69,8 +59,7 @@ window.onload = function () {
         );
     }
 
-    // @ts-ignore
-    function deleteLink(target) {
+    function deleteLink(target: HTMLElement): void {
         const BlockRootDom = util.searchBlockRootDom(target)
 
         // 先にsyncに保存済みのデータを消したいがDom→JSONがやりにくくなる
@@ -139,8 +128,7 @@ window.onload = function () {
         allDeleteLink(target);
     }
 
-    // @ts-ignore
-    function allDeleteLink(target) {
+    function allDeleteLink(target: HTMLElement) {
         const BlockRootDom = util.searchBlockRootDom(target)
 
         const id = BlockRootDom.id;
@@ -154,14 +142,11 @@ window.onload = function () {
         });
     }
 
-    const all_clear = document.getElementById('all_clear');
-    // @ts-ignore
+    const all_clear = document.getElementById('all_clear')!
     all_clear.addEventListener('click', chromeService.storage.allClear);
-    const export_link = document.getElementById('export_link');
-    // @ts-ignore
+    const export_link = document.getElementById('export_link')!
     export_link.addEventListener('click', exportJson);
-    const import_link = document.getElementById('import_link');
-    // @ts-ignore
+    const import_link = document.getElementById('import_link')!
     import_link.addEventListener('click', importJson);
 
     chrome.storage.sync.get([chromeService.storage.getTabLengthKey()], function (result) {
@@ -175,9 +160,8 @@ window.onload = function () {
 
         Promise.all(promiseArray).then((result) => {
             const is_tabs_exists = (result.filter(flag => flag === true).length > 0);
-            const main = document.getElementById('main');
+            const main = document.getElementById('main')!
             if (!is_tabs_exists) {
-                // @ts-ignore
                 main.insertAdjacentHTML('afterbegin', `
 <div class="uk-header">
     <h3 class="uk-title uk-margin-remove-bottom no-tabs">保存済みのタブはありません。</h3>
