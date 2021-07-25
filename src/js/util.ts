@@ -111,12 +111,3 @@ export function getTabKey(index: number): string {
 export function getTabLengthKey(): string {
     return "t_len";
 }
-
-export function deflateJson(str: string) {
-    const deflateStr = zlibWrapper.deflate(str);
-    if (deflateStr.length < str.length) {
-        return deflateStr;
-    } else {
-        return str;
-    }
-}

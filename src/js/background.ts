@@ -36,7 +36,7 @@ chrome.browserAction.onClicked.addListener(function () {
 
             const key_str = util.getTabKey(tab_length);
             let save_obj: { [key: string]: string; } = {};
-            save_obj[key_str] = util.deflateJson(blockService.blockToJson(block));
+            save_obj[key_str] = blockService.deflateBlock(block)
             chrome.storage.sync.set(save_obj, function () {
                 const error = chrome.runtime.lastError;
                 if (error) {
