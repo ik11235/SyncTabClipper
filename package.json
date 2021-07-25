@@ -3,6 +3,7 @@
     "@types/chrome": "^0.0.148",
     "@types/jest": "^26.0.24",
     "@types/uikit": "^3.3.2",
+    "buffer": "^6.0.3",
     "copy-webpack-plugin": "^9.0.1",
     "jest": "^27.0.6",
     "ts-jest": "^27.0.4",
@@ -18,8 +19,5 @@
     "build": "webpack --config webpack.dev.js",
     "build:prod": "webpack --config webpack.prod.js && zip -r archive.zip dist/",
     "watch": "webpack --watch"
-  },
-  "dependencies": {
-    "buffer": "^6.0.3"
   }
 }
