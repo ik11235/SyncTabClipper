@@ -153,7 +153,7 @@ describe('blockService', (): void => {
         expect(res).toBe(expected);
     })
 
-    test('blockToHtml 正常系', (): void => {
+    test('htmlToBlock 正常系', (): void => {
         let htmlstr = `
 <div id="123" class="tabs uk-card-default" data-created-at="1609556645678">
     <div class="uk-card-header">
@@ -231,7 +231,7 @@ describe('blockService', (): void => {
     })
 
 
-    test('blockToHtml data-urlが欠損', (): void => {
+    test('htmlToBlock data-urlが欠損', (): void => {
         let htmlstr = `
 <div id="123" class="tabs uk-card-default" data-created-at="1609556645678">
     <div class="uk-card-header">
@@ -259,7 +259,7 @@ describe('blockService', (): void => {
         }).toThrowError("data-url or data-title is null");
     })
 
-    test('blockToHtml data-titleが欠損', (): void => {
+    test('htmlToBlock data-titleが欠損', (): void => {
         let htmlstr = `
 <div id="123" class="tabs uk-card-default" data-created-at="1609556645678">
     <div class="uk-card-header">
