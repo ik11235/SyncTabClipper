@@ -1,113 +1,44 @@
-import {zlibWrapper} from "./zlib-wrapper";
+export namespace util {
+    export function isEmpty(obj: object): boolean {
+        return !Object.keys(obj).length;
+    }
 
-export function isEmpty(obj: object): boolean {
-    return !Object.keys(obj).length;
-}
-
-export function getDomain(str: string): string {
-    try {
-        const parser = new URL(str);
-        return parser.hostname;
-    } catch (e) {
-        if (e.code === "ERR_INVALID_URL") {
-            return "";
-        } else {
-            throw e;
+    export function getDomain(str: string): string {
+        try {
+            const parser = new URL(str);
+            return parser.hostname;
+        } catch (e) {
+            if (e.code === "ERR_INVALID_URL") {
+                return "";
+            } else {
+                throw e;
+            }
         }
     }
-}
 
-/**
- * https://qiita.com/saekis/items/c2b41cd8940923863791
- * @param string
- */
-export function escape_html(string: string): string {
-    // @ts-ignore
-    return string.replace(/[&'`"<>]/g, function (match) {
-        return {
-            '&': '&amp;',
-            "'": '&#x27;',
-            '`': '&#x60;',
-            '"': '&quot;',
-            '<': '&lt;',
-            '>': '&gt;',
-        }[match]
-    });
-}
-
-export function toNumber(str: string | number): number {
-    let num = Number(str);
-    if (isNaN(num)) {
-        throw new Error('to Number Error: ' + str);
-    }
-    return num;
-}
-
-export function getTabLengthOrZero(result: any): number {
-    if (!result) {
-        return 0;
-    } else if (Number.isInteger(result)) {
-        return Number(result);
-    } else if (Number.isInteger(result[getTabLengthKey()])) {
-        return Number(result[getTabLengthKey()]);
-    } else {
-        return 0;
-    }
-}
-
-export function allClear(): void {
-    if (window.confirm('保存したすべてのタブを削除します。よろしいですか？')) {
-        chrome.storage.sync.clear(function () {
-            alert('すべてのデータを削除しました');
+    /**
+     * https://qiita.com/saekis/items/c2b41cd8940923863791
+     * @param string
+     */
+    export function escape_html(string: string): string {
+        // @ts-ignore
+        return string.replace(/[&'`"<>]/g, function (match) {
+            return {
+                '&': '&amp;',
+                "'": '&#x27;',
+                '`': '&#x60;',
+                '"': '&quot;',
+                '<': '&lt;',
+                '>': '&gt;',
+            }[match]
         });
     }
-}
 
-export function getSyncStorage(key: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-        chrome.storage.sync.get([key], (item) => {
-            const error = chrome.runtime.lastError;
-            if (error) {
-                reject(error);
-            } else {
-                resolve(item[key]);
-            }
-        });
-    });
-}
-
-export function createTabs(properties: chrome.tabs.CreateProperties): Promise<void> {
-    return new Promise((resolve, reject) => {
-        chrome.tabs.create(properties, () => {
-            const error = chrome.runtime.lastError;
-            if (error) {
-                reject(error);
-            } else {
-                resolve();
-            }
-        });
-    });
-}
-
-export function setSyncStorage(key: string, value: string): Promise<void> {
-    let set_obj: { [key: string]: string; } = {};
-    set_obj[key] = value;
-    return new Promise((resolve, reject) => {
-        chrome.storage.sync.set(set_obj, () => {
-            const error = chrome.runtime.lastError;
-            if (error) {
-                reject(error);
-            } else {
-                resolve();
-            }
-        });
-    });
-}
-
-export function getTabKey(index: number): string {
-    return `td_${index}`;
-}
-
-export function getTabLengthKey(): string {
-    return "t_len";
+    export function toNumber(str: string | number): number {
+        let num = Number(str);
+        if (isNaN(num)) {
+            throw new Error('to Number Error: ' + str);
+        }
+        return num;
+    }
 }

@@ -1,6 +1,7 @@
 import {model} from "./types/interface";
-import * as util from "./util"
+import {util} from "./util"
 import {zlibWrapper} from "./zlib-wrapper";
+import {chromeService} from "./chromeService";
 
 export namespace blockService {
     export function createBlock(tabs: chrome.tabs.Tab[], created_at: Date): model.Block {
@@ -153,13 +154,13 @@ export namespace blockService {
     }
 
     export function exportAllDataJson(targetElement: HTMLInputElement): void {
-        chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
-            const tab_length = util.getTabLengthOrZero(result);
+        chrome.storage.sync.get([chromeService.storage.getTabLengthKey()], function (result) {
+            const tab_length = chromeService.storage.getTabLengthOrZero(result);
             let promiseArray: Promise<string>[] = [];
 
             for (let x = 0; x < tab_length; x++) {
-                const key = util.getTabKey(x);
-                promiseArray.push(util.getSyncStorage(key))
+                const key = chromeService.storage.getTabKey(x);
+                promiseArray.push(chromeService.storage.getSyncStorage(key))
             }
 
             Promise.all(promiseArray).then((result) => {
@@ -176,8 +177,8 @@ export namespace blockService {
     }
 
     export async function importAllDataJson(jsonStr: string): Promise<void> {
-        const tab_length_result = await util.getSyncStorage(util.getTabLengthKey());
-        const tab_length = util.getTabLengthOrZero(tab_length_result);
+        const tab_length_result = await chromeService.storage.getSyncStorage(chromeService.storage.getTabLengthKey());
+        const tab_length = chromeService.storage.getTabLengthOrZero(tab_length_result);
         let promiseArray: Promise<void>[] = [];
         let idx = tab_length;
 
@@ -185,14 +186,14 @@ export namespace blockService {
         const blocks = blockListForJsonObject(json)
 
         blocks.sort(sortBlock).reverse().forEach(block => {
-            const key = util.getTabKey(idx);
-            promiseArray.push(util.setSyncStorage(key, deflateBlock(block)))
+            const key = chromeService.storage.getTabKey(idx);
+            promiseArray.push(chromeService.storage.setSyncStorage(key, deflateBlock(block)))
             idx += 1
         })
 
         Promise.all(promiseArray).then(() => {
             let set_data: { [key: string]: number; } = {};
-            set_data[util.getTabLengthKey()] = tab_length + json.length;
+            set_data[chromeService.storage.getTabLengthKey()] = tab_length + json.length;
             chrome.storage.sync.set(set_data, function () {
                 chrome.tabs.reload({bypassCache: true}, function () {
                 });

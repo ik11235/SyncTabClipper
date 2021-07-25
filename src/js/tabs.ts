@@ -2,10 +2,11 @@ import UIkit from 'uikit';
 // @ts-ignore
 import Icons from 'uikit/dist/js/uikit-icons';
 import {blockService} from "./blockService";
+import {chromeService} from "./chromeService";
+import {util} from "./util"
+
 // @ts-ignore
 UIkit.use(Icons);
-
-const util = require('./util');
 
 window.onload = function () {
     const extension_name = chrome.runtime.getManifest().name;
@@ -126,7 +127,7 @@ window.onload = function () {
         let promiseArray = [];
         for (let i = 0; i < tab_links.length; i++) {
             const url = tab_links[i].getAttribute("data-url");
-            promiseArray.push(util.createTabs({url: url, active: false}));
+            promiseArray.push(chromeService.tab.createTabs({url: url, active: false}));
         }
         Promise.all(promiseArray).then(() => {
             allDeleteLink(target);
@@ -156,7 +157,7 @@ window.onload = function () {
 
     const all_clear = document.getElementById('all_clear');
     // @ts-ignore
-    all_clear.addEventListener('click', util.allClear);
+    all_clear.addEventListener('click', chromeService.storage.allClear);
     const export_link = document.getElementById('export_link');
     // @ts-ignore
     export_link.addEventListener('click', exportJson);
@@ -164,12 +165,12 @@ window.onload = function () {
     // @ts-ignore
     import_link.addEventListener('click', importJson);
 
-    chrome.storage.sync.get([util.getTabLengthKey()], function (result) {
-        const tab_length = util.getTabLengthOrZero(result);
+    chrome.storage.sync.get([chromeService.storage.getTabLengthKey()], function (result) {
+        const tab_length = chromeService.storage.getTabLengthOrZero(result);
         let promiseArray = [];
 
         for (let i = 0; i < tab_length; i++) {
-            const key = util.getTabKey(i);
+            const key = chromeService.storage.getTabKey(i);
             promiseArray.push(setLinkDom(key))
         }
 
