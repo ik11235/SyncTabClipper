@@ -18,32 +18,8 @@ window.onload = function () {
     }
 
     function importJson() {
-        const import_text_dom = document.getElementById("import_body");
-        // @ts-ignore
-        const json = JSON.parse(import_text_dom.value);
-        (async () => {
-            const tab_length_result = await util.getSyncStorage(util.getTabLengthKey());
-            const tab_length = util.getTabLengthOrZero(tab_length_result);
-            let promiseArray: Promise<void>[] = [];
-            let idx = tab_length;
-            // @ts-ignore
-            json.reverse().forEach((json_arr) => {
-                const key = util.getTabKey(idx);
-                promiseArray.push(util.setSyncStorage(key, util.deflateJson(JSON.stringify(json_arr))));
-                idx += 1;
-            });
-
-            Promise.all(promiseArray).then(() => {
-                let set_data: { [key: string]: number; } = {};
-                set_data[util.getTabLengthKey()] = tab_length + json.length;
-                chrome.storage.sync.set(set_data, function () {
-                    chrome.tabs.reload({bypassCache: true}, function () {
-                    });
-                });
-            }).catch(function (reason) {
-                alert("データのインポートに失敗しました。" + reason.message);
-            });
-        })();
+        const importTextElement: HTMLInputElement = <HTMLInputElement>document.getElementById("import_body");
+        blockService.importAllDataJson(importTextElement.value).catch(error => alert("データのインポートに失敗しました。" + error.message));
     }
 
     // @ts-ignore

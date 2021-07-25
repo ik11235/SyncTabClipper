@@ -26,6 +26,12 @@ export namespace blockService {
         }
     }
 
+    function blockToJsonObjToBlock(object: any): model.Block {
+        return {
+            created_at: new Date(object.created_at),
+            tabs: object.tabs
+        }
+    }
 
     export function blockToJson(block: model.Block): string {
         return JSON.stringify(blockToJsonObj(block));
@@ -59,6 +65,16 @@ export namespace blockService {
             } else {
                 throw e;
             }
+        }
+    }
+
+    export function deflateBlock(block: model.Block): string {
+        const blockStr = blockToJson(block)
+        const deflateStr = util.deflate(blockStr);
+        if (deflateStr.length < blockStr.length) {
+            return deflateStr;
+        } else {
+            return blockStr;
         }
     }
 
@@ -151,6 +167,38 @@ export namespace blockService {
                 targetElement.value = JSON.stringify(sort_result.map(blockToJsonObj))
             })
         });
+    }
 
+    function blockListForJsonObject(json: object[]): model.Block[] {
+        return json.map(blockToJsonObjToBlock)
+    }
+
+    export async function importAllDataJson(jsonStr: string): Promise<void> {
+        const tab_length_result = await util.getSyncStorage(util.getTabLengthKey());
+        const tab_length = util.getTabLengthOrZero(tab_length_result);
+        let promiseArray: Promise<void>[] = [];
+        let idx = tab_length;
+
+        const json = JSON.parse(jsonStr)
+        const blocks = blockListForJsonObject(json)
+
+        blocks.sort(function (a, b) {
+            return a.created_at.getTime() - b.created_at.getTime();
+        }).forEach(block => {
+            const key = util.getTabKey(idx);
+            promiseArray.push(util.setSyncStorage(key, deflateBlock(block)))
+            idx += 1
+        })
+
+        Promise.all(promiseArray).then(() => {
+            let set_data: { [key: string]: number; } = {};
+            set_data[util.getTabLengthKey()] = tab_length + json.length;
+            chrome.storage.sync.set(set_data, function () {
+                chrome.tabs.reload({bypassCache: true}, function () {
+                });
+            });
+        }).catch(function (reason) {
+            throw reason
+        });
     }
 }
