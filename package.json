@@ -18,5 +18,8 @@
     "build": "webpack --config webpack.dev.js",
     "build:prod": "webpack --config webpack.prod.js && zip -r archive.zip dist/",
     "watch": "webpack --watch"
+  },
+  "dependencies": {
+    "buffer": "^6.0.3"
   }
 }
