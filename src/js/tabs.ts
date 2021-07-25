@@ -9,9 +9,7 @@ import {util} from "./util"
 UIkit.use(Icons);
 
 window.onload = function () {
-    const extension_name = chrome.runtime.getManifest().name;
-    // @ts-ignore
-    document.getElementsByTagName("h1")[0].innerHTML = document.getElementsByTagName("h1")[0].innerHTML.replace("SyncTabClipper", extension_name);
+    util.replacePageTitle(<HTMLElement>document.getElementsByTagName("h1")[0], chrome.runtime.getManifest().name)
 
     function exportJson() {
         const exportTextElement: HTMLInputElement = <HTMLInputElement>document.getElementById('export_body')
@@ -23,45 +21,34 @@ window.onload = function () {
         blockService.importAllDataJson(importTextElement.value).catch(error => alert("データのインポートに失敗しました。" + error.message));
     }
 
-    // @ts-ignore
-    function setLinkDom(key) {
+    function setLinkDom(key: string): Promise<boolean> {
         return new Promise(function (resolve) {
                 chrome.storage.sync.get([key], function (result) {
-                    const main = document.getElementById('main');
+                    const main = document.getElementById('main')!
 
                     if (!util.isEmpty(result)) {
                         const block = blockService.inflateJson(result[key]);
                         const insertHtml = blockService.blockToHtml(block, key);
-                        // @ts-ignore
                         main.insertAdjacentHTML('afterbegin', insertHtml);
-                        const this_card_dom = document.getElementById(key);
+                        const BlockRootDom = document.getElementById(key)!
 
-                        // @ts-ignore
-                        const linkDoms = this_card_dom.getElementsByClassName('tab_link');
-                        for (let j = 0; j < linkDoms.length; j++) {
-                            // @ts-ignore
-                            linkDoms[j].addEventListener('click', function (e) {
+                        const linkDoms = BlockRootDom.getElementsByClassName('tab_link');
+                        for (const link of linkDoms) {
+                            link.addEventListener('click', function (e: Event) {
                                 e.preventDefault();
-                                // @ts-ignore
-                                clickLinkByEventListener(e.srcElement);
+                                clickLinkByEventListener(e);
                             });
                         }
 
-                        // @ts-ignore
-                        const deleteLinkDoms = this_card_dom.getElementsByClassName('tab_close');
-                        for (let j = 0; j < deleteLinkDoms.length; j++) {
-                            // @ts-ignore
-                            deleteLinkDoms[j].addEventListener('click', deleteLinkByEventListener);
+                        const deleteLinkDoms = BlockRootDom.getElementsByClassName('tab_close')
+                        for (const link of deleteLinkDoms) {
+                            link.addEventListener('click', deleteLinkByEventListener);
                         }
 
-                        // @ts-ignore
-                        const all_tab_link = this_card_dom.getElementsByClassName('all_tab_link')[0];
-                        // @ts-ignore
-                        all_tab_link.addEventListener('click', allOpenLinkByEventListener);
-                        // @ts-ignore
-                        const all_tab_delete = this_card_dom.getElementsByClassName('all_tab_delete')[0];
-                        // @ts-ignore
-                        all_tab_delete.addEventListener('click', allDeleteLinkByEventListener);
+                        const allTabLink = BlockRootDom.getElementsByClassName('all_tab_link')[0]!
+                        allTabLink.addEventListener('click', allOpenLinkByEventListener)
+                        const allTabDelete = BlockRootDom.getElementsByClassName('all_tab_delete')[0]!
+                        allTabDelete.addEventListener('click', allDeleteLinkByEventListener);
 
                         resolve(true);
                     } else {
@@ -72,16 +59,15 @@ window.onload = function () {
         );
     }
 
-    // @ts-ignore
-    function deleteLink(target) {
-        const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
+    function deleteLink(target: HTMLElement): void {
+        const BlockRootDom = util.searchBlockRootDom(target)
+
         // 先にsyncに保存済みのデータを消したいがDom→JSONがやりにくくなる
         // いったん、DOM消しを先にする
-        const li = target.parentNode;
-        li.parentNode.removeChild(li);
+        target.parentNode!.removeChild(target);
 
-        const id = parentDiv.id;
-        const block = blockService.htmlToBlock(parentDiv)
+        const id = BlockRootDom.id;
+        const block = blockService.htmlToBlock(BlockRootDom)
         if (block.tabs.length <= 0) {
             chrome.storage.sync.remove(id, function () {
                 const error = chrome.runtime.lastError;
@@ -89,7 +75,7 @@ window.onload = function () {
                     alert(error.message);
                 }
                 // タブが0になった場合、現在表示中のdomも削除する
-                parentDiv.parentNode.removeChild(parentDiv);
+                BlockRootDom.parentNode!.removeChild(BlockRootDom);
             });
         } else {
             let save_obj: { [key: string]: string; } = {};
@@ -104,29 +90,31 @@ window.onload = function () {
 
     }
 
-    function clickLinkByEventListener(e: HTMLElement) {
-        const target = e;
-        const url = target.getAttribute("data-url");
-        // @ts-ignore
+    function clickLinkByEventListener(e: Event) {
+        const target = <HTMLElement>e.target!;
+        const url = target.getAttribute("data-url")!
+        const tabRootDom = util.searchTabRootDom(target)
+
         chrome.tabs.create({url: url, active: false}, function () {
-            deleteLink(target);
+            deleteLink(tabRootDom);
         });
     }
 
-    function deleteLinkByEventListener() {
-        // @ts-ignore
-        const target = this;
-        deleteLink(target);
+    function deleteLinkByEventListener(e: Event): void {
+        const target = <HTMLElement>e.target!;
+        const tabRootDom = util.searchTabRootDom(target)
+
+        deleteLink(tabRootDom);
     }
 
-    function allOpenLinkByEventListener() {
-        // @ts-ignore
-        const target = this;
-        const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
-        const tab_links = parentDiv.getElementsByClassName("tab_link");
-        let promiseArray = [];
-        for (let i = 0; i < tab_links.length; i++) {
-            const url = tab_links[i].getAttribute("data-url");
+    function allOpenLinkByEventListener(e: Event): void {
+        const target = <HTMLElement>e.target!;
+
+        const BlockRootDom = util.searchBlockRootDom(target)
+        const tab_links = BlockRootDom.getElementsByClassName("tab_link");
+        let promiseArray: Promise<void>[] = [];
+        for (let tab of tab_links) {
+            const url = tab.getAttribute("data-url")!
             promiseArray.push(chromeService.tab.createTabs({url: url, active: false}));
         }
         Promise.all(promiseArray).then(() => {
@@ -134,35 +122,31 @@ window.onload = function () {
         });
     }
 
-    function allDeleteLinkByEventListener() {
-        // @ts-ignore
-        const target = this;
+    function allDeleteLinkByEventListener(e: Event): void {
+        const target = <HTMLElement>e.target!;
+
         allDeleteLink(target);
     }
 
-    // @ts-ignore
-    function allDeleteLink(target) {
-        const parentDiv = target.parentNode.parentNode.parentNode.parentNode;
+    function allDeleteLink(target: HTMLElement) {
+        const BlockRootDom = util.searchBlockRootDom(target)
 
-        const id = parentDiv.id;
+        const id = BlockRootDom.id;
         chrome.storage.sync.remove(id, function () {
             const error = chrome.runtime.lastError;
             if (error) {
                 alert(error.message);
             }
 
-            parentDiv.parentNode.removeChild(parentDiv);
+            BlockRootDom.parentNode!.removeChild(BlockRootDom);
         });
     }
 
-    const all_clear = document.getElementById('all_clear');
-    // @ts-ignore
+    const all_clear = document.getElementById('all_clear')!
     all_clear.addEventListener('click', chromeService.storage.allClear);
-    const export_link = document.getElementById('export_link');
-    // @ts-ignore
+    const export_link = document.getElementById('export_link')!
     export_link.addEventListener('click', exportJson);
-    const import_link = document.getElementById('import_link');
-    // @ts-ignore
+    const import_link = document.getElementById('import_link')!
     import_link.addEventListener('click', importJson);
 
     chrome.storage.sync.get([chromeService.storage.getTabLengthKey()], function (result) {
@@ -176,9 +160,8 @@ window.onload = function () {
 
         Promise.all(promiseArray).then((result) => {
             const is_tabs_exists = (result.filter(flag => flag === true).length > 0);
-            const main = document.getElementById('main');
+            const main = document.getElementById('main')!
             if (!is_tabs_exists) {
-                // @ts-ignore
                 main.insertAdjacentHTML('afterbegin', `
 <div class="uk-header">
     <h3 class="uk-title uk-margin-remove-bottom no-tabs">保存済みのタブはありません。</h3>

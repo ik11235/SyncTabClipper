@@ -113,7 +113,7 @@ describe('blockService', (): void => {
         }
         const res = blockService.tabToHtml(tab)
         const expected = `
-<li>
+<li class="tab-root-dom">
     <img src=\"https://www.google.com/s2/favicons?domain=example.com\" alt=\"title-test\"/>
     <a href=\"https://example.com/test\" class=\"tab_link\" data-url=\"https://example.com/test\" data-title=\"title-test\">title-test</a>
     <span class=\"uk-link tab_close\" uk-icon=\"icon: close; ratio: 0.9\"></span>
@@ -137,7 +137,7 @@ describe('blockService', (): void => {
         }
         const res = blockService.blockToHtml(block, "123")
         const expected = `
-<div id="123" class="tabs uk-card-default" data-created-at="1609556645678">
+<div id="123" class="tabs uk-card-default block-root-dom" data-created-at="1609556645678">
     <div class="uk-card-header">
         <h3 class="uk-card-title uk-margin-remove-bottom">2個のタブ</h3>
         <p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="2021-01-02T03:04:05.678Z">${block.created_at}</time></p>
@@ -149,13 +149,13 @@ describe('blockService', (): void => {
     </div>
     <div class="uk-card-body">
         <ul>
-<li>
+<li class="tab-root-dom">
     <img src="https://www.google.com/s2/favicons?domain=example.com" alt="title-test"/>
     <a href="https://example.com/test" class="tab_link" data-url="https://example.com/test" data-title="title-test">title-test</a>
     <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>
 </li>
 
-<li>
+<li class="tab-root-dom">
     <img src="https://www.google.com/s2/favicons?domain=google.com" alt="google-test"/>
     <a href="http://google.com/test2" class="tab_link" data-url="http://google.com/test2" data-title="google-test">google-test</a>
     <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>
@@ -180,13 +180,13 @@ describe('blockService', (): void => {
     </div>
     <div class="uk-card-body">
         <ul>
-<li>
+<li class="tab-root-dom">
     <img src="https://www.google.com/s2/favicons?domain=example.com" alt="title-test"/>
     <a href="https://example.com/test" class="tab_link" data-url="https://example.com/test" data-title="title-test">title-test</a>
     <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>
 </li>
 
-<li>
+<li class="tab-root-dom">
     <img src="https://www.google.com/s2/favicons?domain=google.com" alt="google-test"/>
     <a href="http://google.com/test2" class="tab_link" data-url="http://google.com/test2" data-title="google-test">google-test</a>
     <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>
@@ -224,13 +224,13 @@ describe('blockService', (): void => {
     </div>
     <div class="uk-card-body">
         <ul>
-<li>
+<li class="tab-root-dom">
     <img src="https://www.google.com/s2/favicons?domain=example.com" alt="title-test"/>
     <a href="https://example.com/test" class="tab_link" data-url="https://example.com/test" data-title="title-test">title-test</a>
     <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>
 </li>
 
-<li>
+<li class="tab-root-dom">
     <img src="https://www.google.com/s2/favicons?domain=google.com" alt="google-test"/>
     <a href="http://google.com/test2" class="tab_link" data-url="http://google.com/test2" data-title="google-test">google-test</a>
     <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>
@@ -258,7 +258,7 @@ describe('blockService', (): void => {
     </div>
     <div class="uk-card-body">
         <ul>
-<li>
+<li class="tab-root-dom">
     <img src="https://www.google.com/s2/favicons?domain=example.com" alt="title-test"/>
     <a href="https://example.com/test" class="tab_link" data-title="title-test">title-test</a>
     <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>
@@ -286,7 +286,7 @@ describe('blockService', (): void => {
     </div>
     <div class="uk-card-body">
         <ul>
-<li>
+<li class="tab-root-dom">
     <img src="https://www.google.com/s2/favicons?domain=example.com" alt="title-test"/>
     <a href="https://example.com/test" class="tab_link" data-url="http://google.com/test2">title-test</a>
     <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>

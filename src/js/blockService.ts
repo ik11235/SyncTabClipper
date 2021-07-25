@@ -88,7 +88,7 @@ export namespace blockService {
         const encode_url = util.escape_html(tab.url);
         const encode_title = util.escape_html(tab.title);
         return `
-<li>
+<li class="tab-root-dom">
     <img src="https://www.google.com/s2/favicons?domain=${encode_domain}" alt="${encode_title}"/>
     <a href="${encode_url}" class="tab_link" data-url="${encode_url}" data-title="${encode_title}">${encode_title}</a>
     <span class="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"></span>
@@ -99,7 +99,7 @@ export namespace blockService {
         const created_at = block.created_at;
         const tabs = block.tabs.map(tab => tabToHtml(tab)).join("\n");
         return `
-<div id="${id}" class="tabs uk-card-default" data-created-at="${created_at.getTime()}">
+<div id="${id}" class="tabs uk-card-default block-root-dom" data-created-at="${created_at.getTime()}">
     <div class="uk-card-header">
         <h3 class="uk-card-title uk-margin-remove-bottom">${block.tabs.length}個のタブ</h3>
         <p class="uk-text-meta uk-margin-remove-top">作成日: <time datetime="${created_at.toISOString()}">${created_at}</time></p>

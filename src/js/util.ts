@@ -41,4 +41,32 @@ export namespace util {
         }
         return num;
     }
+
+    /**
+     * 指定したelement内に含まれる「SyncTabClipper」を指定テキストに痴漢する
+     * 開発時にmanifestに指定した、testやdev等の文字列に置換するために使用
+     *
+     * @param element
+     * @param replaceStr
+     */
+    export function replacePageTitle(element: HTMLElement, replaceStr: string): void {
+        element.innerHTML = element.innerHTML.replace("SyncTabClipper", replaceStr);
+    }
+
+    export function searchBlockRootDom(element: HTMLElement): HTMLElement {
+        if (element.classList.contains('block-root-dom')) {
+            return element
+        } else {
+            return searchBlockRootDom(<HTMLElement>element.parentElement)
+        }
+    }
+
+    export function searchTabRootDom(element: HTMLElement): HTMLElement {
+        if (element.classList.contains('tab-root-dom')) {
+            return element
+        } else {
+            return searchTabRootDom(<HTMLElement>element.parentElement)
+        }
+    }
+
 }
