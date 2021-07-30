@@ -97,10 +97,6 @@ export namespace chromeService {
 
       return Promise.all(promiseArray).then(result => {
         const nonEmptyArr = result.filter(obj => {
-          console.log(obj)
-          console.log(obj[0])
-          console.log(obj[1])
-
           return obj[1] != null && obj[1].length > 0
         })
         let blockAnyKeys: model.BlockAndKey[] = []
