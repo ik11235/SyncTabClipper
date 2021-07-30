@@ -33,21 +33,17 @@ chrome.browserAction.onClicked.addListener(function () {
     chrome.tabs.query({currentWindow: true}, function (tabs: chrome.tabs.Tab[]) {
       const block = blockService.createBlock(tabs, new Date());
 
-      chromeService.storage.setTabData(tabLength, blockService.deflateBlock(block)).then(_ => {
-        chromeService.storage.setTabLength(tabLength + 1).then(_ => {
-          // errorでないときのみタブを閉じる
-          chrome.tabs.query({currentWindow: true}, function (tabs) {
-            chrome.tabs.create({url: chrome.runtime.getURL('tabs.html')}, function () {
-              tabs.forEach(tab => {
-                chrome.tabs.remove(tab.id!, function () {
-                });
+      chromeService.storage.setTabData(tabLength, blockService.deflateBlock(block))
+        .then(_ => chromeService.storage.setTabLength(tabLength + 1))
+        .then(chromeService.tab.getCurrentWindowTabs)
+        .then(currentTabs => {
+          chrome.tabs.create({url: chrome.runtime.getURL('tabs.html')}, () => {
+            currentTabs.forEach(tab => {
+              chrome.tabs.remove(tab.id!, () => {
               });
-            });
-          });
+            })
+          })
         }).catch(error => {
-          alert(error.message);
-        })
-      }).catch(error => {
         alert(error.message);
       });
     });
