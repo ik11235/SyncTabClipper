@@ -120,18 +120,5 @@ export namespace chromeService {
         });
       });
     }
-
-    export async function getCurrentWindowTabs(): Promise<chrome.tabs.Tab[]> {
-      return new Promise((resolve, reject) => {
-        chrome.tabs.query({currentWindow: true}, function (tabs) {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            reject(error);
-          } else {
-            resolve(tabs);
-          }
-        });
-      });
-    }
   }
 }

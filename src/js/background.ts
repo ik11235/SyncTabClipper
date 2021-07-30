@@ -30,13 +30,12 @@ import {chromeService} from "./chromeService";
 
 chrome.browserAction.onClicked.addListener(function () {
   chromeService.storage.getTabLength().then(tabLength => {
-    chrome.tabs.query({currentWindow: true}, function (tabs: chrome.tabs.Tab[]) {
-      const block = blockService.createBlock(tabs, new Date());
+    chrome.tabs.query({currentWindow: true}, function (currentTabs: chrome.tabs.Tab[]) {
+      const block = blockService.createBlock(currentTabs, new Date());
 
       chromeService.storage.setTabData(tabLength, blockService.deflateBlock(block))
         .then(_ => chromeService.storage.setTabLength(tabLength + 1))
-        .then(chromeService.tab.getCurrentWindowTabs)
-        .then(currentTabs => {
+        .then(_ => {
           chrome.tabs.create({url: chrome.runtime.getURL('tabs.html')}, () => {
             currentTabs.forEach(tab => {
               chrome.tabs.remove(tab.id!, () => {
