@@ -62,7 +62,7 @@ export namespace chromeService {
       });
     }
 
-    export function getSyncStorageReturnKey(key: string): Promise<[string, string]> {
+    function getSyncStorageReturnKey(key: string): Promise<[string, string]> {
       return getSyncStorage(key).then(result => {
           return [key, result]
         }
