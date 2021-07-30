@@ -120,5 +120,41 @@ export namespace chromeService {
         });
       });
     }
+
+    async function closeTab(tab: chrome.tabs.Tab): Promise<void> {
+      return new Promise((resolve, reject) => {
+        chrome.tabs.remove(tab.id!, () => {
+          const error = chrome.runtime.lastError;
+          if (error) {
+            reject(error);
+          } else {
+            resolve();
+          }
+        });
+      });
+    }
+
+    export async function closeTabs(tabs: chrome.tabs.Tab[]): Promise<void> {
+      let promiseArray: Promise<void>[] = [];
+
+      for (const tab of tabs) {
+        promiseArray.push(closeTab(tab))
+      }
+
+      try {
+        await Promise.all(promiseArray)
+        return Promise.resolve();
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    }
+
+    export async function createTabsPageTab(): Promise<void> {
+      const url = chrome.runtime.getURL('tabs.html')
+      await chrome.tabs.create({
+        selected: true,
+        url: url,
+      });
+    }
   }
 }
