@@ -33,28 +33,22 @@ chrome.browserAction.onClicked.addListener(function () {
     chrome.tabs.query({currentWindow: true}, function (tabs: chrome.tabs.Tab[]) {
       const block = blockService.createBlock(tabs, new Date());
 
-      const key_str = chromeService.storage.getTabKey(tabLength);
-      let save_obj: { [key: string]: string; } = {};
-      save_obj[key_str] = blockService.deflateBlock(block)
-      chrome.storage.sync.set(save_obj, function () {
-        const error = chrome.runtime.lastError;
-        if (error) {
-          alert(error.message);
-        } else {
-          chromeService.storage.setTabLength(tabLength + 1).then(_ => {
-            // errorでないときのみタブを閉じる
-            chrome.tabs.query({currentWindow: true}, function (tabs) {
-              chrome.tabs.create({url: chrome.runtime.getURL('tabs.html')}, function () {
-                tabs.forEach(tab => {
-                  chrome.tabs.remove(tab.id!, function () {
-                  });
+      chromeService.storage.setTabData(tabLength, blockService.deflateBlock(block)).then(_ => {
+        chromeService.storage.setTabLength(tabLength + 1).then(_ => {
+          // errorでないときのみタブを閉じる
+          chrome.tabs.query({currentWindow: true}, function (tabs) {
+            chrome.tabs.create({url: chrome.runtime.getURL('tabs.html')}, function () {
+              tabs.forEach(tab => {
+                chrome.tabs.remove(tab.id!, function () {
                 });
               });
             });
-          }).catch(error => {
-            alert(error.message);
-          })
-        }
+          });
+        }).catch(error => {
+          alert(error.message);
+        })
+      }).catch(error => {
+        alert(error.message);
       });
     });
   });

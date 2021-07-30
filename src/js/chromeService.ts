@@ -6,10 +6,7 @@ export namespace chromeService {
   export namespace storage {
 
     const tabLengthKey: string = "t_len";
-
-    export function getTabKey(index: number): string {
-      return `td_${index}`;
-    }
+    const tabKey = (index: number): string => `td_${index}`;
 
     export function setSyncStorage(key: string, value: string): Promise<void> {
       let set_obj: { [key: string]: string; } = {};
@@ -47,11 +44,17 @@ export namespace chromeService {
       });
     }
 
-    function getSyncStorageReturnKey(key: string): Promise<[string, string]> {
+    function getSyncStorageReturnKey(index: number): Promise<[string, string]> {
+      const key = tabKey(index)
       return getSyncStorage(key).then(result => {
           return [key, result]
         }
       )
+    }
+
+    export async function setTabData(index: number, data: string): Promise<void> {
+      const key = tabKey(index);
+      return setSyncStorage(key, data);
     }
 
     export async function setTabLength(value: number): Promise<void> {
@@ -72,6 +75,10 @@ export namespace chromeService {
       return b.block.created_at.getTime() - a.block.created_at.getTime()
     }
 
+    export async function getAllBlock(): Promise<model.Block[]> {
+      let bak = await getAllBlockAndKey()
+      return bak.map(obj => obj.block)
+    }
 
     export async function getAllBlockAndKey(): Promise<model.BlockAndKey[]> {
       let tabLength = await getTabLength()
@@ -79,8 +86,7 @@ export namespace chromeService {
       let promiseArray: Promise<[string, string]>[] = [];
 
       for (let i = 0; i < tabLength; i++) {
-        const key = chromeService.storage.getTabKey(i);
-        promiseArray.push(getSyncStorageReturnKey(key))
+        promiseArray.push(getSyncStorageReturnKey(i))
       }
 
       return Promise.all(promiseArray).then(result => {
