@@ -157,4 +157,28 @@ export namespace chromeService {
       });
     }
   }
+
+  export namespace ContextMenus {
+    const appName = chrome.runtime.getManifest().name
+    const parentMenuId = `${appName}.mainMenu`
+
+    export function createParentMenu(): void {
+      chrome.contextMenus.create({
+        id: parentMenuId,
+        "title": appName,
+        "type": "normal",
+        "contexts": ["all"],
+      });
+    }
+
+    export function createGotoTabsPageMenu():void {
+      chrome.contextMenus.create({
+        "title": "tabページを開く",
+        "parentId": parentMenuId,
+        "type": "normal",
+        "contexts": ["all"],
+        "onclick": chromeService.tab.createTabsPageTab
+      });
+    }
+  }
 }

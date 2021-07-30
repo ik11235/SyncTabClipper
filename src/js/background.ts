@@ -2,22 +2,9 @@ import {blockService} from "./blockService";
 import {chromeService} from "./chromeService";
 
 (() => {
-  // contextMenusに関する操作
-  chrome.contextMenus.removeAll();
-
-  //親メニュー
-  const parentId = chrome.contextMenus.create({
-    "title": "syncTabClipper",
-    "type": "normal",
-    "contexts": ["all"],
-  });
-
-  chrome.contextMenus.create({
-    "title": "tabページを開く",
-    "parentId": parentId,
-    "type": "normal",
-    "contexts": ["all"],
-    "onclick": chromeService.tab.createTabsPageTab
+  chrome.runtime.onInstalled.addListener(() => {
+    chromeService.ContextMenus.createParentMenu();
+    chromeService.ContextMenus.createGotoTabsPageMenu();
   });
 
   chrome.browserAction.onClicked.addListener(() => {
