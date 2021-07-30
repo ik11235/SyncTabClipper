@@ -5,12 +5,10 @@ import {util} from "./util";
 export namespace chromeService {
   export namespace storage {
 
+    const tabLengthKey: string = "t_len";
+
     export function getTabKey(index: number): string {
       return `td_${index}`;
-    }
-
-    export function getTabLengthKey(): string {
-      return "t_len";
     }
 
     export function setSyncStorage(key: string, value: string): Promise<void> {
@@ -26,19 +24,6 @@ export namespace chromeService {
           }
         });
       });
-    }
-
-
-    export function getTabLengthOrZero(result: any): number {
-      if (!result) {
-        return 0;
-      } else if (Number.isInteger(result)) {
-        return Number(result);
-      } else if (Number.isInteger(result[getTabLengthKey()])) {
-        return Number(result[getTabLengthKey()]);
-      } else {
-        return 0;
-      }
     }
 
     export function allClear(): void {
@@ -69,9 +54,12 @@ export namespace chromeService {
       )
     }
 
+    export async function setTabLength(value: number): Promise<void> {
+      return setSyncStorage(tabLengthKey, value.toString())
+    }
 
-    async function getTabLength(): Promise<number> {
-      return getSyncStorage(chromeService.storage.getTabLengthKey()).then(result => {
+    export async function getTabLength(): Promise<number> {
+      return getSyncStorage(tabLengthKey).then(result => {
         if (result == null) {
           return 0
         } else {
