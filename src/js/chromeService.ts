@@ -111,22 +111,6 @@ export namespace chromeService {
         return blockAnyKeys.sort(sortBlockAnyKeys)
       });
     }
-
-    export async function getAllBlock(): Promise<model.Block[]> {
-      let tabLength = await getTabLength()
-
-      let promiseArray: Promise<string>[] = [];
-
-      for (let i = 0; i < tabLength; i++) {
-        const key = chromeService.storage.getTabKey(i);
-        promiseArray.push(getSyncStorage(key))
-      }
-
-      return Promise.all(promiseArray).then(result => {
-        const nonEmptyArr = result.filter(obj => obj.length > 0)
-        return blockService.blocksSort(nonEmptyArr.map(blockService.inflateJson))
-      });
-    }
   }
 
   export namespace tab {
