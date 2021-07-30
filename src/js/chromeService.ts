@@ -102,7 +102,7 @@ export namespace chromeService {
           blockAnyKeys.push(t)
         }
 
-        return blockAnyKeys.sort(sortBlockAnyKeys)
+        return blockAnyKeys.sort(sortBlockAnyKeys).reverse()
       });
     }
   }
