@@ -154,21 +154,10 @@ export namespace blockService {
   }
 
   export function exportAllDataJson(targetElement: HTMLInputElement): void {
-    chrome.storage.sync.get([chromeService.storage.getTabLengthKey()], function (result) {
-      const tab_length = chromeService.storage.getTabLengthOrZero(result);
-      let promiseArray: Promise<string>[] = [];
+    chromeService.storage.getAllBlock().then(blocks => {
+      const sortBlocks = blocksSort(blocks);
 
-      for (let x = 0; x < tab_length; x++) {
-        const key = chromeService.storage.getTabKey(x);
-        promiseArray.push(chromeService.storage.getSyncStorage(key))
-      }
-
-      Promise.all(promiseArray).then((result) => {
-        const obj_result = result.filter(Boolean).filter(str => str.length > 0).map(data => blockService.inflateJson(data));
-        const sort_result = blocksSort(obj_result.filter(Boolean).filter(data => (data.tabs.length > 0)));
-
-        targetElement.value = JSON.stringify(sort_result.map(blockToJsonObj))
-      })
+      targetElement.value = JSON.stringify(sortBlocks.map(blockToJsonObj));
     });
   }
 
@@ -177,29 +166,24 @@ export namespace blockService {
   }
 
   export async function importAllDataJson(jsonStr: string): Promise<void> {
-    const tab_length_result = await chromeService.storage.getSyncStorage(chromeService.storage.getTabLengthKey());
-    const tab_length = chromeService.storage.getTabLengthOrZero(tab_length_result);
+    const tabLength = await chromeService.storage.getTabLength();
     let promiseArray: Promise<void>[] = [];
-    let idx = tab_length;
+    let idx = tabLength;
 
     const json = JSON.parse(jsonStr)
     const blocks = blockListForJsonObject(json)
 
     blocksSort(blocks).reverse().forEach(block => {
-      const key = chromeService.storage.getTabKey(idx);
-      promiseArray.push(chromeService.storage.setSyncStorage(key, deflateBlock(block)))
+      promiseArray.push(chromeService.storage.setTabData(idx, deflateBlock(block)))
       idx += 1
     })
 
     Promise.all(promiseArray).then(() => {
-      let set_data: { [key: string]: number; } = {};
-      set_data[chromeService.storage.getTabLengthKey()] = tab_length + json.length;
-      chrome.storage.sync.set(set_data, function () {
-        chrome.tabs.reload({bypassCache: true}, function () {
-        });
+      chromeService.storage.setTabLength(tabLength + json.length).then(_ => {
+        chrome.tabs.reload({bypassCache: true});
+      }).catch(function (reason) {
+        throw reason
       });
-    }).catch(function (reason) {
-      throw reason
     });
   }
 

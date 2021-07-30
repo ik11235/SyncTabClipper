@@ -5,15 +5,10 @@ import {util} from "./util";
 export namespace chromeService {
   export namespace storage {
 
-    export function getTabKey(index: number): string {
-      return `td_${index}`;
-    }
+    const tabLengthKey: string = "t_len";
+    const tabKey = (index: number): string => `td_${index}`;
 
-    export function getTabLengthKey(): string {
-      return "t_len";
-    }
-
-    export function setSyncStorage(key: string, value: string): Promise<void> {
+    function setSyncStorage(key: string, value: string): Promise<void> {
       let set_obj: { [key: string]: string; } = {};
       set_obj[key] = value;
       return new Promise((resolve, reject) => {
@@ -28,28 +23,7 @@ export namespace chromeService {
       });
     }
 
-
-    export function getTabLengthOrZero(result: any): number {
-      if (!result) {
-        return 0;
-      } else if (Number.isInteger(result)) {
-        return Number(result);
-      } else if (Number.isInteger(result[getTabLengthKey()])) {
-        return Number(result[getTabLengthKey()]);
-      } else {
-        return 0;
-      }
-    }
-
-    export function allClear(): void {
-      if (window.confirm('保存したすべてのタブを削除します。よろしいですか？')) {
-        chrome.storage.sync.clear(function () {
-          alert('すべてのデータを削除しました');
-        });
-      }
-    }
-
-    export function getSyncStorage(key: string): Promise<string> {
+    function getSyncStorage(key: string): Promise<string> {
       return new Promise((resolve, reject) => {
         chrome.storage.sync.get([key], (item) => {
           const error = chrome.runtime.lastError;
@@ -62,16 +36,33 @@ export namespace chromeService {
       });
     }
 
-    function getSyncStorageReturnKey(key: string): Promise<[string, string]> {
+    export function allClear(): void {
+      if (window.confirm('保存したすべてのタブを削除します。よろしいですか？')) {
+        chrome.storage.sync.clear(function () {
+          alert('すべてのデータを削除しました');
+        });
+      }
+    }
+
+    function getSyncStorageReturnKey(index: number): Promise<[string, string]> {
+      const key = tabKey(index)
       return getSyncStorage(key).then(result => {
           return [key, result]
         }
       )
     }
 
+    export async function setTabData(index: number, data: string): Promise<void> {
+      const key = tabKey(index);
+      return setSyncStorage(key, data);
+    }
 
-    async function getTabLength(): Promise<number> {
-      return getSyncStorage(chromeService.storage.getTabLengthKey()).then(result => {
+    export async function setTabLength(value: number): Promise<void> {
+      return setSyncStorage(tabLengthKey, value.toString())
+    }
+
+    export async function getTabLength(): Promise<number> {
+      return getSyncStorage(tabLengthKey).then(result => {
         if (result == null) {
           return 0
         } else {
@@ -84,6 +75,10 @@ export namespace chromeService {
       return b.block.created_at.getTime() - a.block.created_at.getTime()
     }
 
+    export async function getAllBlock(): Promise<model.Block[]> {
+      let bak = await getAllBlockAndKey()
+      return bak.map(obj => obj.block)
+    }
 
     export async function getAllBlockAndKey(): Promise<model.BlockAndKey[]> {
       let tabLength = await getTabLength()
@@ -91,8 +86,7 @@ export namespace chromeService {
       let promiseArray: Promise<[string, string]>[] = [];
 
       for (let i = 0; i < tabLength; i++) {
-        const key = chromeService.storage.getTabKey(i);
-        promiseArray.push(getSyncStorageReturnKey(key))
+        promiseArray.push(getSyncStorageReturnKey(i))
       }
 
       return Promise.all(promiseArray).then(result => {
@@ -108,7 +102,7 @@ export namespace chromeService {
           blockAnyKeys.push(t)
         }
 
-        return blockAnyKeys.sort(sortBlockAnyKeys)
+        return blockAnyKeys.sort(sortBlockAnyKeys).reverse()
       });
     }
   }
