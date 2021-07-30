@@ -17,14 +17,7 @@ import {chromeService} from "./chromeService";
     "parentId": parentId,
     "type": "normal",
     "contexts": ["all"],
-    "onclick": function () {
-      // https://gist.github.com/syoichi/3747507
-      const url = chrome.runtime.getURL('tabs.html');
-      chrome.tabs.create({
-        selected: true,
-        url: url
-      });
-    }
+    "onclick": chromeService.tab.createTabsPageTab
   });
 
   chrome.browserAction.onClicked.addListener(() => {
@@ -35,10 +28,7 @@ import {chromeService} from "./chromeService";
 
           chromeService.storage.setTabData(tabLength, blockService.deflateBlock(block))
             .then(_ => chromeService.storage.setTabLength(tabLength + 1))
-            .then(_ => {
-              chrome.tabs.create({url: chrome.runtime.getURL('tabs.html')}, () => {
-              })
-            })
+            .then(_ => chromeService.tab.createTabsPageTab())
             .then(_ => chromeService.tab.closeTabs(currentTabs))
             .catch(error => {
               alert(error.message);

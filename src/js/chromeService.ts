@@ -148,5 +148,13 @@ export namespace chromeService {
         return Promise.reject(err);
       }
     }
+
+    export async function createTabsPageTab(): Promise<void> {
+      const url = chrome.runtime.getURL('tabs.html')
+      await chrome.tabs.create({
+        selected: true,
+        url: url,
+      });
+    }
   }
 }
