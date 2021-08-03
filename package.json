@@ -1,6 +1,6 @@
 {
   "devDependencies": {
-    "@types/chrome": "^0.0.149",
+    "@types/chrome": "^0.0.152",
     "@types/jest": "^26.0.24",
     "@types/uikit": "^3.3.2",
     "buffer": "^6.0.3",
