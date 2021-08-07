@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {model} from "../types/interface";
 import {util} from "../util";
 
@@ -57,20 +57,36 @@ const Block: React.FC<model.BlockAndKey> = (block) => {
 export const BlockDom = (block: model.BlockAndKey) => <Block block={block.block} IDkey={block.IDkey}/>;
 
 const Tab: React.FC<model.Tab> = (tab) => {
-    const domain = util.getDomain(tab.url);
-    const encode_domain = (domain === "") ? encodeURI(" ") : encodeURI(domain);
-    const encode_url = util.escape_html(tab.url);
-    const encode_title = util.escape_html(tab.title);
+        const [nowTab, setNowTab] = useState(tab);
+        const [isDisplayed, setIsDisplayed] = useState(true);
+
+        const deleteTab = () => {
+            setIsDisplayed(false)
+        }
+
+        if (isDisplayed) {
+            const domain = util.getDomain(nowTab.url);
+            const encode_domain = (domain === "") ? encodeURI(" ") : encodeURI(domain);
+            const encode_url = util.escape_html(tab.url);
+            const encode_title = util.escape_html(tab.title);
 
 
-    return (
-        <li className="tab-root-dom">
-            <img src={`https://www.google.com/s2/favicons?domain=${encode_domain}`} alt={encode_title}/>
-            <a href={encode_url} className="tab_link" data-url={encode_url}
-               data-title={encode_title}>{encode_title}</a>
-            <span className="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"/>
-        </li>
-    );
+            return (
+                <li className="tab-root-dom">
+                    <img src={`https://www.google.com/s2/favicons?domain=${encode_domain}`} alt={encode_title}/>
+                    <a href={encode_url} className="tab_link" data-url={encode_url}
+                       data-title={encode_title}>{encode_title}</a>
+                    <span className="uk-link tab_close" uk-icon="icon: close; ratio: 0.9" onClick={deleteTab}/>
+                </li>
+            );
+        } else {
+            return (<div style={display_none}/>);
+        }
+    }
+;
+
+const display_none = {
+    display: "none"
 };
 
 
