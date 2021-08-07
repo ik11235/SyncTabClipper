@@ -2,6 +2,8 @@
   "devDependencies": {
     "@types/chrome": "^0.0.154",
     "@types/jest": "^26.0.24",
+    "@types/react": "^17.0.16",
+    "@types/react-dom": "^17.0.9",
     "@types/uikit": "^3.3.2",
     "buffer": "^6.0.3",
     "copy-webpack-plugin": "^9.0.1",
@@ -19,5 +21,9 @@
     "build": "webpack --config webpack.dev.js",
     "build:prod": "webpack --config webpack.prod.js && zip -r archive.zip dist/",
     "watch": "webpack --watch"
+  },
+  "dependencies": {
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2"
   }
 }

@@ -4,6 +4,9 @@ import Icons from 'uikit/dist/js/uikit-icons';
 import {blockService} from "./blockService";
 import {chromeService} from "./chromeService";
 import {util} from "./util"
+import React from "react";
+import ReactDOM from "react-dom";
+import App from './comp';
 
 // @ts-ignore
 UIkit.use(Icons);
@@ -41,4 +44,13 @@ window.onload = function () {
 `);
     }
   })
+
+  let a = React.createElement(
+    'p', {}, "count:" + 1
+  )
+  let dom = document.querySelector('#react_test');
+
+
+  // @ts-ignore
+  ReactDOM.render(a, dom);
 };

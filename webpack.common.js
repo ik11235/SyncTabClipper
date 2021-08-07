@@ -17,10 +17,15 @@ module.exports = {
                 use: "ts-loader",
                 exclude: /node_modules/,
             },
+            {
+                test: /\.tsx$/,
+                use: "ts-loader",
+                exclude: /node_modules/,
+            },
         ],
     },
     resolve: {
-        extensions: [".ts", ".js"],
+        extensions: [".ts", ".js", ".tsx", "jsx"],
     },
     plugins: [
         new CopyPlugin({
