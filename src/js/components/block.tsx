@@ -34,11 +34,11 @@ const Block: React.FC<model.BlockAndKey> = (block) => {
     const [nowBlock, setNowBlock] = useState(block.block);
     const created_at = nowBlock.created_at;
     const deleteClick = (index: number) => {
-        setNowBlock((block) => {
-            block.tabs.splice(index, 1)
+        setNowBlock((nowBlock) => {
+            nowBlock.tabs.splice(index, 1)
             return {
-                created_at: block.created_at,
-                tabs: block.tabs
+                created_at: nowBlock.created_at,
+                tabs: nowBlock.tabs
             }
         });
     }
