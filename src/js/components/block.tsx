@@ -12,7 +12,10 @@ const Main: React.FC<MainProps> = (props) => {
         return (
             <div>
                 {props.BlockAndKeys.map((block) => {
-                    return BlockDom(block)
+                    return <Block block={block.block}
+                                  IDkey={block.IDkey}
+                                  key={block.IDkey}
+                    />;
                 })}
             </div>
         );
@@ -26,7 +29,6 @@ const Main: React.FC<MainProps> = (props) => {
 };
 
 export const MainDom = (blocks: model.BlockAndKey[]) => <Main BlockAndKeys={blocks}/>;
-
 
 const Block: React.FC<model.BlockAndKey> = (block) => {
     const [nowBlock, setNowBlock] = useState(block.block);
@@ -58,7 +60,9 @@ const Block: React.FC<model.BlockAndKey> = (block) => {
                 <div className="uk-card-body">
                     <ul>
                         {nowBlock.tabs.map((tab, index) => {
-                            return <Tab tab={tab} deleteClick={() => deleteClick(index)}/>;
+                            return <Tab tab={tab}
+                                        deleteClick={() => deleteClick(index)}
+                                        key={index}/>;
                         })}
                     </ul>
                 </div>
@@ -72,10 +76,6 @@ const Block: React.FC<model.BlockAndKey> = (block) => {
 const display_none = {
     display: "none"
 };
-
-
-export const BlockDom = (block: model.BlockAndKey) => <Block block={block.block} IDkey={block.IDkey}/>;
-
 
 interface TabProps {
     tab: model.Tab,
