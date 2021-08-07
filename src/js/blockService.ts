@@ -276,7 +276,7 @@ export namespace blockService {
 
     for (const blockAndKey of blockAndKeys) {
       const block = blockAndKey.block
-      const key = blockAndKey.key
+      const key = blockAndKey.IDkey
 
       const insertHtml = blockService.blockToHtml(block, key);
       main.insertAdjacentHTML('afterbegin', insertHtml);

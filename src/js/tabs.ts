@@ -4,9 +4,8 @@ import Icons from 'uikit/dist/js/uikit-icons';
 import {blockService} from "./blockService";
 import {chromeService} from "./chromeService";
 import {util} from "./util"
-import React from "react";
 import ReactDOM from "react-dom";
-import App, {AppDom} from './comp';
+import {MainDom} from "./components/block";
 
 // @ts-ignore
 UIkit.use(Icons);
@@ -34,19 +33,6 @@ window.onload = function () {
   chromeService.storage.getAllBlockAndKey().then(blocks => {
     const main = document.getElementById('main')!
 
-    if (blocks.length > 0) {
-      blockService.setDomForBlocks(main, blocks)
-    } else {
-      main.insertAdjacentHTML('afterbegin', `
-<div class="uk-header">
-    <h3 class="uk-title uk-margin-remove-bottom no-tabs">保存済みのタブはありません。</h3>
-</div>
-`);
-    }
+    ReactDOM.render(MainDom(blocks), main);
   })
-
-  let dom = document.querySelector('#react_test');
-
-  //@ts-ignore
-  ReactDOM.render(AppDom, dom);
 };

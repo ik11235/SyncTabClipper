@@ -19,7 +19,7 @@ export namespace model {
    * memo: 無理矢理感があるので、できれば使わない方向にしたい
    */
   interface BlockAndKey {
-    key: string,
+    IDkey: string,
     block: model.Block,
   }
 

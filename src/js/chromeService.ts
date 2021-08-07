@@ -96,7 +96,7 @@ export namespace chromeService {
         let blockAnyKeys: model.BlockAndKey[] = []
         for (const arr of nonEmptyArr) {
           const t: model.BlockAndKey = {
-            key: arr[0],
+            IDkey: arr[0],
             block: blockService.inflateJson(arr[1])
           }
           blockAnyKeys.push(t)
