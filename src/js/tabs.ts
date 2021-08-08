@@ -30,7 +30,7 @@ window.onload = function () {
   const import_link = document.getElementById('import_link')!
   import_link.addEventListener('click', importJson);
 
-  chromeService.storage.getAllBlockAndKey().then(blocks => {
+  chromeService.storage.getAllNewBlock().then(blocks => {
     const main = document.getElementById('main')!
 
     ReactDOM.render(MainDom(blocks), main);

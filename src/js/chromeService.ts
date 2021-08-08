@@ -5,8 +5,22 @@ import {util} from "./util";
 export namespace chromeService {
   export namespace storage {
 
+    import NewBlock = model.NewBlock;
     const tabLengthKey: string = "t_len";
     const tabKey = (index: number): string => `td_${index}`;
+
+    function deleteSyncStorage(key: string): Promise<void> {
+      return new Promise((resolve, reject) => {
+        chrome.storage.sync.remove(key, () => {
+          const error = chrome.runtime.lastError;
+          if (error) {
+            reject(error);
+          } else {
+            resolve();
+          }
+        });
+      });
+    }
 
     function setSyncStorage(key: string, value: string): Promise<void> {
       let set_obj: { [key: string]: string; } = {};
@@ -52,6 +66,32 @@ export namespace chromeService {
       )
     }
 
+    function getSyncStorageReturnIndex(index: number): Promise<[number, string]> {
+      const key = tabKey(index)
+      return getSyncStorage(key).then(result => {
+          return [index, result]
+        }
+      )
+    }
+
+    export async function setBlock(block: model.NewBlock): Promise<void> {
+      const blockData = {
+        tabs: block.tabs,
+        created_at: block.created_at
+      }
+
+      if (block.tabs.length <= 0) {
+        return removeBlock(block);
+      } else {
+        return chromeService.storage.setTabData(block.indexNum, blockService.deflateBlock(blockData))
+      }
+    }
+
+    export async function removeBlock(block: NewBlock): Promise<void> {
+      const key = tabKey(block.indexNum);
+      return deleteSyncStorage(key);
+    }
+
     export async function setTabData(index: number, data: string): Promise<void> {
       const key = tabKey(index);
       return setSyncStorage(key, data);
@@ -71,6 +111,10 @@ export namespace chromeService {
       })
     }
 
+    const sortNewBlock = (a: model.NewBlock, b: model.NewBlock): number => {
+      return b.created_at.getTime() - a.created_at.getTime()
+    }
+
     const sortBlockAnyKeys = (a: model.BlockAndKey, b: model.BlockAndKey): number => {
       return b.block.created_at.getTime() - a.block.created_at.getTime()
     }
@@ -79,6 +123,35 @@ export namespace chromeService {
       let bak = await getAllBlockAndKey()
       return bak.map(obj => obj.block)
     }
+
+    export async function getAllNewBlock(): Promise<model.NewBlock[]> {
+      let tabLength = await getTabLength()
+
+      let promiseArray: Promise<[number, string]>[] = [];
+
+      for (let i = 0; i < tabLength; i++) {
+        promiseArray.push(getSyncStorageReturnIndex(i))
+      }
+
+      return Promise.all(promiseArray).then(result => {
+        const nonEmptyArr = result.filter(obj => {
+          return obj[1] != null && obj[1].length > 0
+        })
+        let blockAnyKeys: model.NewBlock[] = []
+        for (const arr of nonEmptyArr) {
+          const block = blockService.inflateJson(arr[1])
+          const t: model.NewBlock = {
+            indexNum: arr[0],
+            tabs: block.tabs,
+            created_at: block.created_at,
+          }
+          blockAnyKeys.push(t)
+        }
+
+        return blockAnyKeys.sort(sortNewBlock).reverse()
+      });
+    }
+
 
     export async function getAllBlockAndKey(): Promise<model.BlockAndKey[]> {
       let tabLength = await getTabLength()

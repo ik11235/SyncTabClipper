@@ -7,6 +7,12 @@ export namespace model {
     tabs: Tab[],
   }
 
+  interface NewBlock {
+    indexNum: number, // chrome.storageに保存する際に使用するためのindex
+    created_at: Date,
+    tabs: Tab[],
+  }
+
   interface Tab {
     url: string,
     title: string,
