@@ -17,23 +17,6 @@ window.onload = function () {
   const sidebar = document.getElementById('sidebar')!
   ReactDOM.render(SideBarDom(), sidebar);
 
-  const exportJson = (): void => {
-    const exportTextElement: HTMLInputElement = <HTMLInputElement>document.getElementById('export_body')
-    blockService.exportAllDataJson(exportTextElement)
-  }
-
-  const importJson = (): void => {
-    const importTextElement: HTMLInputElement = <HTMLInputElement>document.getElementById("import_body");
-    blockService.importAllDataJson(importTextElement.value).catch(error => alert("データのインポートに失敗しました。" + error.message));
-  }
-
-  const all_clear = document.getElementById('all_clear')!
-  all_clear.addEventListener('click', chromeService.storage.allClear);
-  const export_link = document.getElementById('export_link')!
-  export_link.addEventListener('click', exportJson);
-  const import_link = document.getElementById('import_link')!
-  import_link.addEventListener('click', importJson);
-
   chromeService.storage.getAllNewBlock().then(blocks => {
     const main = document.getElementById('main')!
 
