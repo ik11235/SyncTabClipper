@@ -29,8 +29,6 @@ const Main: React.FC<MainProps> = (props) => {
     }
 };
 
-export const MainDom = (blocks: model.NewBlock[]) => <Main Block={blocks}/>;
-
 const Block: React.FC<model.NewBlock> = (block) => {
     const [nowBlock, setNowBlock] = useState(block);
     const created_at = nowBlock.created_at;
@@ -138,4 +136,4 @@ const Tab: React.FC<TabProps> = (props) => {
     );
 };
 
-export default Block;
+export default Main;

@@ -11,6 +11,4 @@ const Header: React.FC = () => {
     );
 }
 
-export const HeaderDom = () => <Header />;
-
 export default Header;
