@@ -22,6 +22,16 @@ module.exports = {
                 use: "ts-loader",
                 exclude: /node_modules/,
             },
+            {
+                test: /\.css/,
+                use: [
+                    "style-loader",
+                    {
+                        loader: "css-loader",
+                        options: {url: false}
+                    }
+                ]
+            }
         ],
     },
     resolve: {
@@ -36,11 +46,6 @@ module.exports = {
                     context: "src/js",
                     from: "zlib*.js",
                     to: path.join(__dirname, "dist/js/"),
-                },
-                {
-                    context: "src/css",
-                    from: "uikit.min.css",
-                    to: path.join(__dirname, "dist/css/"),
                 },
             ],
         }),
