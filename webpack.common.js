@@ -4,7 +4,7 @@ const CopyPlugin = require("copy-webpack-plugin");
 module.exports = {
     entry: {
         background: path.join(__dirname, "src/js/background.ts"),
-        tabs: path.join(__dirname, "src/js/tabs.ts"),
+        tabs: path.join(__dirname, "src/js/tabs.tsx"),
     },
     output: {
         path: path.join(__dirname, "dist/js"),
@@ -17,10 +17,15 @@ module.exports = {
                 use: "ts-loader",
                 exclude: /node_modules/,
             },
+            {
+                test: /\.tsx$/,
+                use: "ts-loader",
+                exclude: /node_modules/,
+            },
         ],
     },
     resolve: {
-        extensions: [".ts", ".js"],
+        extensions: [".ts", ".js", ".tsx", "jsx"],
     },
     plugins: [
         new CopyPlugin({

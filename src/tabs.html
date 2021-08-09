@@ -14,48 +14,13 @@
     <div class="uk-grid">
         <div class="uk-width-1-1">
             <div id="header">
-                <h1 class='uk-heading-primary uk-heading-divider'>
-                    <img src="images/icon.svg" width="32" height="32"/>
-                    SyncTabClipper
-                </h1>
             </div>
         </div>
     </div>
 
     <div class="uk-grid main-contents">
         <div class="uk-width-expand" id="main"></div>
-        <aside class="uk-width-auto">
-            <div class="uk-card uk-card-default uk-card-body">
-                <ul class="uk-nav-default uk-nav-parent-icon" uk-nav>
-                    <li class="uk-nav-header">メニュー</li>
-                    <li>
-                        <a href="#" id="all_clear"><span class="uk-margin-small-right" uk-icon="icon: trash"></span>
-                            すべてのデータを削除する
-                        </a>
-                    </li>
-                    <li>
-                    <li class="uk-parent">
-                        <a href="#"><span class="uk-margin-small-right" uk-icon="icon: pull"></span>export</a>
-                        <ul class="uk-nav-sub">
-                            <li><label for="export_body"></label><textarea readonly id="export_body" rows=4></textarea>
-                            </li>
-                            <li>
-                                <button id="export_link">export実行</button>
-                            </li>
-                        </ul>
-                    </li>
-                    <li class="uk-parent">
-                        <a href="#"><span class="uk-margin-small-right" uk-icon="icon: push"></span>import</a>
-                        <ul class="uk-nav-sub">
-                            <li><label for="import_body"></label><textarea id="import_body" rows=4></textarea></li>
-                            <li>
-                                <button id="import_link">import実行</button>
-                            </li>
-                        </ul>
-                    </li>
-                </ul>
-            </div>
-        </aside>
+        <aside class="uk-width-auto" id="sidebar"></aside>
     </div>
 </div>
 
