@@ -3,10 +3,10 @@ import UIkit from 'uikit';
 import Icons from 'uikit/dist/js/uikit-icons';
 import {chromeService} from "./chromeService";
 import ReactDOM from "react-dom";
-import Main from "./components/block";
-import SideBar from "./sideBar";
-import Header from "./header";
+import SideBar from "./components/sideBar";
+import Header from "./components/header";
 import React from "react";
+import Main from "./components/main";
 
 // @ts-ignore
 UIkit.use(Icons);

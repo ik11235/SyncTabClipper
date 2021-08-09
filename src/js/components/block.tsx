@@ -1,33 +1,7 @@
 import React, {useState} from 'react';
 import {model} from "../types/interface";
-import {util} from "../util";
 import {chromeService} from "../chromeService";
-
-interface MainProps {
-    Block: model.NewBlock[]
-}
-
-const Main: React.FC<MainProps> = (props) => {
-    if (props.Block.length > 0) {
-        return (
-            <div>
-                {props.Block.map((block) => {
-                    return <Block tabs={block.tabs}
-                                  indexNum={block.indexNum}
-                                  created_at={block.created_at}
-                                  key={block.indexNum}
-                    />;
-                })}
-            </div>
-        );
-    } else {
-        return (
-            <div className="uk-header">
-                <h3 className="uk-title uk-margin-remove-bottom no-tabs">保存済みのタブはありません。</h3>
-            </div>
-        );
-    }
-};
+import {Tab} from "./tab";
 
 const Block: React.FC<model.NewBlock> = (block) => {
     const [nowBlock, setNowBlock] = useState(block);
@@ -109,31 +83,6 @@ const display_none = {
     display: "none"
 };
 
-interface TabProps {
-    tab: model.Tab,
-    deleteClick: VoidFunction,
-    openLinkClick: VoidFunction,
-}
-
-const Tab: React.FC<TabProps> = (props) => {
-    const domain = util.getDomain(props.tab.url);
-    const encode_domain = (domain === "") ? encodeURI(" ") : encodeURI(domain);
-    const encode_url = util.escape_html(props.tab.url);
-    const encode_title = util.escape_html(props.tab.title);
+export default Block;
 
 
-    return (
-        <li className="tab-root-dom">
-            <img src={`https://www.google.com/s2/favicons?domain=${encode_domain}`} alt={encode_title}/>
-            <a href={encode_url} className="tab_link" data-url={encode_url}
-               data-title={encode_title} onClick={(e) => {
-                e.preventDefault();
-                props.openLinkClick();
-            }}>{encode_title}</a>
-            <span className="uk-link tab_close" uk-icon="icon: close; ratio: 0.9"
-                  onClick={props.deleteClick}/>
-        </li>
-    );
-};
-
-export default Main;

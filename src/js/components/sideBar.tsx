@@ -1,6 +1,6 @@
 import React from "react";
-import {blockService} from "./blockService";
-import {chromeService} from "./chromeService";
+import {blockService} from "../blockService";
+import {chromeService} from "../chromeService";
 
 const SideBar: React.FC = () => {
 
