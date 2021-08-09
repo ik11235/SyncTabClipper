@@ -3,7 +3,7 @@ import {model} from "../types/interface";
 import {chromeService} from "../chromeService";
 import {Tab} from "./tab";
 
-const Block: React.FC<model.NewBlock> = (block) => {
+const Block: React.FC<model.Block> = (block) => {
     const [nowBlock, setNowBlock] = useState(block);
     const created_at = nowBlock.created_at;
     const openLink = (index: number) => {

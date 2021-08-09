@@ -3,7 +3,7 @@ import {zlibWrapper} from "./zlib-wrapper";
 import {chromeService} from "./chromeService";
 
 export namespace blockService {
-  export function createNewBlock(tabs: chrome.tabs.Tab[], created_at: Date, index: number): model.NewBlock {
+  export function createBlock(tabs: chrome.tabs.Tab[], created_at: Date, index: number): model.Block {
     let blockTabs: model.Tab[] = []
 
     tabs.forEach(tab => {
@@ -22,7 +22,7 @@ export namespace blockService {
 
   }
 
-  function newBlockToJsonObj(block: model.NewBlock): object {
+  function blockToJsonObj(block: model.Block): object {
     return {
       created_at: block.created_at.getTime(),
       tabs: block.tabs
@@ -30,7 +30,7 @@ export namespace blockService {
   }
 
 
-  function blockToJsonObjToBlock(object: any, index: number): model.NewBlock {
+  function jsonObjToBlock(object: any, index: number): model.Block {
     return {
       indexNum: index,
       created_at: new Date(object.created_at),
@@ -38,12 +38,12 @@ export namespace blockService {
     }
   }
 
-  export function newBlockToJson(block: model.NewBlock): string {
-    return JSON.stringify(newBlockToJsonObj(block));
+  export function blockToJson(block: model.Block): string {
+    return JSON.stringify(blockToJsonObj(block));
   }
 
 
-  export function jsonToBlock(json: string, indexNum: number): model.NewBlock {
+  export function jsonToBlock(json: string, indexNum: number): model.Block {
     let js = JSON.parse(json);
 
     const tabs: model.Tab[] = []
@@ -62,7 +62,7 @@ export namespace blockService {
     }
   }
 
-  export function inflateJson(jsonStr: string, indexNum: number): model.NewBlock {
+  export function inflateJson(jsonStr: string, indexNum: number): model.Block {
     try {
       return jsonToBlock(jsonStr, indexNum);
     } catch (e) {
@@ -75,8 +75,8 @@ export namespace blockService {
     }
   }
 
-  export function deflateBlock(block: model.NewBlock): string {
-    const blockStr = newBlockToJson(block)
+  export function deflateBlock(block: model.Block): string {
+    const blockStr = blockToJson(block)
     const deflateStr = zlibWrapper.deflate(blockStr);
     if (deflateStr.length < blockStr.length) {
       return deflateStr;
@@ -86,15 +86,15 @@ export namespace blockService {
   }
 
   export function exportAllDataJson(targetElement: HTMLInputElement): void {
-    chromeService.storage.getAllNewBlock().then(blocks => {
-      targetElement.value = JSON.stringify(blocks.map(newBlockToJsonObj));
+    chromeService.storage.getAllBlock().then(blocks => {
+      targetElement.value = JSON.stringify(blocks.map(blockToJsonObj));
     });
   }
 
-  function blockListForJsonObject(json: object[], startIndex: number): model.NewBlock[] {
+  function blockListForJsonObject(json: object[], startIndex: number): model.Block[] {
     let idx = startIndex
     return json.map(obj => {
-      const o = blockToJsonObjToBlock(obj, idx)
+      const o = jsonObjToBlock(obj, idx)
       idx += 1
       return o
     })

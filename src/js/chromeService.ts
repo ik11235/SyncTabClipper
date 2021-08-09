@@ -65,7 +65,7 @@ export namespace chromeService {
       )
     }
 
-    export async function setBlock(block: model.NewBlock): Promise<void> {
+    export async function setBlock(block: model.Block): Promise<void> {
       if (block.tabs.length <= 0) {
         return removeBlock(block);
       } else {
@@ -73,7 +73,7 @@ export namespace chromeService {
       }
     }
 
-    export async function removeBlock(block: model.NewBlock): Promise<void> {
+    export async function removeBlock(block: model.Block): Promise<void> {
       const key = tabKey(block.indexNum);
       return deleteSyncStorage(key);
     }
@@ -97,7 +97,7 @@ export namespace chromeService {
       })
     }
 
-    export async function getAllNewBlock(): Promise<model.NewBlock[]> {
+    export async function getAllBlock(): Promise<model.Block[]> {
       let tabLength = await getTabLength()
 
       let promiseArray: Promise<[number, string]>[] = [];
@@ -110,17 +110,17 @@ export namespace chromeService {
         const nonEmptyArr = result.filter(obj => {
           return obj[1] != null && obj[1].length > 0
         })
-        let newBlocks: model.NewBlock[] = []
+        let newBlocks: model.Block[] = []
         for (const arr of nonEmptyArr) {
           const block = blockService.inflateJson(arr[1], arr[0])
           newBlocks.push(block)
         }
 
-        return newBlocks.sort(sortNewBlock)
+        return newBlocks.sort(sortBlock)
       });
     }
 
-    const sortNewBlock = (a: model.NewBlock, b: model.NewBlock): number => {
+    const sortBlock = (a: model.Block, b: model.Block): number => {
       return b.created_at.getTime() - a.created_at.getTime()
     }
   }

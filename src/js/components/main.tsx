@@ -3,7 +3,7 @@ import React from "react";
 import Block from "./block"
 
 interface MainProps {
-    Block: model.NewBlock[]
+    Block: model.Block[]
 }
 
 const Main: React.FC<MainProps> = (props) => {

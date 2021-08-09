@@ -18,7 +18,7 @@ window.onload = function () {
     const sidebar = document.getElementById('sidebar')!
     ReactDOM.render(<SideBar/>, sidebar);
 
-    chromeService.storage.getAllNewBlock().then(blocks => {
+    chromeService.storage.getAllBlock().then(blocks => {
         const main = document.getElementById('main')!
 
         ReactDOM.render(<Main Block={blocks}/>, main);

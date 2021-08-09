@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 describe('blockService', (): void => {
-  test('createNewBlock 正常系', (): void => {
+  test('createBlock 正常系', (): void => {
     const tabs: chrome.tabs.Tab[] = [
       {
         index: 0,
@@ -50,7 +50,7 @@ describe('blockService', (): void => {
       },
     ]
     const created_at = new Date(`2021-01-02T03:04:05.678Z`)
-    const res = blockService.createNewBlock(tabs, created_at,1)
+    const res = blockService.createBlock(tabs, created_at, 1)
     expect(res).toEqual({
       indexNum: 1,
       created_at: new Date(`2021-01-02T03:04:05.678Z`),
@@ -67,7 +67,7 @@ describe('blockService', (): void => {
     });
   });
 
-  test('newBlockToJson 正常系', (): void => {
+  test('blockToJson 正常系', (): void => {
     let block = {
       indexNum: 1,
       created_at: new Date(`2021-01-02T03:04:05.678Z`),
@@ -83,7 +83,7 @@ describe('blockService', (): void => {
       ],
     }
 
-    const res = blockService.newBlockToJson(block)
+    const res = blockService.blockToJson(block)
     expect(res).toBe("{\"created_at\":1609556645678,\"tabs\":[{\"url\":\"https://example.com/test\",\"title\":\"title-test\"},{\"url\":\"http://google.com/test2\",\"title\":\"google-test\"}]}");
   });
 

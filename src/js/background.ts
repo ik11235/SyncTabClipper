@@ -11,7 +11,7 @@ import {chromeService} from "./chromeService";
     chromeService.storage.getTabLength()
       .then(tabLength => {
         chrome.tabs.query({currentWindow: true}, (currentTabs: chrome.tabs.Tab[]) => {
-          const block = blockService.createNewBlock(currentTabs, new Date(), tabLength);
+          const block = blockService.createBlock(currentTabs, new Date(), tabLength);
 
           chromeService.storage.setBlock(block)
             .then(_ => chromeService.storage.setTabLength(tabLength + 1))
