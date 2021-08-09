@@ -49,12 +49,17 @@ export namespace chromeService {
       });
     }
 
-    export function allClear(): void {
-      if (window.confirm('保存したすべてのタブを削除します。よろしいですか？')) {
+    export async function allClear(): Promise<void> {
+      return new Promise((resolve, reject) => {
         chrome.storage.sync.clear(function () {
-          alert('すべてのデータを削除しました');
+          const error = chrome.runtime.lastError;
+          if (error) {
+            reject(error);
+          } else {
+            resolve();
+          }
         });
-      }
+      });
     }
 
     function getSyncStorageReturnIndex(index: number): Promise<[number, string]> {

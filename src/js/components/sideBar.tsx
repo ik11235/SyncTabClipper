@@ -15,7 +15,9 @@ const SideBar: React.FC = () => {
     }
 
     const deleteAllData = () => {
-        chromeService.storage.allClear()
+        if (window.confirm('保存したすべてのタブを削除します。よろしいですか？')) {
+            chromeService.storage.allClear().then(_ => alert('すべてのデータを削除しました'));
+        }
     }
 
     return (
