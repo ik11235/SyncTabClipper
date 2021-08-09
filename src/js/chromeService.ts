@@ -5,7 +5,6 @@ import {util} from "./util";
 export namespace chromeService {
   export namespace storage {
 
-    import NewBlock = model.NewBlock;
     const tabLengthKey: string = "t_len";
     const tabKey = (index: number): string => `td_${index}`;
 
@@ -79,7 +78,7 @@ export namespace chromeService {
       }
     }
 
-    export async function removeBlock(block: NewBlock): Promise<void> {
+    export async function removeBlock(block: model.NewBlock): Promise<void> {
       const key = tabKey(block.indexNum);
       return deleteSyncStorage(key);
     }
@@ -127,26 +126,12 @@ export namespace chromeService {
           newBlocks.push(t)
         }
 
-        return newBlocks.sort(sortNewBlock).reverse()
+        return newBlocks.sort(sortNewBlock)
       });
     }
 
     const sortNewBlock = (a: model.NewBlock, b: model.NewBlock): number => {
       return b.created_at.getTime() - a.created_at.getTime()
-    }
-
-    export async function getAllBlock(): Promise<model.Block[]> {
-      let newBlocks = await getAllNewBlock();
-      let blocks: model.Block[] = []
-      for (const nb of newBlocks) {
-        const bb = {
-          tabs: nb.tabs,
-          created_at: nb.created_at
-        }
-        blocks.push(bb)
-      }
-
-      return blocks;
     }
   }
 
