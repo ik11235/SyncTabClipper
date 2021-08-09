@@ -67,8 +67,9 @@ describe('blockService', (): void => {
     });
   });
 
-  test('blockToJson 正常系', (): void => {
+  test('newBlockToJson 正常系', (): void => {
     let block = {
+      indexNum: 1,
       created_at: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
         {
@@ -82,15 +83,16 @@ describe('blockService', (): void => {
       ],
     }
 
-    const res = blockService.blockToJson(block)
+    const res = blockService.newBlockToJson(block)
     expect(res).toBe("{\"created_at\":1609556645678,\"tabs\":[{\"url\":\"https://example.com/test\",\"title\":\"title-test\"},{\"url\":\"http://google.com/test2\",\"title\":\"google-test\"}]}");
   });
 
   test('jsonToBlock 正常系', (): void => {
     let json = "{\"created_at\":1609556645678,\"tabs\":[{\"url\":\"https://example.com/test\",\"title\":\"title-test\"},{\"url\":\"http://google.com/test2\",\"title\":\"google-test\"}]}"
 
-    const res = blockService.jsonToBlock(json)
+    const res = blockService.jsonToBlock(json, 1)
     const expected = {
+      indexNum: 1,
       created_at: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
         {
@@ -111,6 +113,7 @@ describe('blockService', (): void => {
     deflateSpy.mockReturnValueOnce('eNpSNXdSNTJKLkpNLElNiU8sAXJUjR0NzQwsTU3NzExMzcwtVI2cgaIliUnFEElVUydVsK7SohyoiJFRRklJQTGY6QZEqRWJuQU5qXrJ+blAXklqMdhciDmZJTmpcG1gni5MgbmLqqkLkAQAAAD//w==');
 
     const block = {
+      indexNum: 1,
       created_at: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
         {
@@ -129,6 +132,7 @@ describe('blockService', (): void => {
     deflateSpy.mockReturnValueOnce('eNqkzNEKwjAMBdCvyaOiadPqo3P4G1JnmEJHxxrBz7e2cyAoA4VSetObA7YCxGZgJ3w+OkkB1G5tVlsiYzQZuwHcp6m4UyyfQBXkrdvgxwniRaSP+XlIh++u6z0vm9ClJByzW5yreJ7Wclq8CrZ+dj7aE92G0L7J+IUuxf9sNW8r9bOu53WtR53qdD8AAAD//w==');
 
     const block = {
+      indexNum: 1,
       created_at: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
         {
@@ -159,8 +163,9 @@ describe('blockService', (): void => {
     inflateSpy.mockReturnValueOnce("{\"created_at\":1627200615501,\"tabs\":[{\"url\":\"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html\",\"title\":\"syncTabCliper\"},{\"url\":\"chrome://extensions/\",\"title\":\"拡張機能\"},{\"url\":\"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html\",\"title\":\"syncTabCliper\"},{\"url\":\"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html\",\"title\":\"syncTabCliper\"},{\"url\":\"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html\",\"title\":\"syncTabCliper\"},{\"url\":\"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html\",\"title\":\"syncTabCliper\"},{\"url\":\"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html\",\"title\":\"syncTabCliper\"},{\"url\":\"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html\",\"title\":\"syncTabCliper\"},{\"url\":\"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html\",\"title\":\"syncTabCliper\"},{\"url\":\"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html\",\"title\":\"syncTabCliper\"},{\"url\":\"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html\",\"title\":\"syncTabCliper\"},{\"url\":\"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html\",\"title\":\"syncTabCliper\"},{\"url\":\"chrome://newtab/\",\"title\":\"新しいタブ\"},{\"url\":\"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html\",\"title\":\"syncTabCliper\"}]}");
 
     const input = "{\"created_at\":1609556645678,\"tabs\":[{\"url\":\"https://example.com/test\",\"title\":\"title-test\"},{\"url\":\"http://google.com/test2\",\"title\":\"google-test\"}]}"
-
+    const indexNum = 1;
     const expected = {
+      indexNum: indexNum,
       created_at: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
         {
@@ -173,7 +178,7 @@ describe('blockService', (): void => {
         },
       ],
     }
-    expect(blockService.inflateJson(input)).toStrictEqual(expected)
+    expect(blockService.inflateJson(input, indexNum)).toStrictEqual(expected)
     expect(inflateSpy).toBeCalledTimes(0)
   })
 
@@ -181,8 +186,10 @@ describe('blockService', (): void => {
     inflateSpy.mockReturnValueOnce("{\"created_at\":1609556645678,\"tabs\":[{\"url\":\"https://example.com/test\",\"title\":\"title-test\"},{\"url\":\"http://google.com/test2\",\"title\":\"google-test\"},{\"url\":\"http://google.com/test3\",\"title\":\"google-test33\"},{\"url\":\"http://google.com/test4\",\"title\":\"google-test44\"}]}");
 
     const input = 'eNqkzNEKwjAMBdCvyaOiadPqo3P4G1JnmEJHxxrBz7e2cyAoA4VSetObA7YCxGZgJ3w+OkkB1G5tVlsiYzQZuwHcp6m4UyyfQBXkrdvgxwniRaSP+XlIh++u6z0vm9ClJByzW5yreJ7Wclq8CrZ+dj7aE92G0L7J+IUuxf9sNW8r9bOu53WtR53qdD8AAAD//w=='
+    const indexNum = 1;
 
     const expected = {
+      indexNum: indexNum,
       created_at: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
         {
@@ -203,17 +210,9 @@ describe('blockService', (): void => {
         },
       ],
     }
-    expect(blockService.inflateJson(input)).toStrictEqual(expected)
+    expect(blockService.inflateJson(input, indexNum)).toStrictEqual(expected)
     expect(inflateSpy.mock.calls[0]).toEqual(['eNqkzNEKwjAMBdCvyaOiadPqo3P4G1JnmEJHxxrBz7e2cyAoA4VSetObA7YCxGZgJ3w+OkkB1G5tVlsiYzQZuwHcp6m4UyyfQBXkrdvgxwniRaSP+XlIh++u6z0vm9ClJByzW5yreJ7Wclq8CrZ+dj7aE92G0L7J+IUuxf9sNW8r9bOu53WtR53qdD8AAAD//w=='])
 
     expect(inflateSpy).toBeCalledTimes(1)
   })
-
-
-  function convertElement(str: string): HTMLElement {
-    const element = document.createElement('div')
-    element.innerHTML = str
-
-    return <HTMLElement>element.firstElementChild
-  }
 })

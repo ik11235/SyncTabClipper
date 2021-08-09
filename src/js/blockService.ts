@@ -22,13 +22,6 @@ export namespace blockService {
 
   }
 
-  function blockToJsonObj(block: model.Block): object {
-    return {
-      created_at: block.created_at.getTime(),
-      tabs: block.tabs
-    }
-  }
-
   function newBlockToJsonObj(block: model.NewBlock): object {
     return {
       created_at: block.created_at.getTime(),
@@ -37,18 +30,20 @@ export namespace blockService {
   }
 
 
-  function blockToJsonObjToBlock(object: any): model.Block {
+  function blockToJsonObjToBlock(object: any, index: number): model.NewBlock {
     return {
+      indexNum: index,
       created_at: new Date(object.created_at),
       tabs: object.tabs
     }
   }
 
-  export function blockToJson(block: model.Block): string {
-    return JSON.stringify(blockToJsonObj(block));
+  export function newBlockToJson(block: model.NewBlock): string {
+    return JSON.stringify(newBlockToJsonObj(block));
   }
 
-  export function jsonToBlock(json: string): model.Block {
+
+  export function jsonToBlock(json: string, indexNum: number): model.NewBlock {
     let js = JSON.parse(json);
 
     const tabs: model.Tab[] = []
@@ -61,26 +56,27 @@ export namespace blockService {
     });
 
     return {
+      indexNum: indexNum,
       created_at: new Date(js.created_at),
       tabs: tabs,
     }
   }
 
-  export function inflateJson(jsonStr: string): model.Block {
+  export function inflateJson(jsonStr: string, indexNum: number): model.NewBlock {
     try {
-      return jsonToBlock(jsonStr);
+      return jsonToBlock(jsonStr, indexNum);
     } catch (e) {
       if (e instanceof SyntaxError) {
         const jsonStr2 = zlibWrapper.inflate(jsonStr);
-        return jsonToBlock(jsonStr2);
+        return jsonToBlock(jsonStr2, indexNum);
       } else {
         throw e;
       }
     }
   }
 
-  export function deflateBlock(block: model.Block): string {
-    const blockStr = blockToJson(block)
+  export function deflateBlock(block: model.NewBlock): string {
+    const blockStr = newBlockToJson(block)
     const deflateStr = zlibWrapper.deflate(blockStr);
     if (deflateStr.length < blockStr.length) {
       return deflateStr;
@@ -89,18 +85,19 @@ export namespace blockService {
     }
   }
 
-  const sortBlock = (a: model.Block, b: model.Block): number => {
-    return b.created_at.getTime() - a.created_at.getTime()
-  }
-
   export function exportAllDataJson(targetElement: HTMLInputElement): void {
     chromeService.storage.getAllNewBlock().then(blocks => {
       targetElement.value = JSON.stringify(blocks.map(newBlockToJsonObj));
     });
   }
 
-  function blockListForJsonObject(json: object[]): model.Block[] {
-    return json.map(blockToJsonObjToBlock)
+  function blockListForJsonObject(json: object[], startIndex: number): model.NewBlock[] {
+    let idx = startIndex
+    return json.map(obj => {
+      const o = blockToJsonObjToBlock(obj, idx)
+      idx += 1
+      return o
+    })
   }
 
   export async function importAllDataJson(jsonStr: string): Promise<void> {
@@ -109,11 +106,10 @@ export namespace blockService {
     let idx = tabLength;
 
     const json = JSON.parse(jsonStr)
-    const blocks = blockListForJsonObject(json)
+    const blocks = blockListForJsonObject(json, idx)
 
-    blocksSort(blocks).reverse().forEach(block => {
-      promiseArray.push(chromeService.storage.setTabData(idx, deflateBlock(block)))
-      idx += 1
+    blocks.forEach(block => {
+      promiseArray.push(chromeService.storage.setBlock(block))
     })
 
     Promise.all(promiseArray).then(() => {
@@ -123,9 +119,5 @@ export namespace blockService {
         throw reason
       });
     });
-  }
-
-  export function blocksSort(blocks: model.Block[]): model.Block[] {
-    return blocks.sort(sortBlock);
   }
 }

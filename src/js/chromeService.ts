@@ -66,15 +66,10 @@ export namespace chromeService {
     }
 
     export async function setBlock(block: model.NewBlock): Promise<void> {
-      const blockData = {
-        tabs: block.tabs,
-        created_at: block.created_at
-      }
-
       if (block.tabs.length <= 0) {
         return removeBlock(block);
       } else {
-        return chromeService.storage.setTabData(block.indexNum, blockService.deflateBlock(blockData))
+        return chromeService.storage.setTabData(block.indexNum, blockService.deflateBlock(block))
       }
     }
 
@@ -117,13 +112,8 @@ export namespace chromeService {
         })
         let newBlocks: model.NewBlock[] = []
         for (const arr of nonEmptyArr) {
-          const block = blockService.inflateJson(arr[1])
-          const t: model.NewBlock = {
-            indexNum: arr[0],
-            tabs: block.tabs,
-            created_at: block.created_at,
-          }
-          newBlocks.push(t)
+          const block = blockService.inflateJson(arr[1], arr[0])
+          newBlocks.push(block)
         }
 
         return newBlocks.sort(sortNewBlock)
