@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 describe('blockService', (): void => {
-  test('createBlock 正常系', (): void => {
+  test('createNewBlock 正常系', (): void => {
     const tabs: chrome.tabs.Tab[] = [
       {
         index: 0,
@@ -50,8 +50,9 @@ describe('blockService', (): void => {
       },
     ]
     const created_at = new Date(`2021-01-02T03:04:05.678Z`)
-    const res = blockService.createBlock(tabs, created_at)
+    const res = blockService.createNewBlock(tabs, created_at,1)
     expect(res).toEqual({
+      indexNum: 1,
       created_at: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
         {

@@ -3,7 +3,7 @@ import {zlibWrapper} from "./zlib-wrapper";
 import {chromeService} from "./chromeService";
 
 export namespace blockService {
-  export function createBlock(tabs: chrome.tabs.Tab[], created_at: Date): model.Block {
+  export function createNewBlock(tabs: chrome.tabs.Tab[], created_at: Date, index: number): model.NewBlock {
     let blockTabs: model.Tab[] = []
 
     tabs.forEach(tab => {
@@ -15,9 +15,11 @@ export namespace blockService {
     });
 
     return {
+      indexNum: index,
       created_at: created_at,
       tabs: blockTabs
     };
+
   }
 
   function blockToJsonObj(block: model.Block): object {
@@ -26,6 +28,14 @@ export namespace blockService {
       tabs: block.tabs
     }
   }
+
+  function newBlockToJsonObj(block: model.NewBlock): object {
+    return {
+      created_at: block.created_at.getTime(),
+      tabs: block.tabs
+    }
+  }
+
 
   function blockToJsonObjToBlock(object: any): model.Block {
     return {
@@ -84,10 +94,8 @@ export namespace blockService {
   }
 
   export function exportAllDataJson(targetElement: HTMLInputElement): void {
-    chromeService.storage.getAllBlock().then(blocks => {
-      const sortBlocks = blocksSort(blocks);
-
-      targetElement.value = JSON.stringify(sortBlocks.map(blockToJsonObj));
+    chromeService.storage.getAllNewBlock().then(blocks => {
+      targetElement.value = JSON.stringify(blocks.map(newBlockToJsonObj));
     });
   }
 
