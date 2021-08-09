@@ -53,7 +53,7 @@ const Block: React.FC<model.Block> = (block) => {
                 <div className="uk-card-header">
                     <h3 className="uk-card-title uk-margin-remove-bottom">{nowBlock.tabs.length}個のタブ</h3>
                     <p className="uk-text-meta uk-margin-remove-top">作成日: <time
-                        dateTime={created_at.toISOString()}>{created_at.toISOString()}</time></p>
+                        dateTime={created_at.toISOString()}>{created_at.toLocaleString()}</time></p>
                     <div className="uk-grid">
                         <div className="uk-width-auto"><span className="all_tab_link uk-link"
                                                              onClick={openAllTab}>すべてのリンクを開く</span></div>
