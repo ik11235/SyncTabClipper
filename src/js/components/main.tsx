@@ -10,7 +10,7 @@ const Main: React.FC<MainProps> = (props) => {
     if (props.Block.length > 0) {
         return (
             <div>
-                {props.Block.reverse().map((block) => {
+                {props.Block.map((block) => {
                     return <Block tabs={block.tabs}
                                   indexNum={block.indexNum}
                                   created_at={block.created_at}
