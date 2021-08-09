@@ -58,18 +58,10 @@ export namespace chromeService {
       }
     }
 
-    function getSyncStorageReturnKey(index: number): Promise<[string, string]> {
-      const key = tabKey(index)
-      return getSyncStorage(key).then(result => {
-          return [key, result]
-        }
-      )
-    }
-
     function getSyncStorageReturnIndex(index: number): Promise<[number, string]> {
       const key = tabKey(index)
       return getSyncStorage(key).then(result => {
-          return [index, result]
+          return [index, result];
         }
       )
     }
@@ -111,19 +103,6 @@ export namespace chromeService {
       })
     }
 
-    const sortNewBlock = (a: model.NewBlock, b: model.NewBlock): number => {
-      return b.created_at.getTime() - a.created_at.getTime()
-    }
-
-    const sortBlockAnyKeys = (a: model.BlockAndKey, b: model.BlockAndKey): number => {
-      return b.block.created_at.getTime() - a.block.created_at.getTime()
-    }
-
-    export async function getAllBlock(): Promise<model.Block[]> {
-      let bak = await getAllBlockAndKey()
-      return bak.map(obj => obj.block)
-    }
-
     export async function getAllNewBlock(): Promise<model.NewBlock[]> {
       let tabLength = await getTabLength()
 
@@ -137,7 +116,7 @@ export namespace chromeService {
         const nonEmptyArr = result.filter(obj => {
           return obj[1] != null && obj[1].length > 0
         })
-        let blockAnyKeys: model.NewBlock[] = []
+        let newBlocks: model.NewBlock[] = []
         for (const arr of nonEmptyArr) {
           const block = blockService.inflateJson(arr[1])
           const t: model.NewBlock = {
@@ -145,38 +124,29 @@ export namespace chromeService {
             tabs: block.tabs,
             created_at: block.created_at,
           }
-          blockAnyKeys.push(t)
+          newBlocks.push(t)
         }
 
-        return blockAnyKeys.sort(sortNewBlock).reverse()
+        return newBlocks.sort(sortNewBlock).reverse()
       });
     }
 
+    const sortNewBlock = (a: model.NewBlock, b: model.NewBlock): number => {
+      return b.created_at.getTime() - a.created_at.getTime()
+    }
 
-    export async function getAllBlockAndKey(): Promise<model.BlockAndKey[]> {
-      let tabLength = await getTabLength()
-
-      let promiseArray: Promise<[string, string]>[] = [];
-
-      for (let i = 0; i < tabLength; i++) {
-        promiseArray.push(getSyncStorageReturnKey(i))
+    export async function getAllBlock(): Promise<model.Block[]> {
+      let newBlocks = await getAllNewBlock();
+      let blocks: model.Block[] = []
+      for (const nb of newBlocks) {
+        const bb = {
+          tabs: nb.tabs,
+          created_at: nb.created_at
+        }
+        blocks.push(bb)
       }
 
-      return Promise.all(promiseArray).then(result => {
-        const nonEmptyArr = result.filter(obj => {
-          return obj[1] != null && obj[1].length > 0
-        })
-        let blockAnyKeys: model.BlockAndKey[] = []
-        for (const arr of nonEmptyArr) {
-          const t: model.BlockAndKey = {
-            IDkey: arr[0],
-            block: blockService.inflateJson(arr[1])
-          }
-          blockAnyKeys.push(t)
-        }
-
-        return blockAnyKeys.sort(sortBlockAnyKeys).reverse()
-      });
+      return blocks;
     }
   }
 
