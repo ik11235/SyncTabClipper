@@ -57,42 +57,35 @@ const Block: React.FC<BlockProps> = (props) => {
         changeBlock(newBlock)
     }
 
-    if (nowBlock.tabs.length > 0) {
-        return (
-            <div className="tabs uk-card-default block-root-dom"
-                 data-created-at="${created_at.getTime()}">
-                <div className="uk-card-header">
-                    <h3 className="uk-card-title uk-margin-remove-bottom">{nowBlock.tabs.length}個のタブ</h3>
-                    <p className="uk-text-meta uk-margin-remove-top">作成日: <time
-                        dateTime={created_at.toISOString()}>{created_at.toLocaleString()}</time></p>
-                    <div className="uk-grid">
-                        <div className="uk-width-auto"><span className="all_tab_link uk-link"
-                                                             onClick={openAllTab}>すべてのリンクを開く</span></div>
-                        <div className="uk-width-auto"><span className="all_tab_delete uk-link"
-                                                             onClick={deleteBlock}>すべてのリンクを閉じる</span></div>
-                        <div className="uk-width-expand"></div>
-                    </div>
-                </div>
-                <div className="uk-card-body">
-                    <ul>
-                        {nowBlock.tabs.map((tab, index) => {
-                            return <Tab tab={tab}
-                                        deleteClick={() => deleteClick(index)}
-                                        openLinkClick={() => openLink(index)}
-                                        key={index}/>;
-                        })}
-                    </ul>
+    return (
+        <div className="tabs uk-card-default block-root-dom"
+             data-created-at="${created_at.getTime()}">
+            <div className="uk-card-header">
+                <h3 className="uk-card-title uk-margin-remove-bottom">{nowBlock.tabs.length}個のタブ</h3>
+                <p className="uk-text-meta uk-margin-remove-top">作成日: <time
+                    dateTime={created_at.toISOString()}>{created_at.toLocaleString()}</time></p>
+                <div className="uk-grid">
+                    <div className="uk-width-auto"><span className="all_tab_link uk-link"
+                                                         onClick={openAllTab}>すべてのリンクを開く</span></div>
+                    <div className="uk-width-auto"><span className="all_tab_delete uk-link"
+                                                         onClick={deleteBlock}>すべてのリンクを閉じる</span></div>
+                    <div className="uk-width-expand"></div>
                 </div>
             </div>
-        );
-    } else {
-        return (<div style={display_none}/>);
-    }
+            <div className="uk-card-body">
+                <ul>
+                    {nowBlock.tabs.map((tab, index) => {
+                        return <Tab tab={tab}
+                                    deleteClick={() => deleteClick(index)}
+                                    openLinkClick={() => openLink(index)}
+                                    key={index}/>;
+                    })}
+                </ul>
+            </div>
+        </div>
+    );
 };
 
-const display_none = {
-    display: "none"
-};
 
 export default Block;
 
