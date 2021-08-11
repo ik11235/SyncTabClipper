@@ -3,14 +3,29 @@ import {model} from "../types/interface";
 import {chromeService} from "../chromeService";
 import {Tab} from "./tab";
 
-const Block: React.FC<model.Block> = (block) => {
-    const [nowBlock, setNowBlock] = useState(block);
+interface BlockProps {
+    Block: model.Block,
+    deleteBlock: VoidFunction,
+}
+
+
+const Block: React.FC<BlockProps> = (props) => {
+    const [nowBlock, setNowBlock] = useState(props.Block);
     const created_at = nowBlock.created_at;
     const openLink = (index: number) => {
         const url = nowBlock.tabs[index]!.url;
         chrome.tabs.create({url: url, active: false}, function () {
             deleteClick(index)
         });
+    }
+
+    const changeBlock = (newBlock: model.Block) => {
+        chromeService.storage.setBlock(newBlock).then(_ => {
+            setNowBlock(newBlock)
+            if (newBlock.tabs.length <= 0) {
+                props.deleteBlock()
+            }
+        })
     }
 
     const deleteClick = (index: number) => {
@@ -20,9 +35,7 @@ const Block: React.FC<model.Block> = (block) => {
             indexNum: nowBlock.indexNum,
             created_at: nowBlock.created_at,
         }
-        chromeService.storage.setBlock(newBlock).then(_ => {
-            setNowBlock(newBlock)
-        })
+        changeBlock(newBlock)
     }
 
     const openAllTab = () => {
@@ -41,9 +54,7 @@ const Block: React.FC<model.Block> = (block) => {
             indexNum: nowBlock.indexNum,
             created_at: nowBlock.created_at,
         }
-        chromeService.storage.setBlock(newBlock).then(_ => {
-            setNowBlock(newBlock)
-        })
+        changeBlock(newBlock)
     }
 
     if (nowBlock.tabs.length > 0) {

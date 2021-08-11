@@ -1,5 +1,5 @@
 import {model} from "../types/interface";
-import React from "react";
+import React, {useState} from "react";
 import Block from "./block"
 
 interface MainProps {
@@ -7,15 +7,21 @@ interface MainProps {
 }
 
 const Main: React.FC<MainProps> = (props) => {
-    if (props.Block.length > 0) {
+    const [nowBlocks, setNowBlocks] = useState(props.Block);
+
+    const deleteBlock = (index: number) => {
+        setNowBlocks((blocks) => {
+            return blocks.filter(block => block.indexNum != index);
+        });
+    }
+
+    if (nowBlocks.length > 0) {
         return (
             <div>
-                {props.Block.map((block) => {
-                    return <Block tabs={block.tabs}
-                                  indexNum={block.indexNum}
-                                  created_at={block.created_at}
-                                  key={block.indexNum}
-                    />;
+                {nowBlocks.map((block, index) => {
+                    return <Block key={block.indexNum}
+                                  Block={block}
+                                  deleteBlock={() => deleteBlock(block.indexNum)}/>;
                 })}
             </div>
         );
