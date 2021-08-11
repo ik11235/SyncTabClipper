@@ -69,7 +69,7 @@ const Block: React.FC<BlockProps> = (props) => {
                                                          onClick={openAllTab}>すべてのリンクを開く</span></div>
                     <div className="uk-width-auto"><span className="all_tab_delete uk-link"
                                                          onClick={deleteBlock}>すべてのリンクを閉じる</span></div>
-                    <div className="uk-width-expand"></div>
+                    <div className="uk-width-expand"/>
                 </div>
             </div>
             <div className="uk-card-body">
@@ -85,7 +85,6 @@ const Block: React.FC<BlockProps> = (props) => {
         </div>
     );
 };
-
 
 export default Block;
 
