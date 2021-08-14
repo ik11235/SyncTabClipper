@@ -32,7 +32,8 @@
     "build:prod": "webpack --config webpack.prod.js && zip -r archive.zip dist/",
     "watch": "webpack --watch",
     "lint": "eslint --ext .js,.jsx,.ts,.tsx src/",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "react": "^17.0.2",
