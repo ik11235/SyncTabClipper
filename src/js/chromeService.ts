@@ -7,6 +7,7 @@ export namespace chromeService {
     const tabLengthKey: string = 't_len';
     const tabKey = (index: number): string => `td_${index}`;
 
+    // eslint-disable-next-line require-jsdoc
     function deleteSyncStorage(key: string): Promise<void> {
       return new Promise((resolve, reject) => {
         chrome.storage.sync.remove(key, () => {
@@ -20,6 +21,7 @@ export namespace chromeService {
       });
     }
 
+    // eslint-disable-next-line require-jsdoc
     function setSyncStorage(key: string, value: string): Promise<void> {
       const setObj: { [key: string]: string } = {};
       setObj[key] = value;
@@ -35,6 +37,7 @@ export namespace chromeService {
       });
     }
 
+    // eslint-disable-next-line require-jsdoc
     function getSyncStorage(key: string): Promise<string> {
       return new Promise((resolve, reject) => {
         chrome.storage.sync.get([key], (item) => {
@@ -48,6 +51,7 @@ export namespace chromeService {
       });
     }
 
+    // eslint-disable-next-line require-jsdoc
     export async function allClear(): Promise<void> {
       return new Promise((resolve, reject) => {
         chrome.storage.sync.clear(function () {
@@ -61,6 +65,7 @@ export namespace chromeService {
       });
     }
 
+    // eslint-disable-next-line require-jsdoc
     function getSyncStorageReturnIndex(
       index: number
     ): Promise<[number, string]> {
@@ -70,6 +75,7 @@ export namespace chromeService {
       });
     }
 
+    // eslint-disable-next-line require-jsdoc
     export async function setBlock(block: model.Block): Promise<void> {
       if (block.tabs.length <= 0) {
         return removeBlock(block);
@@ -81,11 +87,13 @@ export namespace chromeService {
       }
     }
 
+    // eslint-disable-next-line require-jsdoc
     export async function removeBlock(block: model.Block): Promise<void> {
       const key = tabKey(block.indexNum);
       return deleteSyncStorage(key);
     }
 
+    // eslint-disable-next-line require-jsdoc
     export async function setTabData(
       index: number,
       data: string
@@ -94,10 +102,12 @@ export namespace chromeService {
       return setSyncStorage(key, data);
     }
 
+    // eslint-disable-next-line require-jsdoc
     export async function setTabLength(value: number): Promise<void> {
       return setSyncStorage(tabLengthKey, value.toString());
     }
 
+    // eslint-disable-next-line require-jsdoc
     export async function getTabLength(): Promise<number> {
       return getSyncStorage(tabLengthKey).then((result) => {
         if (result == null) {
@@ -108,6 +118,7 @@ export namespace chromeService {
       });
     }
 
+    // eslint-disable-next-line require-jsdoc
     export async function getAllBlock(): Promise<model.Block[]> {
       const tabLength = await getTabLength();
 
@@ -137,6 +148,7 @@ export namespace chromeService {
   }
 
   export namespace tab {
+    // eslint-disable-next-line require-jsdoc
     export function createTabs(
       properties: chrome.tabs.CreateProperties
     ): Promise<void> {
@@ -152,6 +164,7 @@ export namespace chromeService {
       });
     }
 
+    // eslint-disable-next-line require-jsdoc
     async function closeTab(tab: chrome.tabs.Tab): Promise<void> {
       return new Promise((resolve, reject) => {
         chrome.tabs.remove(tab.id!, () => {
@@ -165,6 +178,7 @@ export namespace chromeService {
       });
     }
 
+    // eslint-disable-next-line require-jsdoc
     export async function closeTabs(tabs: chrome.tabs.Tab[]): Promise<void> {
       const promiseArray: Promise<void>[] = [];
 
@@ -180,6 +194,7 @@ export namespace chromeService {
       }
     }
 
+    // eslint-disable-next-line require-jsdoc
     export async function createTabsPageTab(): Promise<void> {
       const url = chrome.runtime.getURL('tabs.html');
       await chrome.tabs.create({
@@ -193,6 +208,7 @@ export namespace chromeService {
     const appName = () => chrome.runtime.getManifest().name;
     const parentMenuId = () => `${appName}.mainMenu`;
 
+    // eslint-disable-next-line require-jsdoc
     export function createParentMenu(): void {
       chrome.contextMenus.create({
         id: parentMenuId(),
@@ -202,6 +218,7 @@ export namespace chromeService {
       });
     }
 
+    // eslint-disable-next-line require-jsdoc
     export function createGotoTabsPageMenu(): void {
       chrome.contextMenus.create({
         title: 'tabページを開く',

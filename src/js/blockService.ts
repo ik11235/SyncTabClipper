@@ -3,6 +3,7 @@ import { zlibWrapper } from './zlib-wrapper';
 import { chromeService } from './chromeService';
 
 export namespace blockService {
+  // eslint-disable-next-line require-jsdoc
   export function createBlock(
     tabs: chrome.tabs.Tab[],
     createdAt: Date,
@@ -25,6 +26,7 @@ export namespace blockService {
     };
   }
 
+  // eslint-disable-next-line require-jsdoc
   function blockToJsonObj(block: model.Block): object {
     return {
       created_at: block.createdAt.getTime(),
@@ -32,6 +34,7 @@ export namespace blockService {
     };
   }
 
+  // eslint-disable-next-line require-jsdoc
   function jsonObjToBlock(object: any, index: number): model.Block {
     return {
       indexNum: index,
@@ -40,10 +43,12 @@ export namespace blockService {
     };
   }
 
+  // eslint-disable-next-line require-jsdoc
   export function blockToJson(block: model.Block): string {
     return JSON.stringify(blockToJsonObj(block));
   }
 
+  // eslint-disable-next-line require-jsdoc
   export function jsonToBlock(json: string, indexNum: number): model.Block {
     const js = JSON.parse(json);
 
@@ -63,6 +68,7 @@ export namespace blockService {
     };
   }
 
+  // eslint-disable-next-line require-jsdoc
   export function inflateJson(jsonStr: string, indexNum: number): model.Block {
     try {
       return jsonToBlock(jsonStr, indexNum);
@@ -76,6 +82,7 @@ export namespace blockService {
     }
   }
 
+  // eslint-disable-next-line require-jsdoc
   export function deflateBlock(block: model.Block): string {
     const blockStr = blockToJson(block);
     const deflateStr = zlibWrapper.deflate(blockStr);
@@ -86,12 +93,14 @@ export namespace blockService {
     }
   }
 
+  // eslint-disable-next-line require-jsdoc
   export function exportAllDataJson(targetElement: HTMLInputElement): void {
     chromeService.storage.getAllBlock().then((blocks) => {
       targetElement.value = JSON.stringify(blocks.map(blockToJsonObj));
     });
   }
 
+  // eslint-disable-next-line require-jsdoc
   function blockListForJsonObject(
     json: object[],
     startIndex: number
@@ -104,6 +113,7 @@ export namespace blockService {
     });
   }
 
+  // eslint-disable-next-line require-jsdoc
   export async function importAllDataJson(jsonStr: string): Promise<void> {
     const tabLength = await chromeService.storage.getTabLength();
     const promiseArray: Promise<void>[] = [];
