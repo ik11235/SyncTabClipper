@@ -4,8 +4,8 @@ export namespace util {
       const parser = new URL(str);
       return parser.hostname;
     } catch (e) {
-      if (e.code === "ERR_INVALID_URL") {
-        return "";
+      if (e.code === 'ERR_INVALID_URL') {
+        return '';
       } else {
         throw e;
       }
@@ -26,7 +26,7 @@ export namespace util {
         '"': '&quot;',
         '<': '&lt;',
         '>': '&gt;',
-      }[match]
+      }[match];
     });
   }
 
