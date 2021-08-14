@@ -1,6 +1,6 @@
 {
   "Description": {
-    "message": "Consolidates all open tabs into one to reduce memory consumption. The data will be synchronized for each account. So you can use the same records on multiple devices."
+    "message": "Consolidates all open tabs into one to reduce memory. Saved data will be shared with GoogleAccount and sync across multiple devices."
   },
   "content_msg_tab_length": {
     "message": "$length$ Tabs",
