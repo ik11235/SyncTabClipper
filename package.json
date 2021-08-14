@@ -1,7 +1,7 @@
 {
   "devDependencies": {
     "@types/chrome": "^0.0.154",
-    "@types/jest": "^26.0.24",
+    "@types/jest": "^27.0.1",
     "@types/react": "^17.0.16",
     "@types/react-dom": "^17.0.9",
     "@types/uikit": "^3.3.2",
