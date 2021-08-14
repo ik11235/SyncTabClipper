@@ -3,11 +3,7 @@
   "version": "0.2.0",
   "manifest_version": 2,
   "description": "開いているタブを1つにまとめて、メモリ消費を抑えます。アカウントごとにデータは同期して複数端末で同じ記録を使えます。",
-  "permissions": [
-    "tabs",
-    "storage",
-    "contextMenus"
-  ],
+  "permissions": ["tabs", "storage", "contextMenus"],
   "background": {
     "scripts": [
       "js/zlib.js",
@@ -29,4 +25,3 @@
     }
   }
 }
-

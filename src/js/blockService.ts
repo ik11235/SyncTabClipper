@@ -1,67 +1,74 @@
-import {model} from "./types/interface";
-import {zlibWrapper} from "./zlib-wrapper";
-import {chromeService} from "./chromeService";
+import { model } from './types/interface';
+import { zlibWrapper } from './zlib-wrapper';
+import { chromeService } from './chromeService';
 
 export namespace blockService {
-  export function createBlock(tabs: chrome.tabs.Tab[], created_at: Date, index: number): model.Block {
-    let blockTabs: model.Tab[] = []
+  // eslint-disable-next-line require-jsdoc
+  export function createBlock(
+    tabs: chrome.tabs.Tab[],
+    createdAt: Date,
+    index: number
+  ): model.Block {
+    const blockTabs: model.Tab[] = [];
 
-    tabs.forEach(tab => {
-      const tab_data: model.Tab = {
+    tabs.forEach((tab) => {
+      const tabData: model.Tab = {
         url: tab.url!,
         title: tab.title!,
-      }
-      blockTabs.push(tab_data);
+      };
+      blockTabs.push(tabData);
     });
 
     return {
       indexNum: index,
-      created_at: created_at,
-      tabs: blockTabs
+      createdAt: createdAt,
+      tabs: blockTabs,
     };
-
   }
 
+  // eslint-disable-next-line require-jsdoc
   function blockToJsonObj(block: model.Block): object {
     return {
-      created_at: block.created_at.getTime(),
-      tabs: block.tabs
-    }
+      created_at: block.createdAt.getTime(),
+      tabs: block.tabs,
+    };
   }
 
-
+  // eslint-disable-next-line require-jsdoc
   function jsonObjToBlock(object: any, index: number): model.Block {
     return {
       indexNum: index,
-      created_at: new Date(object.created_at),
-      tabs: object.tabs
-    }
+      createdAt: new Date(object.created_at),
+      tabs: object.tabs,
+    };
   }
 
+  // eslint-disable-next-line require-jsdoc
   export function blockToJson(block: model.Block): string {
     return JSON.stringify(blockToJsonObj(block));
   }
 
-
+  // eslint-disable-next-line require-jsdoc
   export function jsonToBlock(json: string, indexNum: number): model.Block {
-    let js = JSON.parse(json);
+    const js = JSON.parse(json);
 
-    const tabs: model.Tab[] = []
+    const tabs: model.Tab[] = [];
 
-    js.tabs.forEach((json_arr: any) => {
+    js.tabs.forEach((jsonArr: any) => {
       tabs.push({
-        url: json_arr.url,
-        title: json_arr.title,
+        url: jsonArr.url,
+        title: jsonArr.title,
       });
     });
 
     return {
       indexNum: indexNum,
-      created_at: new Date(js.created_at),
+      createdAt: new Date(js.created_at),
       tabs: tabs,
-    }
+    };
   }
 
+  // eslint-disable-next-line require-jsdoc
   export function inflateJson(jsonStr: string, indexNum: number): model.Block {
     try {
       return jsonToBlock(jsonStr, indexNum);
@@ -75,8 +82,9 @@ export namespace blockService {
     }
   }
 
+  // eslint-disable-next-line require-jsdoc
   export function deflateBlock(block: model.Block): string {
-    const blockStr = blockToJson(block)
+    const blockStr = blockToJson(block);
     const deflateStr = zlibWrapper.deflate(blockStr);
     if (deflateStr.length < blockStr.length) {
       return deflateStr;
@@ -85,39 +93,48 @@ export namespace blockService {
     }
   }
 
+  // eslint-disable-next-line require-jsdoc
   export function exportAllDataJson(targetElement: HTMLInputElement): void {
-    chromeService.storage.getAllBlock().then(blocks => {
+    chromeService.storage.getAllBlock().then((blocks) => {
       targetElement.value = JSON.stringify(blocks.map(blockToJsonObj));
     });
   }
 
-  function blockListForJsonObject(json: object[], startIndex: number): model.Block[] {
-    let idx = startIndex
-    return json.map(obj => {
-      const o = jsonObjToBlock(obj, idx)
-      idx += 1
-      return o
-    })
+  // eslint-disable-next-line require-jsdoc
+  function blockListForJsonObject(
+    json: object[],
+    startIndex: number
+  ): model.Block[] {
+    let idx = startIndex;
+    return json.map((obj) => {
+      const o = jsonObjToBlock(obj, idx);
+      idx += 1;
+      return o;
+    });
   }
 
+  // eslint-disable-next-line require-jsdoc
   export async function importAllDataJson(jsonStr: string): Promise<void> {
     const tabLength = await chromeService.storage.getTabLength();
-    let promiseArray: Promise<void>[] = [];
-    let idx = tabLength;
+    const promiseArray: Promise<void>[] = [];
+    const idx = tabLength;
 
-    const json = JSON.parse(jsonStr)
-    const blocks = blockListForJsonObject(json, idx)
+    const json = JSON.parse(jsonStr);
+    const blocks = blockListForJsonObject(json, idx);
 
-    blocks.forEach(block => {
-      promiseArray.push(chromeService.storage.setBlock(block))
-    })
+    blocks.forEach((block) => {
+      promiseArray.push(chromeService.storage.setBlock(block));
+    });
 
     Promise.all(promiseArray).then(() => {
-      chromeService.storage.setTabLength(tabLength + json.length).then(_ => {
-        chrome.tabs.reload({bypassCache: true});
-      }).catch(function (reason) {
-        throw reason
-      });
+      chromeService.storage
+        .setTabLength(tabLength + json.length)
+        .then((_) => {
+          chrome.tabs.reload({ bypassCache: true });
+        })
+        .catch(function (reason) {
+          throw reason;
+        });
     });
   }
 }
