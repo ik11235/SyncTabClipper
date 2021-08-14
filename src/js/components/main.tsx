@@ -33,7 +33,7 @@ const Main: React.FC<MainProps> = (props) => {
     return (
       <div className="uk-header">
         <h3 className="uk-title uk-margin-remove-bottom no-tabs">
-          保存済みのタブはありません。
+          {chrome.i18n.getMessage('content_msg_not_tab')}
         </h3>
       </div>
     );

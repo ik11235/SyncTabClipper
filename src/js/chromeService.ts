@@ -221,7 +221,7 @@ export namespace chromeService {
     // eslint-disable-next-line require-jsdoc
     export function createGotoTabsPageMenu(): void {
       chrome.contextMenus.create({
-        title: 'tabページを開く',
+        title: chrome.i18n.getMessage('content_msg_open_tab_page'),
         parentId: parentMenuId(),
         type: 'normal',
         contexts: ['all'],

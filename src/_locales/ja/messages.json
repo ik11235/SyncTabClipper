@@ -1,0 +1,55 @@
+{
+  "Description": {
+    "message": "開いているタブを1つにまとめて、メモリ消費を抑えます。アカウントごとにデータは同期して複数端末で同じ記録を使えます。"
+  },
+  "content_msg_tab_length": {
+    "message": "$length$個のタブ",
+    "placeholders": {
+      "length": {
+        "content": "$1"
+      }
+    }
+  },
+  "content_msg_created_at": {
+    "message": "作成日: "
+  },
+  "content_msg_all_tab_open": {
+    "message": "すべてのリンクを開く"
+  },
+  "content_msg_all_tab_close": {
+    "message": "すべてのリンクを閉じる"
+  },
+  "content_msg_all_data_delete": {
+    "message": "すべてのデータを削除する"
+  },
+  "content_msg_export": {
+    "message": "エクスポート"
+  },
+  "content_msg_export_exec": {
+    "message": "エクスポート実行"
+  },
+  "content_msg_import": {
+    "message": "インポート"
+  },
+  "content_msg_import_exec": {
+    "message": "インポート実行"
+  },
+  "content_msg_failed_import": {
+    "message": "データのインポートに失敗しました。"
+  },
+  "content_msg_all_delete_confirm": {
+    "message": "保存したすべてのタブを削除します。よろしいですか？"
+  },
+  "content_msg_all_delete_finish": {
+    "message": "すべてのデータを削除しました。"
+  },
+  "content_msg_menu": {
+    "message": "メニュー"
+  },
+  "content_msg_not_tab": {
+    "message": "保存済みのタブはありません。"
+  },
+  "content_msg_open_tab_page": {
+    "message": "保存済みタブのページを開く"
+  }
+}
