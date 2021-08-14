@@ -13,10 +13,13 @@ export namespace util {
   }
 
   /**
+   * HTMLの特殊文字をエスケープして返す
    * https://qiita.com/saekis/items/c2b41cd8940923863791
-   * @param string
+   *
+   * @param {string} string htmlとしてエスケープしたい文字列
+   * @return {string} エスケープした文字列
    */
-  export function escape_html(string: string): string {
+  export function escapeHtml(string: string): string {
     // @ts-ignore
     return string.replace(/[&'`"<>]/g, function (match) {
       return {

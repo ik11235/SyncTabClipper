@@ -49,11 +49,11 @@ describe('blockService', (): void => {
         groupId: 0,
       },
     ];
-    const created_at = new Date(`2021-01-02T03:04:05.678Z`);
-    const res = blockService.createBlock(tabs, created_at, 1);
+    const createdAt = new Date(`2021-01-02T03:04:05.678Z`);
+    const res = blockService.createBlock(tabs, createdAt, 1);
     expect(res).toEqual({
       indexNum: 1,
-      created_at: new Date(`2021-01-02T03:04:05.678Z`),
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
         {
           title: 'title-00',
@@ -70,7 +70,7 @@ describe('blockService', (): void => {
   test('blockToJson 正常系', (): void => {
     const block = {
       indexNum: 1,
-      created_at: new Date(`2021-01-02T03:04:05.678Z`),
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
         {
           url: 'https://example.com/test',
@@ -96,7 +96,7 @@ describe('blockService', (): void => {
     const res = blockService.jsonToBlock(json, 1);
     const expected = {
       indexNum: 1,
-      created_at: new Date(`2021-01-02T03:04:05.678Z`),
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
         {
           url: 'https://example.com/test',
@@ -119,7 +119,7 @@ describe('blockService', (): void => {
 
     const block = {
       indexNum: 1,
-      created_at: new Date(`2021-01-02T03:04:05.678Z`),
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
         {
           url: 'https://example.com/test',
@@ -143,7 +143,7 @@ describe('blockService', (): void => {
 
     const block = {
       indexNum: 1,
-      created_at: new Date(`2021-01-02T03:04:05.678Z`),
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
         {
           url: 'https://example.com/test',
@@ -182,7 +182,7 @@ describe('blockService', (): void => {
     const indexNum = 1;
     const expected = {
       indexNum: indexNum,
-      created_at: new Date(`2021-01-02T03:04:05.678Z`),
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
         {
           url: 'https://example.com/test',
@@ -209,7 +209,7 @@ describe('blockService', (): void => {
 
     const expected = {
       indexNum: indexNum,
-      created_at: new Date(`2021-01-02T03:04:05.678Z`),
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
         {
           url: 'https://example.com/test',

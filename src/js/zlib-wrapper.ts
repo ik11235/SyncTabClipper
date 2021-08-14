@@ -12,17 +12,17 @@ export namespace zlibWrapper {
     const encodeVal = encodeURIComponent(val);
     // 既存のzlib.jsをtypeScriptでimportする方法がわからないので一旦直接呼び出す そのため、@ts-ignoreを指定している
     // @ts-ignore
-    const z_stream = ZLIB.deflateInit({ level: 9 });
-    const encoded_string = z_stream.deflate(encodeVal);
-    return btoaLatin1(encoded_string);
+    const zStream = ZLIB.deflateInit({ level: 9 });
+    const encodedString = zStream.deflate(encodeVal);
+    return btoaLatin1(encodedString);
   }
 
   export function inflate(val: string): string {
     const tobVal = atobLatin1(val);
     // 既存のzlib.jsをtypeScriptでimportする方法がわからないので一旦直接呼び出す そのため、@ts-ignoreを指定している
     // @ts-ignore
-    const z_stream = ZLIB.inflateInit();
-    const decoded_string = z_stream.inflate(tobVal);
-    return decodeURIComponent(decoded_string);
+    const zStream = ZLIB.inflateInit();
+    const decodedString = zStream.inflate(tobVal);
+    return decodeURIComponent(decodedString);
   }
 }

@@ -11,7 +11,7 @@ describe('util', (): void => {
   });
 
   test('escape_html 正常系', (): void => {
-    const res = util.escape_html('<html>aaa</html>');
+    const res = util.escapeHtml('<html>aaa</html>');
     expect(res).toBe('&lt;html&gt;aaa&lt;/html&gt;');
   });
 

@@ -5,29 +5,29 @@ import { chromeService } from './chromeService';
 export namespace blockService {
   export function createBlock(
     tabs: chrome.tabs.Tab[],
-    created_at: Date,
+    createdAt: Date,
     index: number
   ): model.Block {
     const blockTabs: model.Tab[] = [];
 
     tabs.forEach((tab) => {
-      const tab_data: model.Tab = {
+      const tabData: model.Tab = {
         url: tab.url!,
         title: tab.title!,
       };
-      blockTabs.push(tab_data);
+      blockTabs.push(tabData);
     });
 
     return {
       indexNum: index,
-      created_at: created_at,
+      createdAt: createdAt,
       tabs: blockTabs,
     };
   }
 
   function blockToJsonObj(block: model.Block): object {
     return {
-      created_at: block.created_at.getTime(),
+      created_at: block.createdAt.getTime(),
       tabs: block.tabs,
     };
   }
@@ -35,7 +35,7 @@ export namespace blockService {
   function jsonObjToBlock(object: any, index: number): model.Block {
     return {
       indexNum: index,
-      created_at: new Date(object.created_at),
+      createdAt: new Date(object.created_at),
       tabs: object.tabs,
     };
   }
@@ -49,16 +49,16 @@ export namespace blockService {
 
     const tabs: model.Tab[] = [];
 
-    js.tabs.forEach((json_arr: any) => {
+    js.tabs.forEach((jsonArr: any) => {
       tabs.push({
-        url: json_arr.url,
-        title: json_arr.title,
+        url: jsonArr.url,
+        title: jsonArr.title,
       });
     });
 
     return {
       indexNum: indexNum,
-      created_at: new Date(js.created_at),
+      createdAt: new Date(js.created_at),
       tabs: tabs,
     };
   }

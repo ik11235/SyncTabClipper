@@ -10,7 +10,7 @@ interface BlockProps {
 
 const Block: React.FC<BlockProps> = (props) => {
   const [nowBlock, setNowBlock] = useState(props.Block);
-  const created_at = nowBlock.created_at;
+  const createdAt = nowBlock.createdAt;
   const openLink = (index: number) => {
     const url = nowBlock.tabs[index]!.url;
     chrome.tabs.create({ url: url, active: false }, function () {
@@ -32,7 +32,7 @@ const Block: React.FC<BlockProps> = (props) => {
     const newBlock = {
       tabs: nowBlock.tabs,
       indexNum: nowBlock.indexNum,
-      created_at: nowBlock.created_at,
+      createdAt: nowBlock.createdAt,
     };
     changeBlock(newBlock);
   };
@@ -53,7 +53,7 @@ const Block: React.FC<BlockProps> = (props) => {
     const newBlock = {
       tabs: [],
       indexNum: nowBlock.indexNum,
-      created_at: nowBlock.created_at,
+      createdAt: nowBlock.createdAt,
     };
     changeBlock(newBlock);
   };
@@ -69,8 +69,8 @@ const Block: React.FC<BlockProps> = (props) => {
         </h3>
         <p className="uk-text-meta uk-margin-remove-top">
           作成日:{' '}
-          <time dateTime={created_at.toISOString()}>
-            {created_at.toLocaleString()}
+          <time dateTime={createdAt.toISOString()}>
+            {createdAt.toLocaleString()}
           </time>
         </p>
         <div className="uk-grid">

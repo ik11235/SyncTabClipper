@@ -21,10 +21,10 @@ export namespace chromeService {
     }
 
     function setSyncStorage(key: string, value: string): Promise<void> {
-      const set_obj: { [key: string]: string } = {};
-      set_obj[key] = value;
+      const setObj: { [key: string]: string } = {};
+      setObj[key] = value;
       return new Promise((resolve, reject) => {
-        chrome.storage.sync.set(set_obj, () => {
+        chrome.storage.sync.set(setObj, () => {
           const error = chrome.runtime.lastError;
           if (error) {
             reject(error);
@@ -132,7 +132,7 @@ export namespace chromeService {
     }
 
     const sortBlock = (a: model.Block, b: model.Block): number => {
-      return b.created_at.getTime() - a.created_at.getTime();
+      return b.createdAt.getTime() - a.createdAt.getTime();
     };
   }
 
