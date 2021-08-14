@@ -17,15 +17,23 @@ const SideBar: React.FC = () => {
     blockService
       .importAllDataJson(importTextElement.value)
       .catch((error) =>
-        alert('データのインポートに失敗しました。' + error.message)
+        alert(
+          chrome.i18n.getMessage('content_msg_failed_import') +
+            '\n' +
+            error.message
+        )
       );
   };
 
   const deleteAllData = () => {
-    if (window.confirm('保存したすべてのタブを削除します。よろしいですか？')) {
+    if (
+      window.confirm(chrome.i18n.getMessage('content_msg_all_delete_confirm'))
+    ) {
       chromeService.storage
         .allClear()
-        .then((_) => alert('すべてのデータを削除しました'));
+        .then((_) =>
+          alert(chrome.i18n.getMessage('content_msg_all_delete_finish'))
+        );
     }
   };
 
@@ -36,17 +44,19 @@ const SideBar: React.FC = () => {
           className="uk-nav-default uk-nav-parent-icon"
           uk-nav="multiple: true"
         >
-          <li className="uk-nav-header">メニュー</li>
+          <li className="uk-nav-header">
+            {chrome.i18n.getMessage('content_msg_menu')}
+          </li>
           <li className="uk-active">
             <a href="#" id="all_clear" onClick={deleteAllData}>
               <span className="uk-margin-small-right" uk-icon="icon: trash" />
-              すべてのデータを削除する
+              {chrome.i18n.getMessage('content_msg_all_data_delete')}
             </a>
           </li>
           <li className="uk-parent">
             <a href="#">
               <span className="uk-margin-small-right" uk-icon="icon: pull" />
-              export
+              {chrome.i18n.getMessage('content_msg_export')}
             </a>
             <ul className="uk-nav-sub">
               <li>
@@ -55,7 +65,7 @@ const SideBar: React.FC = () => {
               </li>
               <li>
                 <button id="export_link" onClick={exportJson}>
-                  export実行
+                  {chrome.i18n.getMessage('content_msg_export_exec')}
                 </button>
               </li>
             </ul>
@@ -63,7 +73,7 @@ const SideBar: React.FC = () => {
           <li className="uk-parent">
             <a href="#">
               <span className="uk-margin-small-right" uk-icon="icon: push" />
-              import
+              {chrome.i18n.getMessage('content_msg_import')}
             </a>
             <ul className="uk-nav-sub">
               <li>
@@ -72,7 +82,7 @@ const SideBar: React.FC = () => {
               </li>
               <li>
                 <button id="import_link" onClick={importJson}>
-                  import実行
+                  {chrome.i18n.getMessage('content_msg_import_exec')}
                 </button>
               </li>
             </ul>

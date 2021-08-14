@@ -47,6 +47,11 @@ module.exports = {
           from: 'zlib*.js',
           to: path.join(__dirname, 'dist/js/'),
         },
+        {
+          context: 'src/_locales',
+          from: '*/*',
+          to: path.join(__dirname, 'dist/_locales/'),
+        },
       ],
     }),
   ],

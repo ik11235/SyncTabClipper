@@ -65,10 +65,12 @@ const Block: React.FC<BlockProps> = (props) => {
     >
       <div className="uk-card-header">
         <h3 className="uk-card-title uk-margin-remove-bottom">
-          {nowBlock.tabs.length}個のタブ
+          {chrome.i18n.getMessage('content_msg_tab_length', [
+            nowBlock.tabs.length,
+          ])}
         </h3>
         <p className="uk-text-meta uk-margin-remove-top">
-          作成日:{' '}
+          {chrome.i18n.getMessage('content_msg_created_at')}
           <time dateTime={createdAt.toISOString()}>
             {createdAt.toLocaleString()}
           </time>
@@ -76,12 +78,12 @@ const Block: React.FC<BlockProps> = (props) => {
         <div className="uk-grid">
           <div className="uk-width-auto">
             <span className="all_tab_link uk-link" onClick={openAllTab}>
-              すべてのリンクを開く
+              {chrome.i18n.getMessage('content_msg_all_tab_open')}
             </span>
           </div>
           <div className="uk-width-auto">
             <span className="all_tab_delete uk-link" onClick={deleteBlock}>
-              すべてのリンクを閉じる
+              {chrome.i18n.getMessage('content_msg_all_tab_close')}
             </span>
           </div>
           <div className="uk-width-expand" />

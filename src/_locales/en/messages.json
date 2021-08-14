@@ -1,0 +1,55 @@
+{
+  "Description": {
+    "message": "Consolidates all open tabs into one to reduce memory consumption. The data will be synchronized for each account. So you can use the same records on multiple devices."
+  },
+  "content_msg_tab_length": {
+    "message": "$length$ Tabs",
+    "placeholders": {
+      "length": {
+        "content": "$1"
+      }
+    }
+  },
+  "content_msg_created_at": {
+    "message": "created at: "
+  },
+  "content_msg_all_tab_open": {
+    "message": "Open all links"
+  },
+  "content_msg_all_tab_close": {
+    "message": "Close all links"
+  },
+  "content_msg_all_data_delete": {
+    "message": "Delete all data"
+  },
+  "content_msg_export": {
+    "message": "Export"
+  },
+  "content_msg_export_exec": {
+    "message": "Run export"
+  },
+  "content_msg_import": {
+    "message": "Import"
+  },
+  "content_msg_import_exec": {
+    "message": "Run import"
+  },
+  "content_msg_failed_import": {
+    "message": "Failed to import data."
+  },
+  "content_msg_all_delete_confirm": {
+    "message": "Delete all saved tabs. Are you sure?"
+  },
+  "content_msg_all_delete_finish": {
+    "message": "All data deleted."
+  },
+  "content_msg_menu": {
+    "message": "Menu"
+  },
+  "content_msg_not_tab": {
+    "message": "There are no saved tabs."
+  },
+  "content_msg_open_tab_page": {
+    "message": "Open Saved tabs Page"
+  }
+}
