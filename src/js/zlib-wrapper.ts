@@ -1,5 +1,5 @@
 export namespace zlibWrapper {
-  let Buffer = require('buffer').Buffer;
+  const Buffer = require('buffer').Buffer;
 
   const btoaLatin1 = function (str: string): string {
     return Buffer.from(str, 'latin1').toString('base64');

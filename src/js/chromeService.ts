@@ -21,7 +21,7 @@ export namespace chromeService {
     }
 
     function setSyncStorage(key: string, value: string): Promise<void> {
-      let set_obj: { [key: string]: string } = {};
+      const set_obj: { [key: string]: string } = {};
       set_obj[key] = value;
       return new Promise((resolve, reject) => {
         chrome.storage.sync.set(set_obj, () => {
@@ -109,9 +109,9 @@ export namespace chromeService {
     }
 
     export async function getAllBlock(): Promise<model.Block[]> {
-      let tabLength = await getTabLength();
+      const tabLength = await getTabLength();
 
-      let promiseArray: Promise<[number, string]>[] = [];
+      const promiseArray: Promise<[number, string]>[] = [];
 
       for (let i = 0; i < tabLength; i++) {
         promiseArray.push(getSyncStorageReturnIndex(i));
@@ -121,7 +121,7 @@ export namespace chromeService {
         const nonEmptyArr = result.filter((obj) => {
           return obj[1] != null && obj[1].length > 0;
         });
-        let newBlocks: model.Block[] = [];
+        const newBlocks: model.Block[] = [];
         for (const arr of nonEmptyArr) {
           const block = blockService.inflateJson(arr[1], arr[0]);
           newBlocks.push(block);
@@ -166,7 +166,7 @@ export namespace chromeService {
     }
 
     export async function closeTabs(tabs: chrome.tabs.Tab[]): Promise<void> {
-      let promiseArray: Promise<void>[] = [];
+      const promiseArray: Promise<void>[] = [];
 
       for (const tab of tabs) {
         promiseArray.push(closeTab(tab));

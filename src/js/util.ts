@@ -31,7 +31,7 @@ export namespace util {
   }
 
   export function toNumber(str: string | number): number {
-    let num = Number(str);
+    const num = Number(str);
     if (isNaN(num)) {
       throw new Error('to Number Error: ' + str);
     }

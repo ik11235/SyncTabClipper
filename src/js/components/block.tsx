@@ -29,7 +29,7 @@ const Block: React.FC<BlockProps> = (props) => {
 
   const deleteClick = (index: number) => {
     nowBlock.tabs.splice(index, 1);
-    let newBlock = {
+    const newBlock = {
       tabs: nowBlock.tabs,
       indexNum: nowBlock.indexNum,
       created_at: nowBlock.created_at,
@@ -38,8 +38,8 @@ const Block: React.FC<BlockProps> = (props) => {
   };
 
   const openAllTab = () => {
-    let promiseArray: Promise<void>[] = [];
-    for (let tab of nowBlock.tabs) {
+    const promiseArray: Promise<void>[] = [];
+    for (const tab of nowBlock.tabs) {
       promiseArray.push(
         chromeService.tab.createTabs({ url: tab.url, active: false })
       );

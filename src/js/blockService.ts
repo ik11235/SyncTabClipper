@@ -8,7 +8,7 @@ export namespace blockService {
     created_at: Date,
     index: number
   ): model.Block {
-    let blockTabs: model.Tab[] = [];
+    const blockTabs: model.Tab[] = [];
 
     tabs.forEach((tab) => {
       const tab_data: model.Tab = {
@@ -45,7 +45,7 @@ export namespace blockService {
   }
 
   export function jsonToBlock(json: string, indexNum: number): model.Block {
-    let js = JSON.parse(json);
+    const js = JSON.parse(json);
 
     const tabs: model.Tab[] = [];
 
@@ -106,8 +106,8 @@ export namespace blockService {
 
   export async function importAllDataJson(jsonStr: string): Promise<void> {
     const tabLength = await chromeService.storage.getTabLength();
-    let promiseArray: Promise<void>[] = [];
-    let idx = tabLength;
+    const promiseArray: Promise<void>[] = [];
+    const idx = tabLength;
 
     const json = JSON.parse(jsonStr);
     const blocks = blockListForJsonObject(json, idx);

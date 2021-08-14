@@ -68,7 +68,7 @@ describe('blockService', (): void => {
   });
 
   test('blockToJson 正常系', (): void => {
-    let block = {
+    const block = {
       indexNum: 1,
       created_at: new Date(`2021-01-02T03:04:05.678Z`),
       tabs: [
@@ -90,7 +90,7 @@ describe('blockService', (): void => {
   });
 
   test('jsonToBlock 正常系', (): void => {
-    let json =
+    const json =
       '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"},{"url":"http://google.com/test2","title":"google-test"}]}';
 
     const res = blockService.jsonToBlock(json, 1);
