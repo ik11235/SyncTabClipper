@@ -16,5 +16,10 @@
   "plugins": ["react", "@typescript-eslint"],
   "rules": {
     "react/prop-types": "off"
+  },
+  "settings": {
+    "react": {
+      "version": "detect"
+    }
   }
 }
