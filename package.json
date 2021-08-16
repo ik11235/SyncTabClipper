@@ -2,7 +2,7 @@
   "devDependencies": {
     "@types/chrome": "^0.0.154",
     "@types/jest": "^27.0.1",
-    "@types/react": "^17.0.17",
+    "@types/react": "^17.0.18",
     "@types/react-dom": "^17.0.9",
     "@types/uikit": "^3.3.2",
     "@typescript-eslint/eslint-plugin": "^4.29.1",
