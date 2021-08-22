@@ -34,7 +34,7 @@ export const Tab: React.FC<TabProps> = (props) => {
       </a>
       <span
         className="uk-link tab_close"
-        uk-icon="icon: close; ratio: 0.9"
+        data-uk-icon="icon: close; ratio: 0.9"
         onClick={props.deleteClick}
       />
     </li>

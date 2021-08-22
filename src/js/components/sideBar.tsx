@@ -49,13 +49,19 @@ const SideBar: React.FC = () => {
           </li>
           <li className="uk-active">
             <a href="#" id="all_clear" onClick={deleteAllData}>
-              <span className="uk-margin-small-right" uk-icon="icon: trash" />
+              <span
+                className="uk-margin-small-right"
+                data-uk-icon="icon: trash"
+              />
               {chrome.i18n.getMessage('content_msg_all_data_delete')}
             </a>
           </li>
           <li className="uk-parent">
             <a href="#">
-              <span className="uk-margin-small-right" uk-icon="icon: pull" />
+              <span
+                className="uk-margin-small-right"
+                data-uk-icon="icon: pull"
+              />
               {chrome.i18n.getMessage('content_msg_export')}
             </a>
             <ul className="uk-nav-sub">
@@ -72,7 +78,10 @@ const SideBar: React.FC = () => {
           </li>
           <li className="uk-parent">
             <a href="#">
-              <span className="uk-margin-small-right" uk-icon="icon: push" />
+              <span
+                className="uk-margin-small-right"
+                data-uk-icon="icon: push"
+              />
               {chrome.i18n.getMessage('content_msg_import')}
             </a>
             <ul className="uk-nav-sub">
