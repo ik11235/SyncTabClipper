@@ -6,7 +6,7 @@
     "@types/react-dom": "^17.0.9",
     "@types/uikit": "^3.3.2",
     "@typescript-eslint/eslint-plugin": "^4.29.2",
-    "@typescript-eslint/parser": "^4.29.2",
+    "@typescript-eslint/parser": "^4.29.3",
     "buffer": "^6.0.3",
     "copy-webpack-plugin": "^9.0.1",
     "css-loader": "^6.2.0",
