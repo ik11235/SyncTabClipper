@@ -8,7 +8,7 @@ jobs:
     name: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v6
       - name: npm install
         run: npm install
       - name: Run format check
