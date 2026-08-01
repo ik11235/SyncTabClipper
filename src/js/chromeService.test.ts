@@ -52,16 +52,17 @@ describe('chromeService.errorLog', (): void => {
     expect(setBadgeBackgroundColor).toHaveBeenCalledWith({ color: '#DD2222' });
   });
 
-  test('popで取り出すと保存とバッジがクリアされる', async (): Promise<void> => {
+  test('getで取得しても保存とバッジは残る', async (): Promise<void> => {
     await chromeService.errorLog.set('boom');
+    setBadgeText.mockClear();
 
-    await expect(chromeService.errorLog.pop()).resolves.toBe('boom');
-    expect(localData[chromeService.errorLog.errorKey]).toBeUndefined();
-    expect(setBadgeText).toHaveBeenLastCalledWith({ text: '' });
+    await expect(chromeService.errorLog.get()).resolves.toBe('boom');
+    expect(localData[chromeService.errorLog.errorKey]).toBe('boom');
+    expect(setBadgeText).not.toHaveBeenCalled();
   });
 
-  test('未保存時のpopはnullを返す', async (): Promise<void> => {
-    await expect(chromeService.errorLog.pop()).resolves.toBeNull();
+  test('未保存時のgetはnullを返す', async (): Promise<void> => {
+    await expect(chromeService.errorLog.get()).resolves.toBeNull();
   });
 
   test('lastError発生時はErrorインスタンスでrejectする', async (): Promise<void> => {

@@ -226,7 +226,8 @@ export namespace chromeService {
     /**
      * エラーメッセージをchrome.storage.localに保存し、actionバッジで通知する。
      * service workerではalertが使えないため、tabsページのErrorDisplayが
-     * このエラーを表示・クリアする
+     * このエラーを表示する。保存とバッジはユーザーがアラートを閉じるか
+     * 保存操作が成功するまで残す（表示しただけでは消費しない）
      * @param {string} message エラーメッセージ
      * @return {Promise<void>}
      */
@@ -266,10 +267,10 @@ export namespace chromeService {
     }
 
     /**
-     * 保存されたエラーメッセージを取り出し、保存とバッジをクリアする
+     * 保存されたエラーメッセージを取得する。保存とバッジはクリアしない
      * @return {Promise<string | null>} エラーメッセージ。未保存ならnull
      */
-    export function pop(): Promise<string | null> {
+    export function get(): Promise<string | null> {
       return new Promise((resolve, reject) => {
         chrome.storage.local.get([errorKey], (item) => {
           const error = chrome.runtime.lastError;
@@ -277,14 +278,7 @@ export namespace chromeService {
             reject(new Error(error.message));
             return;
           }
-          const message = item[errorKey];
-          if (message == null) {
-            resolve(null);
-            return;
-          }
-          clear()
-            .then(() => resolve(message))
-            .catch(reject);
+          resolve(item[errorKey] ?? null);
         });
       });
     }
