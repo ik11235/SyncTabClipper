@@ -12,7 +12,7 @@ export const ErrorDisplay: React.FC = () => {
     // storage.localの変更を監視する
     const onChanged = (
       changes: { [key: string]: chrome.storage.StorageChange },
-      areaName: string
+      areaName: string,
     ) => {
       const change = changes[chromeService.errorLog.errorKey];
       if (areaName === 'local' && change != null) {

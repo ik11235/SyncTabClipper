@@ -20,7 +20,7 @@ describe('chromeService.errorLog', (): void => {
           },
           get: (
             keys: string[],
-            cb: (items: { [key: string]: string }) => void
+            cb: (items: { [key: string]: string }) => void,
           ): void => {
             const res: { [key: string]: string } = {};
             for (const key of keys) {
@@ -75,7 +75,7 @@ describe('chromeService.errorLog', (): void => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (global as any).chrome.storage.local.set = (
       _obj: { [key: string]: string },
-      cb: () => void
+      cb: () => void,
     ): void => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (global as any).chrome.runtime.lastError = { message: 'quota exceeded' };

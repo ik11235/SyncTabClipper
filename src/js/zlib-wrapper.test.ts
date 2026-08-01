@@ -20,7 +20,7 @@ describe('zlibWrapper', () => {
 
   test('deflate→inflateの往復で元に戻る', (): void => {
     expect(zlibWrapper.inflate(zlibWrapper.deflate(originalJson))).toBe(
-      originalJson
+      originalJson,
     );
   });
 });

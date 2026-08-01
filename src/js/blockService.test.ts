@@ -97,7 +97,7 @@ describe('blockService', (): void => {
 
     const res = blockService.blockToJson(block);
     expect(res).toBe(
-      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"},{"url":"http://google.com/test2","title":"google-test"}]}'
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"},{"url":"http://google.com/test2","title":"google-test"}]}',
     );
   });
 
@@ -126,7 +126,7 @@ describe('blockService', (): void => {
 
   test('deflateBlock 非圧縮時', (): void => {
     deflateSpy.mockReturnValueOnce(
-      'eNpSNXdSNTJKLkpNLElNiU8sAXJUjR0NzQwsTU3NzExMzcwtVI2cgaIliUnFEElVUydVsK7SohyoiJFRRklJQTGY6QZEqRWJuQU5qXrJ+blAXklqMdhciDmZJTmpcG1gni5MgbmLqqkLkAQAAAD//w=='
+      'eNpSNXdSNTJKLkpNLElNiU8sAXJUjR0NzQwsTU3NzExMzcwtVI2cgaIliUnFEElVUydVsK7SohyoiJFRRklJQTGY6QZEqRWJuQU5qXrJ+blAXklqMdhciDmZJTmpcG1gni5MgbmLqqkLkAQAAAD//w==',
     );
 
     const block = {
@@ -150,7 +150,7 @@ describe('blockService', (): void => {
 
   test('deflateBlock 圧縮時', (): void => {
     deflateSpy.mockReturnValueOnce(
-      'eNqkzNEKwjAMBdCvyaOiadPqo3P4G1JnmEJHxxrBz7e2cyAoA4VSetObA7YCxGZgJ3w+OkkB1G5tVlsiYzQZuwHcp6m4UyyfQBXkrdvgxwniRaSP+XlIh++u6z0vm9ClJByzW5yreJ7Wclq8CrZ+dj7aE92G0L7J+IUuxf9sNW8r9bOu53WtR53qdD8AAAD//w=='
+      'eNqkzNEKwjAMBdCvyaOiadPqo3P4G1JnmEJHxxrBz7e2cyAoA4VSetObA7YCxGZgJ3w+OkkB1G5tVlsiYzQZuwHcp6m4UyyfQBXkrdvgxwniRaSP+XlIh++u6z0vm9ClJByzW5yreJ7Wclq8CrZ+dj7aE92G0L7J+IUuxf9sNW8r9bOu53WtR53qdD8AAAD//w==',
     );
 
     const block = {
@@ -186,7 +186,7 @@ describe('blockService', (): void => {
 
   test('inflateJson v1非圧縮データ(バージョン表記なし)', (): void => {
     inflateSpy.mockReturnValueOnce(
-      '{"created_at":1627200615501,"tabs":[{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome://extensions/","title":"拡張機能"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome://newtab/","title":"新しいタブ"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"}]}'
+      '{"created_at":1627200615501,"tabs":[{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome://extensions/","title":"拡張機能"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome://newtab/","title":"新しいタブ"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"}]}',
     );
 
     const input =
@@ -212,7 +212,7 @@ describe('blockService', (): void => {
 
   test('inflateJson v1圧縮データ(バージョン表記なし)', (): void => {
     inflateSpy.mockReturnValueOnce(
-      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"},{"url":"http://google.com/test2","title":"google-test"},{"url":"http://google.com/test3","title":"google-test33"},{"url":"http://google.com/test4","title":"google-test44"}]}'
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"},{"url":"http://google.com/test2","title":"google-test"},{"url":"http://google.com/test3","title":"google-test33"},{"url":"http://google.com/test4","title":"google-test44"}]}',
     );
 
     const input =
@@ -268,7 +268,7 @@ describe('blockService', (): void => {
 
   test('inflateJson v2圧縮データ', (): void => {
     inflateSpy.mockReturnValueOnce(
-      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}'
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}',
     );
 
     const input = '{"v":2,"ev":"0.3.0","d":"compressed-data"}';
@@ -290,7 +290,7 @@ describe('blockService', (): void => {
   test('inflateJson 未対応バージョンはエラー(圧縮)', (): void => {
     const input = '{"v":99,"ev":"99.0.0","d":"compressed-data"}';
     expect(() => blockService.inflateJson(input, 1)).toThrow(
-      'Unsupported data version: v=99'
+      'Unsupported data version: v=99',
     );
     expect(inflateSpy).toHaveBeenCalledTimes(0);
   });
@@ -299,7 +299,7 @@ describe('blockService', (): void => {
     const input =
       '{"v":99,"ev":"99.0.0","created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}';
     expect(() => blockService.inflateJson(input, 1)).toThrow(
-      'Unsupported data version: v=99'
+      'Unsupported data version: v=99',
     );
     expect(inflateSpy).toHaveBeenCalledTimes(0);
   });
@@ -352,7 +352,7 @@ describe('blockService import/export', (): void => {
 
     await blockService.exportAllDataJson(element);
     expect(element.value).toBe(
-      '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}'
+      '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
     );
   });
 
@@ -397,7 +397,7 @@ describe('blockService import/export', (): void => {
 
   test('importAllDataJson 未対応バージョンはエラー', async (): Promise<void> => {
     await expect(
-      blockService.importAllDataJson('{"v":99,"blocks":[]}')
+      blockService.importAllDataJson('{"v":99,"blocks":[]}'),
     ).rejects.toThrow('Unsupported data version: v=99');
     expect(setBlockSpy).not.toHaveBeenCalled();
     expect(setTabLengthSpy).not.toHaveBeenCalled();

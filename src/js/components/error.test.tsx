@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { ErrorDisplay } from './error';
 import { chromeService } from '../chromeService';
@@ -16,7 +16,7 @@ describe('ErrorDisplay', (): void => {
   let onChangedListeners: Array<
     (
       changes: { [key: string]: chrome.storage.StorageChange },
-      areaName: string
+      areaName: string,
     ) => void
   >;
   let container: HTMLDivElement;
@@ -65,7 +65,7 @@ describe('ErrorDisplay', (): void => {
           },
           get: (
             keys: string[],
-            cb: (items: { [key: string]: string }) => void
+            cb: (items: { [key: string]: string }) => void,
           ): void => {
             const res: { [key: string]: string } = {};
             for (const key of keys) {
@@ -85,8 +85,8 @@ describe('ErrorDisplay', (): void => {
           addListener: (
             listener: (
               changes: { [key: string]: chrome.storage.StorageChange },
-              areaName: string
-            ) => void
+              areaName: string,
+            ) => void,
           ): void => {
             onChangedListeners.push(listener);
           },

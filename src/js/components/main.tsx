@@ -18,7 +18,7 @@ const Main: React.FC<MainProps> = (props) => {
   if (nowBlocks.length > 0) {
     return (
       <div>
-        {nowBlocks.map((block, index) => {
+        {nowBlocks.map((block) => {
           return (
             <Block
               key={block.indexNum}
