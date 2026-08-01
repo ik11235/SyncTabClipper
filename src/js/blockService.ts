@@ -85,17 +85,20 @@ export namespace blockService {
         throw e;
       }
     }
-    if (js.d == null) {
-      if (js.v == null || js.v === CURRENT_SCHEMA_VERSION) {
-        // 非圧縮のブロックJSON(vフィールドを持たないv1も構造は同じ)
+    // vフィールドを持たない従来形式は暗黙のv1
+    const version = js.v ?? 1;
+    switch (version) {
+      case 1:
+        // v1の非圧縮はブロックJSONそのもの
         return jsonObjToBlock(js, indexNum);
-      }
-      throw new Error(`Unsupported data version: v=${js.v}`);
+      case 2:
+        // v2は圧縮時のみエンベロープ形式({v, ev, d})になる
+        return js.d == null
+          ? jsonObjToBlock(js, indexNum)
+          : jsonToBlock(zlibWrapper.inflate(js.d), indexNum);
+      default:
+        throw new Error(`Unsupported data version: v=${version}`);
     }
-    if (js.v === CURRENT_SCHEMA_VERSION) {
-      return jsonToBlock(zlibWrapper.inflate(js.d), indexNum);
-    }
-    throw new Error(`Unsupported data version: v=${js.v}`);
   }
 
   // eslint-disable-next-line require-jsdoc
@@ -154,10 +157,14 @@ export namespace blockService {
     if (Array.isArray(json)) {
       // v1のエクスポートはブロックの素の配列
       blockObjs = json;
-    } else if (json.v === CURRENT_SCHEMA_VERSION) {
-      blockObjs = json.blocks;
     } else {
-      throw new Error(`Unsupported data version: v=${json.v}`);
+      switch (json.v) {
+        case 2:
+          blockObjs = json.blocks;
+          break;
+        default:
+          throw new Error(`Unsupported data version: v=${json.v}`);
+      }
     }
     const blocks = blockListForJsonObject(blockObjs, idx);
 
