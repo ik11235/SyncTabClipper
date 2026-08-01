@@ -3,6 +3,10 @@ import { zlibWrapper } from './zlib-wrapper';
 import { chromeService } from './chromeService';
 
 export namespace blockService {
+  // 保存データ・エクスポートJSONのスキーマ版数
+  // バージョン情報を持たない従来形式を暗黙のv1とみなし、v2からフィールドを付与する
+  export const CURRENT_SCHEMA_VERSION = 2;
+
   // eslint-disable-next-line require-jsdoc
   export function createBlock(
     tabs: chrome.tabs.Tab[],
@@ -70,22 +74,39 @@ export namespace blockService {
 
   // eslint-disable-next-line require-jsdoc
   export function inflateJson(jsonStr: string, indexNum: number): model.Block {
+    let js: any;
     try {
-      return jsonToBlock(jsonStr, indexNum);
+      js = JSON.parse(jsonStr);
     } catch (e) {
       if (e instanceof SyntaxError) {
-        const jsonStr2 = zlibWrapper.inflate(jsonStr);
-        return jsonToBlock(jsonStr2, indexNum);
+        // v1の圧縮データは素のzlib+base64文字列でJSONとして解釈できない
+        return jsonToBlock(zlibWrapper.inflate(jsonStr), indexNum);
       } else {
         throw e;
       }
     }
+    if (js.d == null) {
+      // 非圧縮のブロックJSON(vフィールドを持たないv1も構造は同じ)
+      return jsonObjToBlock(js, indexNum);
+    }
+    if (js.v === CURRENT_SCHEMA_VERSION) {
+      return jsonToBlock(zlibWrapper.inflate(js.d), indexNum);
+    }
+    throw new Error(`Unsupported data version: v=${js.v}`);
   }
 
   // eslint-disable-next-line require-jsdoc
   export function deflateBlock(block: model.Block): string {
-    const blockStr = blockToJson(block);
-    const deflateStr = zlibWrapper.deflate(blockStr);
+    // 圧縮アルゴリズムの変更に備え、バージョン情報は圧縮ペイロードの外側に置く
+    const version = {
+      v: CURRENT_SCHEMA_VERSION,
+      ev: chromeService.runtime.getExtensionVersion(),
+    };
+    const blockStr = JSON.stringify({ ...version, ...blockToJsonObj(block) });
+    const deflateStr = JSON.stringify({
+      ...version,
+      d: zlibWrapper.deflate(blockToJson(block)),
+    });
     if (deflateStr.length < blockStr.length) {
       return deflateStr;
     } else {
@@ -98,7 +119,11 @@ export namespace blockService {
     targetElement: HTMLInputElement
   ): Promise<void> {
     return chromeService.storage.getAllBlock().then((blocks) => {
-      targetElement.value = JSON.stringify(blocks.map(blockToJsonObj));
+      targetElement.value = JSON.stringify({
+        v: CURRENT_SCHEMA_VERSION,
+        ev: chromeService.runtime.getExtensionVersion(),
+        blocks: blocks.map(blockToJsonObj),
+      });
     });
   }
 
@@ -122,14 +147,23 @@ export namespace blockService {
     const idx = tabLength;
 
     const json = JSON.parse(jsonStr);
-    const blocks = blockListForJsonObject(json, idx);
+    let blockObjs: object[];
+    if (Array.isArray(json)) {
+      // v1のエクスポートはブロックの素の配列
+      blockObjs = json;
+    } else if (json.v === CURRENT_SCHEMA_VERSION) {
+      blockObjs = json.blocks;
+    } else {
+      throw new Error(`Unsupported data version: v=${json.v}`);
+    }
+    const blocks = blockListForJsonObject(blockObjs, idx);
 
     blocks.forEach((block) => {
       promiseArray.push(chromeService.storage.setBlock(block));
     });
 
     await Promise.all(promiseArray);
-    await chromeService.storage.setTabLength(tabLength + json.length);
+    await chromeService.storage.setTabLength(tabLength + blockObjs.length);
     chrome.tabs.reload({ bypassCache: true });
   }
 }

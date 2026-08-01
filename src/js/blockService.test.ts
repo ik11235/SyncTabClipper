@@ -2,19 +2,27 @@
  * @jest-environment jsdom
  */
 import { blockService } from './blockService';
+import { chromeService } from './chromeService';
 import { zlibWrapper } from './zlib-wrapper';
 
 let deflateSpy: jest.SpyInstance;
 let inflateSpy: jest.SpyInstance;
+let versionSpy: jest.SpyInstance;
 
 beforeAll(() => {
   deflateSpy = jest.spyOn(zlibWrapper, 'deflate');
   inflateSpy = jest.spyOn(zlibWrapper, 'inflate');
+  versionSpy = jest.spyOn(chromeService.runtime, 'getExtensionVersion');
+});
+
+beforeEach(() => {
+  versionSpy.mockReturnValue('9.9.9');
 });
 
 afterEach(() => {
   deflateSpy.mockReset();
   inflateSpy.mockReset();
+  versionSpy.mockReset();
 });
 
 describe('blockService', (): void => {
@@ -128,7 +136,7 @@ describe('blockService', (): void => {
       ],
     };
     const expected =
-      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}';
+      '{"v":2,"ev":"9.9.9","created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}';
     expect(blockService.deflateBlock(block)).toBe(expected);
     expect(deflateSpy.mock.calls[0]).toEqual([
       '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}',
@@ -164,7 +172,7 @@ describe('blockService', (): void => {
       ],
     };
     const expected =
-      'eNqkzNEKwjAMBdCvyaOiadPqo3P4G1JnmEJHxxrBz7e2cyAoA4VSetObA7YCxGZgJ3w+OkkB1G5tVlsiYzQZuwHcp6m4UyyfQBXkrdvgxwniRaSP+XlIh++u6z0vm9ClJByzW5yreJ7Wclq8CrZ+dj7aE92G0L7J+IUuxf9sNW8r9bOu53WtR53qdD8AAAD//w==';
+      '{"v":2,"ev":"9.9.9","d":"eNqkzNEKwjAMBdCvyaOiadPqo3P4G1JnmEJHxxrBz7e2cyAoA4VSetObA7YCxGZgJ3w+OkkB1G5tVlsiYzQZuwHcp6m4UyyfQBXkrdvgxwniRaSP+XlIh++u6z0vm9ClJByzW5yreJ7Wclq8CrZ+dj7aE92G0L7J+IUuxf9sNW8r9bOu53WtR53qdD8AAAD//w=="}';
     expect(blockService.deflateBlock(block)).toBe(expected);
     expect(deflateSpy.mock.calls[0]).toEqual([
       '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"},{"url":"http://google.com/test2","title":"google-test"},{"url":"http://google.com/test3","title":"google-test33"},{"url":"http://google.com/test4","title":"google-test44"}]}',
@@ -235,5 +243,150 @@ describe('blockService', (): void => {
     ]);
 
     expect(inflateSpy).toBeCalledTimes(1);
+  });
+
+  test('inflateJson v2非圧縮データ', (): void => {
+    const input =
+      '{"v":2,"ev":"0.3.0","created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}';
+    const expected = {
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [
+        {
+          url: 'https://example.com/test',
+          title: 'title-test',
+        },
+      ],
+    };
+    expect(blockService.inflateJson(input, 1)).toStrictEqual(expected);
+    expect(inflateSpy).toBeCalledTimes(0);
+  });
+
+  test('inflateJson v2圧縮データ', (): void => {
+    inflateSpy.mockReturnValueOnce(
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}'
+    );
+
+    const input = '{"v":2,"ev":"0.3.0","d":"compressed-data"}';
+    const expected = {
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [
+        {
+          url: 'https://example.com/test',
+          title: 'title-test',
+        },
+      ],
+    };
+    expect(blockService.inflateJson(input, 1)).toStrictEqual(expected);
+    expect(inflateSpy.mock.calls[0]).toEqual(['compressed-data']);
+    expect(inflateSpy).toBeCalledTimes(1);
+  });
+
+  test('inflateJson 未対応バージョンはエラー', (): void => {
+    const input = '{"v":99,"ev":"99.0.0","d":"compressed-data"}';
+    expect(() => blockService.inflateJson(input, 1)).toThrow(
+      'Unsupported data version: v=99'
+    );
+    expect(inflateSpy).toBeCalledTimes(0);
+  });
+});
+
+describe('blockService import/export', (): void => {
+  let getAllBlockSpy: jest.SpyInstance;
+  let getTabLengthSpy: jest.SpyInstance;
+  let setBlockSpy: jest.SpyInstance;
+  let setTabLengthSpy: jest.SpyInstance;
+  const reload = jest.fn();
+
+  beforeEach(() => {
+    getAllBlockSpy = jest.spyOn(chromeService.storage, 'getAllBlock');
+    getTabLengthSpy = jest
+      .spyOn(chromeService.storage, 'getTabLength')
+      .mockResolvedValue(3);
+    setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    setTabLengthSpy = jest
+      .spyOn(chromeService.storage, 'setTabLength')
+      .mockResolvedValue(undefined);
+    reload.mockClear();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = { tabs: { reload: reload } };
+  });
+
+  afterEach(() => {
+    getAllBlockSpy.mockRestore();
+    getTabLengthSpy.mockRestore();
+    setBlockSpy.mockRestore();
+    setTabLengthSpy.mockRestore();
+  });
+
+  test('exportAllDataJson バージョン情報付きで出力する', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+        tabs: [
+          {
+            url: 'https://example.com/test',
+            title: 'title-test',
+          },
+        ],
+      },
+    ]);
+    const element = { value: '' } as HTMLInputElement;
+
+    await blockService.exportAllDataJson(element);
+    expect(element.value).toBe(
+      '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}'
+    );
+  });
+
+  test('importAllDataJson v2形式', async (): Promise<void> => {
+    const json =
+      '{"v":2,"ev":"0.3.0","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}';
+
+    await blockService.importAllDataJson(json);
+    expect(setBlockSpy).toHaveBeenCalledTimes(1);
+    expect(setBlockSpy.mock.calls[0][0]).toStrictEqual({
+      indexNum: 3,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [
+        {
+          url: 'https://example.com/test',
+          title: 'title-test',
+        },
+      ],
+    });
+    expect(setTabLengthSpy).toHaveBeenCalledWith(4);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  test('importAllDataJson v1形式(素の配列)', async (): Promise<void> => {
+    const json =
+      '[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]';
+
+    await blockService.importAllDataJson(json);
+    expect(setBlockSpy).toHaveBeenCalledTimes(1);
+    expect(setBlockSpy.mock.calls[0][0]).toStrictEqual({
+      indexNum: 3,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [
+        {
+          url: 'https://example.com/test',
+          title: 'title-test',
+        },
+      ],
+    });
+    expect(setTabLengthSpy).toHaveBeenCalledWith(4);
+  });
+
+  test('importAllDataJson 未対応バージョンはエラー', async (): Promise<void> => {
+    await expect(
+      blockService.importAllDataJson('{"v":99,"blocks":[]}')
+    ).rejects.toThrow('Unsupported data version: v=99');
+    expect(setBlockSpy).not.toHaveBeenCalled();
+    expect(setTabLengthSpy).not.toHaveBeenCalled();
   });
 });

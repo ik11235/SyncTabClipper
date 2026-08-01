@@ -1,3 +1,7 @@
+# Unreleased
+
+- [NEW] 保存データ・エクスポート JSON に保存時のバージョン情報 (スキーマ版数・拡張機能バージョン) を付与 (#157)
+
 # v0.3.0 (2026-08-01)
 
 - [NEW] Manifest V3 に移行 (Chrome Web Store の MV2 廃止対応)
