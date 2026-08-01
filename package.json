@@ -1,4 +1,5 @@
 {
+  "name": "SyncTabClipper",
   "devDependencies": {
     "@types/chrome": "^0.0.154",
     "@types/jest": "^27.0.1",
