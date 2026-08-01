@@ -45,7 +45,7 @@ export namespace chromeService {
           if (error) {
             reject(new Error(error.message));
           } else {
-            resolve(item[key]);
+            resolve(item[key] as string);
           }
         });
       });
@@ -279,7 +279,7 @@ export namespace chromeService {
             reject(new Error(error.message));
             return;
           }
-          resolve(item[errorKey] ?? null);
+          resolve((item[errorKey] as string | undefined) ?? null);
         });
       });
     }

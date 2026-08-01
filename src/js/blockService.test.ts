@@ -32,6 +32,8 @@ describe('blockService', (): void => {
         selected: false,
         discarded: false,
         autoDiscardable: false,
+        frozen: false,
+        lastAccessed: 0,
         groupId: 0,
       },
       {
@@ -46,6 +48,8 @@ describe('blockService', (): void => {
         selected: false,
         discarded: false,
         autoDiscardable: false,
+        frozen: false,
+        lastAccessed: 0,
         groupId: 0,
       },
     ];

@@ -11,7 +11,7 @@ export namespace util {
       const parser = new URL(str);
       return parser.hostname;
     } catch (e) {
-      if (e.code === 'ERR_INVALID_URL') {
+      if ((e as { code?: string }).code === 'ERR_INVALID_URL') {
         return '';
       } else {
         throw e;

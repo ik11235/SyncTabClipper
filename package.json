@@ -1,11 +1,11 @@
 {
   "name": "SyncTabClipper",
   "devDependencies": {
-    "@types/chrome": "^0.0.154",
+    "@types/chrome": "^0.2.5",
     "@types/jest": "^27.0.1",
     "@types/react": "^17.0.19",
     "@types/react-dom": "^17.0.9",
-    "@types/uikit": "^3.3.2",
+    "@types/uikit": "^3.23.0",
     "@typescript-eslint/eslint-plugin": "^4.29.2",
     "@typescript-eslint/parser": "^4.29.2",
     "buffer": "^6.0.3",
@@ -21,7 +21,7 @@
     "terser-webpack-plugin": "^5.1.4",
     "ts-jest": "^27.0.5",
     "ts-loader": "^9.2.5",
-    "typescript": "^4.3.5",
+    "typescript": "^5.9.3",
     "uikit": "^3.7.2",
     "webpack": "^5.51.1",
     "webpack-cli": "^4.8.0",
