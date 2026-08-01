@@ -1,18 +1,12 @@
 {
   "name": "SyncTabClipper",
   "version": "0.2.1",
-  "manifest_version": 2,
+  "manifest_version": 3,
   "description": "__MSG_Description__",
   "default_locale": "en",
   "permissions": ["tabs", "storage", "contextMenus"],
   "background": {
-    "scripts": [
-      "js/zlib.js",
-      "js/zlib-deflate.js",
-      "js/zlib-inflate.js",
-      "js/background.js"
-    ],
-    "persistant": false
+    "service_worker": "js/background.js"
   },
   "icons": {
     "16": "images/icon16.png",
@@ -20,7 +14,7 @@
     "48": "images/icon48.png",
     "128": "images/icon128.png"
   },
-  "browser_action": {
+  "action": {
     "default_icon": {
       "16": "images/icon16.png"
     }

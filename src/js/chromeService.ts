@@ -195,10 +195,26 @@ export namespace chromeService {
     }
 
     // eslint-disable-next-line require-jsdoc
+    export function queryTabs(
+      queryInfo: chrome.tabs.QueryInfo
+    ): Promise<chrome.tabs.Tab[]> {
+      return new Promise((resolve, reject) => {
+        chrome.tabs.query(queryInfo, (tabs) => {
+          const error = chrome.runtime.lastError;
+          if (error) {
+            reject(error);
+          } else {
+            resolve(tabs);
+          }
+        });
+      });
+    }
+
+    // eslint-disable-next-line require-jsdoc
     export async function createTabsPageTab(): Promise<void> {
       const url = chrome.runtime.getURL('tabs.html');
       await chrome.tabs.create({
-        selected: true,
+        active: true,
         url: url,
       });
     }
@@ -206,7 +222,8 @@ export namespace chromeService {
 
   export namespace ContextMenus {
     const appName = () => chrome.runtime.getManifest().name;
-    const parentMenuId = () => `${appName}.mainMenu`;
+    const parentMenuId = () => `${appName()}.mainMenu`;
+    export const gotoTabsPageMenuId = 'gotoTabsPage';
 
     // eslint-disable-next-line require-jsdoc
     export function createParentMenu(): void {
@@ -221,11 +238,11 @@ export namespace chromeService {
     // eslint-disable-next-line require-jsdoc
     export function createGotoTabsPageMenu(): void {
       chrome.contextMenus.create({
+        id: gotoTabsPageMenuId,
         title: chrome.i18n.getMessage('content_msg_open_tab_page'),
         parentId: parentMenuId(),
         type: 'normal',
         contexts: ['all'],
-        onclick: chromeService.tab.createTabsPageTab,
       });
     }
   }

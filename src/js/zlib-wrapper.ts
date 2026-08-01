@@ -1,3 +1,12 @@
+// zlib*.jsは非モジュールのレガシーJSで、globalThis.ZLIBを介して相互参照する
+// side-effect importでbackground/tabs両バンドルに同梱し、ロード経路を一本化する
+// @ts-ignore
+import './zlib.js';
+// @ts-ignore
+import './zlib-deflate.js';
+// @ts-ignore
+import './zlib-inflate.js';
+
 export namespace zlibWrapper {
   const Buffer = require('buffer').Buffer;
 

@@ -71,8 +71,9 @@ Usage: z_stream.inflateReset();
 
 */
 
+var ZLIB = globalThis.ZLIB;
 if( typeof ZLIB === 'undefined' ) {
-    alert('ZLIB is not defined.  SRC zlib.js before zlib-inflate.js')
+    throw new Error('ZLIB is not defined.  SRC zlib.js before zlib-inflate.js');
 }
 
 (function() {

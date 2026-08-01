@@ -93,8 +93,9 @@ Usage: z_stream.deflateBound(sourceLen);
     TODO document
 */
 
+var ZLIB = globalThis.ZLIB;
 if( typeof ZLIB === 'undefined' ) {
-    alert('ZLIB is not defined.  SRC zlib.js before zlib-deflate.js')
+    throw new Error('ZLIB is not defined.  SRC zlib.js before zlib-deflate.js');
 }
 
 (function() {
