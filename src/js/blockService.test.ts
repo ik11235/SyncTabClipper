@@ -180,7 +180,7 @@ describe('blockService', (): void => {
     expect(deflateSpy).toHaveBeenCalledTimes(1);
   });
 
-  test('inflateJson 非解凍時', (): void => {
+  test('inflateJson v1非圧縮データ(バージョン表記なし)', (): void => {
     inflateSpy.mockReturnValueOnce(
       '{"created_at":1627200615501,"tabs":[{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome://extensions/","title":"拡張機能"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"},{"url":"chrome://newtab/","title":"新しいタブ"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"syncTabCliper"}]}'
     );
@@ -206,7 +206,7 @@ describe('blockService', (): void => {
     expect(inflateSpy).toBeCalledTimes(0);
   });
 
-  test('inflateJson 解凍', (): void => {
+  test('inflateJson v1圧縮データ(バージョン表記なし)', (): void => {
     inflateSpy.mockReturnValueOnce(
       '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"},{"url":"http://google.com/test2","title":"google-test"},{"url":"http://google.com/test3","title":"google-test33"},{"url":"http://google.com/test4","title":"google-test44"}]}'
     );
@@ -372,7 +372,7 @@ describe('blockService import/export', (): void => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  test('importAllDataJson v1形式(素の配列)', async (): Promise<void> => {
+  test('importAllDataJson v1形式(バージョン表記なしの素の配列)', async (): Promise<void> => {
     const json =
       '[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]';
 
