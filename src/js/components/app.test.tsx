@@ -136,4 +136,30 @@ describe('App', (): void => {
     expect(container.textContent).toContain('SyncTabClipper');
     expect(container.textContent).toContain('content_msg_menu');
   });
+
+  test('Mainのレンダリング時例外でもページ全体は生き残りエラーを表示する', async (): Promise<void> => {
+    // createdAtが不正なDateだとblock.tsxのtoISOString()がRangeErrorを投げる
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('invalid'),
+        tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      },
+    ]);
+    // Reactが境界で捕捉した例外をconsole.errorへ出力するため抑止する
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      // ヘッダー・サイドバーはアンマウントされず、エラーが表示される
+      expect(container.textContent).toContain('SyncTabClipper');
+      expect(container.textContent).toContain('content_msg_menu');
+      expect(container.textContent).toContain('Invalid time value');
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
 });

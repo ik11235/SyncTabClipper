@@ -3,6 +3,7 @@ import { model } from '../types/interface';
 import { chromeService } from '../chromeService';
 import Header from './header';
 import { ErrorDisplay } from './error';
+import { ErrorBoundary } from './errorBoundary';
 import Main from './main';
 import SideBar from './sideBar';
 
@@ -38,7 +39,12 @@ const App: React.FC = () => {
 
       <div className="uk-grid">
         <div className="uk-width-expand">
-          {blocks != null && <Main Block={blocks} />}
+          {/* Mainのレンダリング時例外でHeader/ErrorDisplay/SideBarまで
+              アンマウントされないよう境界で隔離する（旧・独立ルート構成が
+              持っていたフォールトアイソレーションの維持） */}
+          <ErrorBoundary>
+            {blocks != null && <Main Block={blocks} />}
+          </ErrorBoundary>
         </div>
         <SideBar />
       </div>
