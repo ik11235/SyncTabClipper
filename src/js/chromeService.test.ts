@@ -52,6 +52,12 @@ describe('chromeService.errorLog', (): void => {
     expect(setBadgeBackgroundColor).toHaveBeenCalledWith({ color: '#DD2222' });
   });
 
+  test('setにErrorインスタンスを渡すとmessageが保存される', async (): Promise<void> => {
+    await chromeService.errorLog.set(new Error('boom'));
+
+    expect(localData[chromeService.errorLog.errorKey]).toBe('boom');
+  });
+
   test('getで取得しても保存とバッジは残る', async (): Promise<void> => {
     await chromeService.errorLog.set('boom');
     setBadgeText.mockClear();

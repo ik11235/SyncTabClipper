@@ -8,8 +8,7 @@ import { chromeService } from './chromeService';
  */
 function handleError(error: unknown): void {
   console.error(error);
-  const message = error instanceof Error ? error.message : String(error);
-  chromeService.errorLog.set(message).catch(console.error);
+  chromeService.errorLog.set(error).catch(console.error);
 }
 
 /**

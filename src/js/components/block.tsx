@@ -28,10 +28,7 @@ const Block: React.FC<BlockProps> = (props) => {
         }
       })
       .catch((error) => {
-        // chromeServiceはchrome.runtime.lastError（Errorインスタンスでない
-        // {message?: string}）でrejectするためinstanceofでガードする
-        const message = error instanceof Error ? error.message : String(error);
-        chromeService.errorLog.set(message).catch(console.error);
+        chromeService.errorLog.set(error).catch(console.error);
       });
   };
 
@@ -52,9 +49,13 @@ const Block: React.FC<BlockProps> = (props) => {
         chromeService.tab.createTabs({ url: tab.url, active: false })
       );
     }
-    Promise.all(promiseArray).then(() => {
-      deleteBlock();
-    });
+    Promise.all(promiseArray)
+      .then(() => {
+        deleteBlock();
+      })
+      .catch((error) => {
+        chromeService.errorLog.set(error).catch(console.error);
+      });
   };
 
   const deleteBlock = () => {

@@ -224,21 +224,22 @@ export namespace chromeService {
     export const errorKey = 'error';
 
     /**
-     * エラーメッセージをchrome.storage.localに保存し、actionバッジで通知する。
+     * エラーをchrome.storage.localに保存し、actionバッジで通知する。
      * service workerではalertが使えないため、tabsページのErrorDisplayが
-     * このエラーを表示する。保存とバッジはユーザーがアラートを閉じるか
-     * 保存操作が成功するまで残す（表示しただけでは消費しない）
-     * @param {string} message エラーメッセージ
+     * このエラーを表示する。保存とバッジはユーザーがエラーを確認するか
+     * 保存操作が成功するまで残す
+     * @param {unknown} error 発生したエラー（Error以外はStringで文字列化）
      * @return {Promise<void>}
      */
-    export function set(message: string): Promise<void> {
+    export function set(error: unknown): Promise<void> {
+      const message = error instanceof Error ? error.message : String(error);
       const setObj: { [key: string]: string } = {};
       setObj[errorKey] = message;
       return new Promise((resolve, reject) => {
         chrome.storage.local.set(setObj, () => {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            reject(new Error(error.message));
+          const lastError = chrome.runtime.lastError;
+          if (lastError) {
+            reject(new Error(lastError.message));
           } else {
             chrome.action.setBadgeBackgroundColor({ color: '#DD2222' });
             chrome.action.setBadgeText({ text: '!' });

@@ -33,7 +33,6 @@ window.onload = function () {
       ReactDOM.render(<Main Block={blocks} />, main);
     })
     .catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      chromeService.errorLog.set(message).catch(console.error);
+      chromeService.errorLog.set(error).catch(console.error);
     });
 };
