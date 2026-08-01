@@ -86,8 +86,11 @@ export namespace blockService {
       }
     }
     if (js.d == null) {
-      // 非圧縮のブロックJSON(vフィールドを持たないv1も構造は同じ)
-      return jsonObjToBlock(js, indexNum);
+      if (js.v == null || js.v === CURRENT_SCHEMA_VERSION) {
+        // 非圧縮のブロックJSON(vフィールドを持たないv1も構造は同じ)
+        return jsonObjToBlock(js, indexNum);
+      }
+      throw new Error(`Unsupported data version: v=${js.v}`);
     }
     if (js.v === CURRENT_SCHEMA_VERSION) {
       return jsonToBlock(zlibWrapper.inflate(js.d), indexNum);

@@ -283,8 +283,17 @@ describe('blockService', (): void => {
     expect(inflateSpy).toBeCalledTimes(1);
   });
 
-  test('inflateJson 未対応バージョンはエラー', (): void => {
+  test('inflateJson 未対応バージョンはエラー(圧縮)', (): void => {
     const input = '{"v":99,"ev":"99.0.0","d":"compressed-data"}';
+    expect(() => blockService.inflateJson(input, 1)).toThrow(
+      'Unsupported data version: v=99'
+    );
+    expect(inflateSpy).toBeCalledTimes(0);
+  });
+
+  test('inflateJson 未対応バージョンはエラー(非圧縮)', (): void => {
+    const input =
+      '{"v":99,"ev":"99.0.0","created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}';
     expect(() => blockService.inflateJson(input, 1)).toThrow(
       'Unsupported data version: v=99'
     );
