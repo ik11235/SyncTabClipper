@@ -2,13 +2,14 @@ import { blockService } from './blockService';
 import { chromeService } from './chromeService';
 
 /**
- * service workerではalertが使えないため、エラーをログ出力しバッジで通知する
+ * service workerではalertが使えないため、エラーをログ出力し、
+ * storage.local + actionバッジ経由でtabsページのErrorDisplayに通知する
  * @param {unknown} error 発生したエラー
  */
 function handleError(error: unknown): void {
   console.error(error);
-  chrome.action.setBadgeBackgroundColor({ color: '#DD2222' });
-  chrome.action.setBadgeText({ text: '!' });
+  const message = error instanceof Error ? error.message : String(error);
+  chromeService.errorLog.set(message).catch(console.error);
 }
 
 /**
@@ -25,7 +26,7 @@ async function saveCurrentWindowTabs(): Promise<void> {
   await chromeService.storage.setTabLength(tabLength + 1);
   await chromeService.tab.createTabsPageTab();
   await chromeService.tab.closeTabs(currentTabs);
-  chrome.action.setBadgeText({ text: '' });
+  await chromeService.errorLog.clear();
 }
 
 chrome.runtime.onInstalled.addListener(() => {

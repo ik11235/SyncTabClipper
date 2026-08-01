@@ -19,12 +19,17 @@ const Block: React.FC<BlockProps> = (props) => {
   };
 
   const changeBlock = (newBlock: model.Block) => {
-    chromeService.storage.setBlock(newBlock).then((_) => {
-      setNowBlock(newBlock);
-      if (newBlock.tabs.length <= 0) {
-        props.deleteBlock();
-      }
-    });
+    chromeService.storage
+      .setBlock(newBlock)
+      .then((_) => {
+        setNowBlock(newBlock);
+        if (newBlock.tabs.length <= 0) {
+          props.deleteBlock();
+        }
+      })
+      .catch((error) => {
+        chromeService.errorLog.set(error.message).catch(console.error);
+      });
   };
 
   const deleteClick = (index: number) => {

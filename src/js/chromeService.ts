@@ -220,6 +220,76 @@ export namespace chromeService {
     }
   }
 
+  export namespace errorLog {
+    export const errorKey = 'error';
+
+    /**
+     * エラーメッセージをchrome.storage.localに保存し、actionバッジで通知する。
+     * service workerではalertが使えないため、tabsページのErrorDisplayが
+     * このエラーを表示・クリアする
+     * @param {string} message エラーメッセージ
+     * @return {Promise<void>}
+     */
+    export function set(message: string): Promise<void> {
+      const setObj: { [key: string]: string } = {};
+      setObj[errorKey] = message;
+      return new Promise((resolve, reject) => {
+        chrome.storage.local.set(setObj, () => {
+          const error = chrome.runtime.lastError;
+          if (error) {
+            reject(error);
+          } else {
+            chrome.action.setBadgeBackgroundColor({ color: '#DD2222' });
+            chrome.action.setBadgeText({ text: '!' });
+            resolve();
+          }
+        });
+      });
+    }
+
+    /**
+     * 保存されたエラーメッセージとバッジをクリアする
+     * @return {Promise<void>}
+     */
+    export function clear(): Promise<void> {
+      return new Promise((resolve, reject) => {
+        chrome.storage.local.remove(errorKey, () => {
+          const error = chrome.runtime.lastError;
+          if (error) {
+            reject(error);
+          } else {
+            chrome.action.setBadgeText({ text: '' });
+            resolve();
+          }
+        });
+      });
+    }
+
+    /**
+     * 保存されたエラーメッセージを取り出し、保存とバッジをクリアする
+     * @return {Promise<string | null>} エラーメッセージ。未保存ならnull
+     */
+    export function pop(): Promise<string | null> {
+      return new Promise((resolve, reject) => {
+        chrome.storage.local.get([errorKey], (item) => {
+          const error = chrome.runtime.lastError;
+          if (error) {
+            reject(error);
+            return;
+          }
+          const message = item[errorKey];
+          if (message == null) {
+            resolve(null);
+            return;
+          }
+          clear()
+            .then(() => resolve(message))
+            .catch(reject);
+        });
+      });
+    }
+  }
+
   export namespace ContextMenus {
     const appName = () => chrome.runtime.getManifest().name;
     const parentMenuId = () => `${appName()}.mainMenu`;
