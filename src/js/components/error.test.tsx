@@ -16,10 +16,36 @@ describe('ErrorDisplay', (): void => {
     ) => void
   >;
   let container: HTMLDivElement;
+  const setBadgeText = jest.fn();
+
+  const setVisibility = (state: 'visible' | 'hidden'): void => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => state,
+    });
+  };
+
+  const errorKey = chromeService.errorLog.errorKey;
+
+  const mount = async (): Promise<void> => {
+    await act(async () => {
+      ReactDOM.render(<ErrorDisplay />, container);
+    });
+  };
+
+  const notifyRemoved = async (): Promise<void> => {
+    await act(async () => {
+      for (const listener of onChangedListeners) {
+        listener({ [errorKey]: { oldValue: 'boom' } }, 'local');
+      }
+    });
+  };
 
   beforeEach((): void => {
     localData = {};
     onChangedListeners = [];
+    setBadgeText.mockClear();
+    setVisibility('visible');
     container = document.createElement('div');
     document.body.appendChild(container);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,7 +88,7 @@ describe('ErrorDisplay', (): void => {
         },
       },
       action: {
-        setBadgeText: jest.fn(),
+        setBadgeText: setBadgeText,
         setBadgeBackgroundColor: jest.fn(),
       },
     };
@@ -73,24 +99,69 @@ describe('ErrorDisplay', (): void => {
     container.remove();
   });
 
-  test('マウント時に保存済みエラーを表示する（保存は消費しない）', async (): Promise<void> => {
-    localData[chromeService.errorLog.errorKey] = 'boom';
+  test('可視ページでは表示した時点で保存とバッジをクリアし表示は残す', async (): Promise<void> => {
+    localData[errorKey] = 'boom';
 
+    await mount();
+
+    expect(container.textContent).toContain('boom');
+    expect(localData[errorKey]).toBeUndefined();
+    expect(setBadgeText).toHaveBeenCalledWith({ text: '' });
+  });
+
+  test('非可視ページでは表示するが保存とバッジは消費しない', async (): Promise<void> => {
+    setVisibility('hidden');
+    localData[errorKey] = 'boom';
+
+    await mount();
+
+    expect(container.textContent).toContain('boom');
+    expect(localData[errorKey]).toBe('boom');
+    expect(setBadgeText).not.toHaveBeenCalled();
+  });
+
+  test('非可視ページが可視になった時点で保存とバッジをクリアする', async (): Promise<void> => {
+    setVisibility('hidden');
+    localData[errorKey] = 'boom';
+    await mount();
+    expect(localData[errorKey]).toBe('boom');
+
+    setVisibility('visible');
     await act(async () => {
-      ReactDOM.render(<ErrorDisplay />, container);
+      document.dispatchEvent(new Event('visibilitychange'));
     });
 
     expect(container.textContent).toContain('boom');
-    // 他のtabsページでも表示できるよう、表示しただけでは保存を消費しない
-    expect(localData[chromeService.errorLog.errorKey]).toBe('boom');
+    expect(localData[errorKey]).toBeUndefined();
+    expect(setBadgeText).toHaveBeenCalledWith({ text: '' });
+  });
+
+  test('非可視ページは他ページでの確認済みクリアに追随して非表示になる', async (): Promise<void> => {
+    setVisibility('hidden');
+    localData[errorKey] = 'boom';
+    await mount();
+    expect(container.textContent).toContain('boom');
+
+    delete localData[errorKey];
+    await notifyRemoved();
+
+    expect(container.textContent).toBe('');
+  });
+
+  test('可視ページは確認済みクリア後もアラートを表示し続ける', async (): Promise<void> => {
+    localData[errorKey] = 'boom';
+    await mount();
+
+    // 自身の消費によるstorage変更イベントが届いても表示は取り下げない
+    await notifyRemoved();
+
+    expect(container.textContent).toContain('boom');
   });
 
   test('閉じると非表示になり保存とバッジがクリアされる', async (): Promise<void> => {
-    localData[chromeService.errorLog.errorKey] = 'boom';
-
-    await act(async () => {
-      ReactDOM.render(<ErrorDisplay />, container);
-    });
+    setVisibility('hidden');
+    localData[errorKey] = 'boom';
+    await mount();
 
     const closeButton =
       container.querySelector<HTMLAnchorElement>('a.uk-alert-close')!;
@@ -99,62 +170,23 @@ describe('ErrorDisplay', (): void => {
     });
 
     expect(container.textContent).toBe('');
-    expect(localData[chromeService.errorLog.errorKey]).toBeUndefined();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((global as any).chrome.action.setBadgeText).toHaveBeenCalledWith({
-      text: '',
-    });
-  });
-
-  test('他ページでのクリアに追随して非表示になる', async (): Promise<void> => {
-    localData[chromeService.errorLog.errorKey] = 'boom';
-
-    await act(async () => {
-      ReactDOM.render(<ErrorDisplay />, container);
-    });
-    expect(container.textContent).toContain('boom');
-
-    delete localData[chromeService.errorLog.errorKey];
-    await act(async () => {
-      for (const listener of onChangedListeners) {
-        listener(
-          {
-            [chromeService.errorLog.errorKey]: {
-              oldValue: 'boom',
-            },
-          },
-          'local'
-        );
-      }
-    });
-
-    expect(container.textContent).toBe('');
+    expect(localData[errorKey]).toBeUndefined();
+    expect(setBadgeText).toHaveBeenCalledWith({ text: '' });
   });
 
   test('未保存時は何も表示しない', async (): Promise<void> => {
-    await act(async () => {
-      ReactDOM.render(<ErrorDisplay />, container);
-    });
+    await mount();
 
     expect(container.textContent).toBe('');
   });
 
   test('表示中にstorage.onChangedで新しいエラーが届くと表示する', async (): Promise<void> => {
-    await act(async () => {
-      ReactDOM.render(<ErrorDisplay />, container);
-    });
+    await mount();
 
-    localData[chromeService.errorLog.errorKey] = 'late error';
+    localData[errorKey] = 'late error';
     await act(async () => {
       for (const listener of onChangedListeners) {
-        listener(
-          {
-            [chromeService.errorLog.errorKey]: {
-              newValue: 'late error',
-            },
-          },
-          'local'
-        );
+        listener({ [errorKey]: { newValue: 'late error' } }, 'local');
       }
     });
 
