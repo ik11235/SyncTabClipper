@@ -226,8 +226,8 @@ export namespace chromeService {
     /**
      * エラーをchrome.storage.localに保存し、actionバッジで通知する。
      * service workerではalertが使えないため、tabsページのErrorDisplayが
-     * このエラーを表示する。保存とバッジはユーザーがエラーを確認するか
-     * 保存操作が成功するまで残す
+     * このエラーを表示する。保存とバッジはユーザーがエラーを確認する
+     * （可視状態のtabsページに表示される）まで残す
      * @param {unknown} error 発生したエラー（Error以外はStringで文字列化）
      * @return {Promise<void>}
      */

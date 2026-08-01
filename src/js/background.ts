@@ -25,7 +25,6 @@ async function saveCurrentWindowTabs(): Promise<void> {
   await chromeService.storage.setTabLength(tabLength + 1);
   await chromeService.tab.createTabsPageTab();
   await chromeService.tab.closeTabs(currentTabs);
-  await chromeService.errorLog.clear();
 }
 
 chrome.runtime.onInstalled.addListener(() => {
