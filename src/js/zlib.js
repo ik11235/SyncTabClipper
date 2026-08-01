@@ -41,7 +41,7 @@
   (zlib format), rfc1951 (deflate format) and rfc1952 (gzip format).
 */
 
-var ZLIB = ( ZLIB || {} ); // ZLIB namespace initialization
+var ZLIB = globalThis.ZLIB = ( globalThis.ZLIB || {} ); // ZLIB namespace initialization
 
 // common definitions
 if(typeof ZLIB.common_initialized === 'undefined') {

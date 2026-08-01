@@ -126,15 +126,8 @@ export namespace blockService {
       promiseArray.push(chromeService.storage.setBlock(block));
     });
 
-    Promise.all(promiseArray).then(() => {
-      chromeService.storage
-        .setTabLength(tabLength + json.length)
-        .then((_) => {
-          chrome.tabs.reload({ bypassCache: true });
-        })
-        .catch(function (reason) {
-          throw reason;
-        });
-    });
+    await Promise.all(promiseArray);
+    await chromeService.storage.setTabLength(tabLength + json.length);
+    chrome.tabs.reload({ bypassCache: true });
   }
 }

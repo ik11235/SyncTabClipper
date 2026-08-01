@@ -1,38 +1,44 @@
 import { blockService } from './blockService';
 import { chromeService } from './chromeService';
 
-(() => {
-  chrome.runtime.onInstalled.addListener(() => {
-    chromeService.ContextMenus.createParentMenu();
-    chromeService.ContextMenus.createGotoTabsPageMenu();
-  });
+/**
+ * service workerではalertが使えないため、エラーをログ出力しバッジで通知する
+ * @param {unknown} error 発生したエラー
+ */
+function handleError(error: unknown): void {
+  console.error(error);
+  chrome.action.setBadgeBackgroundColor({ color: '#DD2222' });
+  chrome.action.setBadgeText({ text: '!' });
+}
 
-  chrome.browserAction.onClicked.addListener(() => {
-    chromeService.storage
-      .getTabLength()
-      .then((tabLength) => {
-        chrome.tabs.query(
-          { currentWindow: true },
-          (currentTabs: chrome.tabs.Tab[]) => {
-            const block = blockService.createBlock(
-              currentTabs,
-              new Date(),
-              tabLength
-            );
-
-            chromeService.storage
-              .setBlock(block)
-              .then((_) => chromeService.storage.setTabLength(tabLength + 1))
-              .then((_) => chromeService.tab.createTabsPageTab())
-              .then((_) => chromeService.tab.closeTabs(currentTabs))
-              .catch((error) => {
-                alert(error.message);
-              });
-          }
-        );
-      })
-      .catch((error) => {
-        alert(error.message);
-      });
+/**
+ * 現在のウィンドウの全タブを保存してtabsページを開き、元のタブを閉じる
+ * @return {Promise<void>}
+ */
+async function saveCurrentWindowTabs(): Promise<void> {
+  const tabLength = await chromeService.storage.getTabLength();
+  const currentTabs = await chromeService.tab.queryTabs({
+    currentWindow: true,
   });
-})();
+  const block = blockService.createBlock(currentTabs, new Date(), tabLength);
+  await chromeService.storage.setBlock(block);
+  await chromeService.storage.setTabLength(tabLength + 1);
+  await chromeService.tab.createTabsPageTab();
+  await chromeService.tab.closeTabs(currentTabs);
+  chrome.action.setBadgeText({ text: '' });
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  chromeService.ContextMenus.createParentMenu();
+  chromeService.ContextMenus.createGotoTabsPageMenu();
+});
+
+chrome.contextMenus.onClicked.addListener((info) => {
+  if (info.menuItemId === chromeService.ContextMenus.gotoTabsPageMenuId) {
+    chromeService.tab.createTabsPageTab().catch(handleError);
+  }
+});
+
+chrome.action.onClicked.addListener(() => {
+  saveCurrentWindowTabs().catch(handleError);
+});
