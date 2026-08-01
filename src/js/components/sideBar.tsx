@@ -1,26 +1,23 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { blockService } from '../blockService';
 import { chromeService } from '../chromeService';
 
 const SideBar: React.FC = () => {
+  const [exportText, setExportText] = useState('');
+  const importRef = useRef<HTMLTextAreaElement>(null);
+
   // エラー通知はerrorLogに統一する（ErrorDisplayがonChangedで即時表示する）
   const notifyError = (error: unknown) => {
     chromeService.errorLog.set(error).catch(console.error);
   };
 
   const exportJson = () => {
-    const exportTextElement = document.getElementById(
-      'export_body',
-    ) as HTMLInputElement;
-    blockService.exportAllDataJson(exportTextElement).catch(notifyError);
+    blockService.exportAllDataJson().then(setExportText).catch(notifyError);
   };
 
   const importJson = () => {
-    const importTextElement = document.getElementById(
-      'import_body',
-    ) as HTMLInputElement;
     blockService
-      .importAllDataJson(importTextElement.value)
+      .importAllDataJson(importRef.current!.value)
       .catch((error) =>
         notifyError(
           chrome.i18n.getMessage('content_msg_failed_import') +
@@ -73,7 +70,12 @@ const SideBar: React.FC = () => {
             <ul className="uk-nav-sub">
               <li>
                 <label htmlFor="export_body" />
-                <textarea readOnly={true} id="export_body" rows={4} />
+                <textarea
+                  readOnly={true}
+                  id="export_body"
+                  rows={4}
+                  value={exportText}
+                />
               </li>
               <li>
                 <button id="export_link" onClick={exportJson}>
@@ -93,7 +95,7 @@ const SideBar: React.FC = () => {
             <ul className="uk-nav-sub">
               <li>
                 <label htmlFor="import_body" />
-                <textarea id="import_body" rows={4} />
+                <textarea id="import_body" rows={4} ref={importRef} />
               </li>
               <li>
                 <button id="import_link" onClick={importJson}>

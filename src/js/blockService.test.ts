@@ -348,10 +348,7 @@ describe('blockService import/export', (): void => {
         ],
       },
     ]);
-    const element = { value: '' } as HTMLInputElement;
-
-    await blockService.exportAllDataJson(element);
-    expect(element.value).toBe(
+    await expect(blockService.exportAllDataJson()).resolves.toBe(
       '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
     );
   });

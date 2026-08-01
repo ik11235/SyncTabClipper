@@ -121,16 +121,14 @@ export namespace blockService {
     }
   }
 
-  export function exportAllDataJson(
-    targetElement: HTMLInputElement,
-  ): Promise<void> {
-    return chromeService.storage.getAllBlock().then((blocks) => {
-      targetElement.value = JSON.stringify({
+  export function exportAllDataJson(): Promise<string> {
+    return chromeService.storage.getAllBlock().then((blocks) =>
+      JSON.stringify({
         v: CURRENT_SCHEMA_VERSION,
         ev: chromeService.runtime.getExtensionVersion(),
         blocks: blocks.map(blockToJsonObj),
-      });
-    });
+      }),
+    );
   }
 
   function blockListForJsonObject(
