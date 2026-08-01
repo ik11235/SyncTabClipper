@@ -1,16 +1,13 @@
 import UIkit from 'uikit';
-// @ts-ignore
 import Icons from 'uikit/dist/js/uikit-icons';
 import { chromeService } from './chromeService';
 import ReactDOM from 'react-dom';
 import SideBar from './components/sideBar';
 import Header from './components/header';
-import React from 'react';
 import Main from './components/main';
 import { ErrorDisplay } from './components/error';
 import '../css/uikit.min.css';
 
-// @ts-ignore
 UIkit.use(Icons);
 
 window.onload = function () {

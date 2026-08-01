@@ -10,14 +10,14 @@ const SideBar: React.FC = () => {
 
   const exportJson = () => {
     const exportTextElement = document.getElementById(
-      'export_body'
+      'export_body',
     ) as HTMLInputElement;
     blockService.exportAllDataJson(exportTextElement).catch(notifyError);
   };
 
   const importJson = () => {
     const importTextElement = document.getElementById(
-      'import_body'
+      'import_body',
     ) as HTMLInputElement;
     blockService
       .importAllDataJson(importTextElement.value)
@@ -25,8 +25,8 @@ const SideBar: React.FC = () => {
         notifyError(
           chrome.i18n.getMessage('content_msg_failed_import') +
             ' ' +
-            (error instanceof Error ? error.message : String(error))
-        )
+            (error instanceof Error ? error.message : String(error)),
+        ),
       );
   };
 
@@ -36,8 +36,8 @@ const SideBar: React.FC = () => {
     ) {
       chromeService.storage
         .allClear()
-        .then((_) =>
-          alert(chrome.i18n.getMessage('content_msg_all_delete_finish'))
+        .then(() =>
+          alert(chrome.i18n.getMessage('content_msg_all_delete_finish')),
         )
         .catch(notifyError);
     }
@@ -48,7 +48,7 @@ const SideBar: React.FC = () => {
       <div className="uk-card uk-card-default uk-card-body">
         <ul
           className="uk-nav-default uk-nav-parent-icon"
-          uk-nav="multiple: true"
+          data-uk-nav="multiple: true"
         >
           <li className="uk-nav-header">
             {chrome.i18n.getMessage('content_msg_menu')}

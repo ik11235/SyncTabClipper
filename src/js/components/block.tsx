@@ -21,7 +21,7 @@ const Block: React.FC<BlockProps> = (props) => {
   const changeBlock = (newBlock: model.Block) => {
     chromeService.storage
       .setBlock(newBlock)
-      .then((_) => {
+      .then(() => {
         setNowBlock(newBlock);
         if (newBlock.tabs.length <= 0) {
           props.deleteBlock();
@@ -46,7 +46,7 @@ const Block: React.FC<BlockProps> = (props) => {
     const promiseArray: Promise<void>[] = [];
     for (const tab of nowBlock.tabs) {
       promiseArray.push(
-        chromeService.tab.createTabs({ url: tab.url, active: false })
+        chromeService.tab.createTabs({ url: tab.url, active: false }),
       );
     }
     Promise.all(promiseArray)

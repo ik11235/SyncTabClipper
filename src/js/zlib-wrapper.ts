@@ -1,13 +1,11 @@
 // zlib*.jsは非モジュールのレガシーJSで、globalThis.ZLIBを介して相互参照する
 // side-effect importでbackground/tabs両バンドルに同梱し、ロード経路を一本化する
-// @ts-ignore
 import './zlib.js';
-// @ts-ignore
 import './zlib-deflate.js';
-// @ts-ignore
 import './zlib-inflate.js';
 
 export namespace zlibWrapper {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- webpackのbuffer polyfill解決に依存
   const Buffer = require('buffer').Buffer;
 
   const btoaLatin1 = function (str: string): string {
@@ -24,8 +22,7 @@ export namespace zlibWrapper {
    */
   export function deflate(val: string): string {
     const encodeVal = encodeURIComponent(val);
-    // 既存のzlib.jsをtypeScriptでimportする方法がわからないので一旦直接呼び出す そのため、@ts-ignoreを指定している
-    // @ts-ignore
+    // @ts-expect-error ZLIBはzlib.jsがglobalThisに定義する型定義のないグローバル
     const zStream = ZLIB.deflateInit({ level: 9 });
     const encodedString = zStream.deflate(encodeVal);
     return btoaLatin1(encodedString);
@@ -38,8 +35,7 @@ export namespace zlibWrapper {
    */
   export function inflate(val: string): string {
     const tobVal = atobLatin1(val);
-    // 既存のzlib.jsをtypeScriptでimportする方法がわからないので一旦直接呼び出す そのため、@ts-ignoreを指定している
-    // @ts-ignore
+    // @ts-expect-error ZLIBはzlib.jsがglobalThisに定義する型定義のないグローバル
     const zStream = ZLIB.inflateInit();
     const decodedString = zStream.inflate(tobVal);
     return decodeURIComponent(decodedString);

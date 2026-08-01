@@ -27,7 +27,7 @@ export namespace util {
    * @return {string} エスケープした文字列
    */
   export function escapeHtml(string: string): string {
-    // @ts-ignore
+    // @ts-expect-error 置換マップの戻り値がstring | undefinedと推論されるため
     return string.replace(/[&'`"<>]/g, function (match) {
       return {
         '&': '&amp;',
