@@ -13,7 +13,7 @@ export namespace chromeService {
         chrome.storage.sync.remove(key, () => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             resolve();
           }
@@ -29,7 +29,7 @@ export namespace chromeService {
         chrome.storage.sync.set(setObj, () => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             resolve();
           }
@@ -43,7 +43,7 @@ export namespace chromeService {
         chrome.storage.sync.get([key], (item) => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             resolve(item[key]);
           }
@@ -57,7 +57,7 @@ export namespace chromeService {
         chrome.storage.sync.clear(function () {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             resolve();
           }
@@ -156,7 +156,7 @@ export namespace chromeService {
         chrome.tabs.create(properties, () => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             resolve();
           }
@@ -170,7 +170,7 @@ export namespace chromeService {
         chrome.tabs.remove(tab.id!, () => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             resolve();
           }
@@ -202,7 +202,7 @@ export namespace chromeService {
         chrome.tabs.query(queryInfo, (tabs) => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             resolve(tabs);
           }
@@ -237,7 +237,7 @@ export namespace chromeService {
         chrome.storage.local.set(setObj, () => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             chrome.action.setBadgeBackgroundColor({ color: '#DD2222' });
             chrome.action.setBadgeText({ text: '!' });
@@ -256,7 +256,7 @@ export namespace chromeService {
         chrome.storage.local.remove(errorKey, () => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             chrome.action.setBadgeText({ text: '' });
             resolve();
@@ -274,7 +274,7 @@ export namespace chromeService {
         chrome.storage.local.get([errorKey], (item) => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
             return;
           }
           const message = item[errorKey];

@@ -64,6 +64,24 @@ describe('chromeService.errorLog', (): void => {
     await expect(chromeService.errorLog.pop()).resolves.toBeNull();
   });
 
+  test('lastError発生時はErrorインスタンスでrejectする', async (): Promise<void> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome.storage.local.set = (
+      _obj: { [key: string]: string },
+      cb: () => void
+    ): void => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (global as any).chrome.runtime.lastError = { message: 'quota exceeded' };
+      cb();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (global as any).chrome.runtime.lastError;
+    };
+
+    const result = chromeService.errorLog.set('boom');
+    await expect(result).rejects.toBeInstanceOf(Error);
+    await expect(result).rejects.toThrow('quota exceeded');
+  });
+
   test('clearで保存とバッジが消える', async (): Promise<void> => {
     await chromeService.errorLog.set('boom');
     await chromeService.errorLog.clear();
