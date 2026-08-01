@@ -199,7 +199,7 @@ describe('blockService', (): void => {
       ],
     };
     expect(blockService.inflateJson(input, indexNum)).toStrictEqual(expected);
-    expect(inflateSpy).toBeCalledTimes(0);
+    expect(inflateSpy).toHaveBeenCalledTimes(0);
   });
 
   test('inflateJson 解凍', (): void => {
@@ -238,6 +238,6 @@ describe('blockService', (): void => {
       'eNqkzNEKwjAMBdCvyaOiadPqo3P4G1JnmEJHxxrBz7e2cyAoA4VSetObA7YCxGZgJ3w+OkkB1G5tVlsiYzQZuwHcp6m4UyyfQBXkrdvgxwniRaSP+XlIh++u6z0vm9ClJByzW5yreJ7Wclq8CrZ+dj7aE92G0L7J+IUuxf9sNW8r9bOu53WtR53qdD8AAAD//w==',
     ]);
 
-    expect(inflateSpy).toBeCalledTimes(1);
+    expect(inflateSpy).toHaveBeenCalledTimes(1);
   });
 });
