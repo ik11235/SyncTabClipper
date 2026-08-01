@@ -1,6 +1,9 @@
-# Unreleased
+# v0.3.1 (2026-08-01)
 
 - [NEW] 保存データ・エクスポート JSON に保存時のバージョン情報 (スキーマ版数・拡張機能バージョン) を付与 (#157)
+- [UPDATE] uikit.css の ver を 3.25.20 に更新
+- [DEV] React 19 / TypeScript 5.9 / eslint 9 / jest 30 / webpack プラグイン群など開発依存を最新化し、npm audit の high 脆弱性を解消
+- [DEV] CI の Node を 24 に更新し、GitHub Actions を最新化
 
 # v0.3.0 (2026-08-01)
 
