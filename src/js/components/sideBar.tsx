@@ -43,6 +43,8 @@ const SideBar: React.FC = () => {
   return (
     <aside className="uk-width-auto">
       <div className="uk-card uk-card-default uk-card-body">
+        {/* uk-nav/uk-iconはReact管理下のノードを削除しないため共存できる。
+            uk-alertのようにノード自体を削除するUIkitコンポーネントは不可 */}
         <ul
           className="uk-nav-default uk-nav-parent-icon"
           data-uk-nav="multiple: true"
