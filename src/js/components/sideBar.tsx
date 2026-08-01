@@ -59,7 +59,7 @@ const SideBar: React.FC = () => {
               {chrome.i18n.getMessage('content_msg_all_data_delete')}
             </a>
           </li>
-          <li className="uk-parent">
+          <li className="uk-parent uk-active">
             <a href="#">
               <span
                 className="uk-margin-small-right"
@@ -84,7 +84,7 @@ const SideBar: React.FC = () => {
               </li>
             </ul>
           </li>
-          <li className="uk-parent">
+          <li className="uk-parent uk-active">
             <a href="#">
               <span
                 className="uk-margin-small-right"
