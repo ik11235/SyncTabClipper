@@ -28,6 +28,6 @@ describe('util', (): void => {
   test('toNumber 異常系string', (): void => {
     expect(() => {
       util.toNumber('10M');
-    }).toThrowError('to Number Error: 10M');
+    }).toThrow('to Number Error: 10M');
   });
 });

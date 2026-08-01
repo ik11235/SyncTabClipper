@@ -16,7 +16,7 @@ export const ErrorDisplay: React.FC = () => {
     ) => {
       const change = changes[chromeService.errorLog.errorKey];
       if (areaName === 'local' && change != null) {
-        if (change.newValue != null) {
+        if (typeof change.newValue === 'string') {
           setError(change.newValue);
         } else if (document.visibilityState === 'hidden') {
           // ユーザーが他の可視ページでエラーを確認（消費）した。
