@@ -1,11 +1,15 @@
 /**
  * @jest-environment jsdom
  */
-import React from 'react';
-import ReactDOM from 'react-dom';
-import { act } from 'react-dom/test-utils';
+import React, { act } from 'react';
+import { createRoot, Root } from 'react-dom/client';
 import { ErrorDisplay } from './error';
 import { chromeService } from '../chromeService';
+
+// テスティングライブラリを介さず素のactを使うため必要
+(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe('ErrorDisplay', (): void => {
   let localData: { [key: string]: string };
@@ -16,6 +20,7 @@ describe('ErrorDisplay', (): void => {
     ) => void
   >;
   let container: HTMLDivElement;
+  let root: Root;
   const setBadgeText = jest.fn();
 
   const setVisibility = (state: 'visible' | 'hidden'): void => {
@@ -29,7 +34,8 @@ describe('ErrorDisplay', (): void => {
 
   const mount = async (): Promise<void> => {
     await act(async () => {
-      ReactDOM.render(<ErrorDisplay />, container);
+      root = createRoot(container);
+      root.render(<ErrorDisplay />);
     });
   };
 
@@ -95,7 +101,7 @@ describe('ErrorDisplay', (): void => {
   });
 
   afterEach((): void => {
-    ReactDOM.unmountComponentAtNode(container);
+    act(() => root.unmount());
     container.remove();
   });
 

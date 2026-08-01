@@ -263,7 +263,7 @@ describe('blockService', (): void => {
       ],
     };
     expect(blockService.inflateJson(input, 1)).toStrictEqual(expected);
-    expect(inflateSpy).toBeCalledTimes(0);
+    expect(inflateSpy).toHaveBeenCalledTimes(0);
   });
 
   test('inflateJson v2圧縮データ', (): void => {
@@ -284,7 +284,7 @@ describe('blockService', (): void => {
     };
     expect(blockService.inflateJson(input, 1)).toStrictEqual(expected);
     expect(inflateSpy.mock.calls[0]).toEqual(['compressed-data']);
-    expect(inflateSpy).toBeCalledTimes(1);
+    expect(inflateSpy).toHaveBeenCalledTimes(1);
   });
 
   test('inflateJson 未対応バージョンはエラー(圧縮)', (): void => {
@@ -292,7 +292,7 @@ describe('blockService', (): void => {
     expect(() => blockService.inflateJson(input, 1)).toThrow(
       'Unsupported data version: v=99'
     );
-    expect(inflateSpy).toBeCalledTimes(0);
+    expect(inflateSpy).toHaveBeenCalledTimes(0);
   });
 
   test('inflateJson 未対応バージョンはエラー(非圧縮)', (): void => {
@@ -301,7 +301,7 @@ describe('blockService', (): void => {
     expect(() => blockService.inflateJson(input, 1)).toThrow(
       'Unsupported data version: v=99'
     );
-    expect(inflateSpy).toBeCalledTimes(0);
+    expect(inflateSpy).toHaveBeenCalledTimes(0);
   });
 });
 
