@@ -220,6 +220,16 @@ export namespace chromeService {
     }
   }
 
+  export namespace runtime {
+    /**
+     * 拡張機能自体のバージョン(manifestのversion)を返す
+     * @return {string} 拡張機能のバージョン文字列
+     */
+    export function getExtensionVersion(): string {
+      return chrome.runtime.getManifest().version;
+    }
+  }
+
   export namespace errorLog {
     export const errorKey = 'error';
 
