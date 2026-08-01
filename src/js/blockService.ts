@@ -94,8 +94,10 @@ export namespace blockService {
   }
 
   // eslint-disable-next-line require-jsdoc
-  export function exportAllDataJson(targetElement: HTMLInputElement): void {
-    chromeService.storage.getAllBlock().then((blocks) => {
+  export function exportAllDataJson(
+    targetElement: HTMLInputElement
+  ): Promise<void> {
+    return chromeService.storage.getAllBlock().then((blocks) => {
       targetElement.value = JSON.stringify(blocks.map(blockToJsonObj));
     });
   }

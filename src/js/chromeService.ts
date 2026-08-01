@@ -13,7 +13,7 @@ export namespace chromeService {
         chrome.storage.sync.remove(key, () => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             resolve();
           }
@@ -29,7 +29,7 @@ export namespace chromeService {
         chrome.storage.sync.set(setObj, () => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             resolve();
           }
@@ -43,7 +43,7 @@ export namespace chromeService {
         chrome.storage.sync.get([key], (item) => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             resolve(item[key]);
           }
@@ -57,7 +57,7 @@ export namespace chromeService {
         chrome.storage.sync.clear(function () {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             resolve();
           }
@@ -156,7 +156,7 @@ export namespace chromeService {
         chrome.tabs.create(properties, () => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             resolve();
           }
@@ -170,7 +170,7 @@ export namespace chromeService {
         chrome.tabs.remove(tab.id!, () => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             resolve();
           }
@@ -202,7 +202,7 @@ export namespace chromeService {
         chrome.tabs.query(queryInfo, (tabs) => {
           const error = chrome.runtime.lastError;
           if (error) {
-            reject(error);
+            reject(new Error(error.message));
           } else {
             resolve(tabs);
           }
@@ -216,6 +216,71 @@ export namespace chromeService {
       await chrome.tabs.create({
         active: true,
         url: url,
+      });
+    }
+  }
+
+  export namespace errorLog {
+    export const errorKey = 'error';
+
+    /**
+     * エラーをchrome.storage.localに保存し、actionバッジで通知する。
+     * service workerではalertが使えないため、tabsページのErrorDisplayが
+     * このエラーを表示する。保存とバッジはユーザーがエラーを確認する
+     * （可視状態のtabsページに表示される）まで残す
+     * @param {unknown} error 発生したエラー（Error以外はStringで文字列化）
+     * @return {Promise<void>}
+     */
+    export function set(error: unknown): Promise<void> {
+      const message = error instanceof Error ? error.message : String(error);
+      const setObj: { [key: string]: string } = {};
+      setObj[errorKey] = message;
+      return new Promise((resolve, reject) => {
+        chrome.storage.local.set(setObj, () => {
+          const lastError = chrome.runtime.lastError;
+          if (lastError) {
+            reject(new Error(lastError.message));
+          } else {
+            chrome.action.setBadgeBackgroundColor({ color: '#DD2222' });
+            chrome.action.setBadgeText({ text: '!' });
+            resolve();
+          }
+        });
+      });
+    }
+
+    /**
+     * 保存されたエラーメッセージとバッジをクリアする
+     * @return {Promise<void>}
+     */
+    export function clear(): Promise<void> {
+      return new Promise((resolve, reject) => {
+        chrome.storage.local.remove(errorKey, () => {
+          const error = chrome.runtime.lastError;
+          if (error) {
+            reject(new Error(error.message));
+          } else {
+            chrome.action.setBadgeText({ text: '' });
+            resolve();
+          }
+        });
+      });
+    }
+
+    /**
+     * 保存されたエラーメッセージを取得する。保存とバッジはクリアしない
+     * @return {Promise<string | null>} エラーメッセージ。未保存ならnull
+     */
+    export function get(): Promise<string | null> {
+      return new Promise((resolve, reject) => {
+        chrome.storage.local.get([errorKey], (item) => {
+          const error = chrome.runtime.lastError;
+          if (error) {
+            reject(new Error(error.message));
+            return;
+          }
+          resolve(item[errorKey] ?? null);
+        });
       });
     }
   }

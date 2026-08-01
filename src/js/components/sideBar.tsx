@@ -3,11 +3,16 @@ import { blockService } from '../blockService';
 import { chromeService } from '../chromeService';
 
 const SideBar: React.FC = () => {
+  // エラー通知はerrorLogに統一する（ErrorDisplayがonChangedで即時表示する）
+  const notifyError = (error: unknown) => {
+    chromeService.errorLog.set(error).catch(console.error);
+  };
+
   const exportJson = () => {
     const exportTextElement = document.getElementById(
       'export_body'
     ) as HTMLInputElement;
-    blockService.exportAllDataJson(exportTextElement);
+    blockService.exportAllDataJson(exportTextElement).catch(notifyError);
   };
 
   const importJson = () => {
@@ -17,10 +22,10 @@ const SideBar: React.FC = () => {
     blockService
       .importAllDataJson(importTextElement.value)
       .catch((error) =>
-        alert(
+        notifyError(
           chrome.i18n.getMessage('content_msg_failed_import') +
-            '\n' +
-            error.message
+            ' ' +
+            (error instanceof Error ? error.message : String(error))
         )
       );
   };
@@ -33,7 +38,8 @@ const SideBar: React.FC = () => {
         .allClear()
         .then((_) =>
           alert(chrome.i18n.getMessage('content_msg_all_delete_finish'))
-        );
+        )
+        .catch(notifyError);
     }
   };
 
