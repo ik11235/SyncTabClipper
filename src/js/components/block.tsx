@@ -28,7 +28,10 @@ const Block: React.FC<BlockProps> = (props) => {
         }
       })
       .catch((error) => {
-        chromeService.errorLog.set(error.message).catch(console.error);
+        // chromeServiceはchrome.runtime.lastError（Errorインスタンスでない
+        // {message?: string}）でrejectするためinstanceofでガードする
+        const message = error instanceof Error ? error.message : String(error);
+        chromeService.errorLog.set(message).catch(console.error);
       });
   };
 

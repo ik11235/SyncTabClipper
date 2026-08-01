@@ -32,9 +32,15 @@ export const ErrorDisplay: React.FC = () => {
   if (error == null) {
     return null;
   }
+  // data-uk-alertを付けるとUIkitがReactを介さずDOMノードを削除してしまい
+  // 以降の再レンダリングと不整合を起こすため、閉じる処理はReactのstateで行う
   return (
-    <div className="uk-alert-danger" data-uk-alert="true">
-      <a className="uk-alert-close" data-uk-close="true"></a>
+    <div className="uk-alert uk-alert-danger">
+      <a
+        className="uk-alert-close"
+        data-uk-close="true"
+        onClick={() => setError(null)}
+      ></a>
       <p>{error}</p>
     </div>
   );
