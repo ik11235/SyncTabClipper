@@ -11,26 +11,24 @@ interface TabProps {
 export const Tab: React.FC<TabProps> = (props) => {
   const domain = util.getDomain(props.tab.url);
   const encodeDomain = domain === '' ? encodeURI(' ') : encodeURI(domain);
-  const encodeUrl = util.escapeHtml(props.tab.url);
-  const encodeTitle = util.escapeHtml(props.tab.title);
 
   return (
     <li className="tab-root-dom">
       <img
         src={`https://www.google.com/s2/favicons?domain=${encodeDomain}`}
-        alt={encodeTitle}
+        alt={props.tab.title}
       />
       <a
-        href={encodeUrl}
+        href={props.tab.url}
         className="tab_link"
-        data-url={encodeUrl}
-        data-title={encodeTitle}
+        data-url={props.tab.url}
+        data-title={props.tab.title}
         onClick={(e) => {
           e.preventDefault();
           props.openLinkClick();
         }}
       >
-        {encodeTitle}
+        {props.tab.title}
       </a>
       <span
         className="uk-link tab_close"
