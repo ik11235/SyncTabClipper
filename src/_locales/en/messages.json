@@ -51,5 +51,22 @@
   },
   "content_msg_open_tab_page": {
     "message": "Open Saved tabs Page"
+  },
+  "content_msg_storage_usage": {
+    "message": "Storage Usage"
+  },
+  "content_msg_storage_usage_detail": {
+    "message": "$used$ / $total$ bytes ($percentage$% used)",
+    "placeholders": {
+      "used": {
+        "content": "$1"
+      },
+      "total": {
+        "content": "$2"
+      },
+      "percentage": {
+        "content": "$3"
+      }
+    }
   }
 }

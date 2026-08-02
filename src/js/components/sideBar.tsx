@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { blockService } from '../blockService';
 import { chromeService } from '../chromeService';
+import StorageUsage from './storageUsage';
 
 interface SideBarProps {
   // storageの全削除とブロック一覧stateの更新はApp側で行う
@@ -113,6 +114,7 @@ const SideBar: React.FC<SideBarProps> = (props) => {
           </li>
         </ul>
       </div>
+      <StorageUsage />
     </aside>
   );
 };
