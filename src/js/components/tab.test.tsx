@@ -14,10 +14,7 @@ describe('Tab', (): void => {
   let container: HTMLDivElement;
   let root: Root;
 
-  const mount = async (tab: {
-    url: string;
-    title: string;
-  }): Promise<void> => {
+  const mount = async (tab: { url: string; title: string }): Promise<void> => {
     await act(async () => {
       root = createRoot(container);
       root.render(
