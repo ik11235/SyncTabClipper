@@ -303,6 +303,36 @@ describe('blockService', (): void => {
     );
     expect(inflateSpy).toHaveBeenCalledTimes(0);
   });
+
+  // JSONとしてparseできるだけの壊れたデータを通すと、描画時に例外になり
+  // 一覧全体が表示されなくなるため、inflateJsonの時点で弾く
+  test.each([
+    ['tabsが欠落', '{"created_at":1609556645678}'],
+    [
+      'created_atが欠落',
+      '{"tabs":[{"url":"https://example.com/","title":"t"}]}',
+    ],
+    ['created_atが数値でない', '{"created_at":"x","tabs":[]}'],
+    ['created_atが有限数でない', '{"created_at":null,"tabs":[]}'],
+    ['配列', '[]'],
+    ['数値', '123'],
+    ['文字列JSON', '"foo"'],
+    ['null', 'null'],
+    ['tabsが配列でない', '{"created_at":1609556645678,"tabs":{}}'],
+    ['tabsの要素がnull', '{"created_at":1609556645678,"tabs":[null]}'],
+    [
+      'tabsの要素にurlがない',
+      '{"created_at":1609556645678,"tabs":[{"title":"t"}]}',
+    ],
+    [
+      'tabsの要素にtitleがない',
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/"}]}',
+    ],
+  ])('inflateJson %s はエラー', (_name: string, input: string): void => {
+    expect(() => blockService.inflateJson(input, 1)).toThrow(
+      /^Invalid block data:/,
+    );
+  });
 });
 
 describe('blockService import/export', (): void => {

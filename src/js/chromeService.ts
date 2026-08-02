@@ -82,12 +82,51 @@ export namespace chromeService {
         promiseArray.push(getSyncStorageReturnIndex(i));
       }
 
-      return Promise.all(promiseArray).then((result) =>
-        result
-          .filter((obj) => obj[1] != null && obj[1].length > 0)
-          .map((arr) => blockService.inflateJson(arr[1], arr[0]))
-          .toSorted(sortBlock),
-      );
+      const result = await Promise.all(promiseArray);
+      const brokenKeys: string[] = [];
+      const blocks = result
+        .filter((obj) => obj[1] != null && obj[1].length > 0)
+        .map((arr) => {
+          // 壊れた・解釈不能な保存データが1件あっても一覧全体が
+          // 表示されなくならないよう、復元失敗したブロックはスキップする
+          try {
+            return blockService.inflateJson(arr[1], arr[0]);
+          } catch (e) {
+            console.error(`Failed to inflate block (key=${tabKey(arr[0])})`, e);
+            brokenKeys.push(tabKey(arr[0]));
+            return null;
+          }
+        })
+        .filter((block) => block != null)
+        .toSorted(sortBlock);
+
+      if (brokenKeys.length > 0) {
+        await notifyBrokenBlocks(brokenKeys);
+      }
+
+      return blocks;
+    }
+
+    /**
+     * 復元に失敗したブロックがあることをユーザーへ通知する。
+     * 通知に失敗してもgetAllBlock自体は成功させる
+     * @param {string[]} brokenKeys 復元に失敗したブロックのstorage key
+     * @return {Promise<void>}
+     */
+    async function notifyBrokenBlocks(brokenKeys: string[]): Promise<void> {
+      try {
+        // 保存失敗など、ユーザーがまだ見ていない先行のエラーを上書きしない
+        if ((await errorLog.get()) != null) {
+          return;
+        }
+        await errorLog.set(
+          chrome.i18n.getMessage('content_msg_broken_block', [
+            brokenKeys.join(', '),
+          ]),
+        );
+      } catch (e) {
+        console.error(e);
+      }
     }
 
     const sortBlock = (a: model.Block, b: model.Block): number => {

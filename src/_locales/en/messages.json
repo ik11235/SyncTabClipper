@@ -49,6 +49,14 @@
   "content_msg_not_tab": {
     "message": "There are no saved tabs."
   },
+  "content_msg_broken_block": {
+    "message": "Some saved data is corrupted and was skipped (key: $keys$).",
+    "placeholders": {
+      "keys": {
+        "content": "$1"
+      }
+    }
+  },
   "content_msg_open_tab_page": {
     "message": "Open Saved tabs Page"
   },

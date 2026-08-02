@@ -39,11 +39,46 @@ export namespace blockService {
     d?: string;
   };
 
+  /**
+   * JSONとしてparseできただけのデータがBlockとして描画可能かを検証する。
+   * ここで弾かないと、created_atやtabsが欠けたデータが描画時まで生き残り、
+   * 一覧全体のレンダリングを落とす。呼び出し側がブロック単位で
+   * スキップできるよう、不正な場合は例外を投げる
+   * @param {unknown} object 検証対象のパース済みJSON
+   * @throws {Error} Blockとして解釈できない場合
+   */
+  function assertBlockJson(object: unknown): asserts object is BlockJson {
+    if (object == null || typeof object !== 'object' || Array.isArray(object)) {
+      throw new Error('Invalid block data: not an object');
+    }
+    const { created_at: createdAt, tabs } = object as {
+      created_at?: unknown;
+      tabs?: unknown;
+    };
+    if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) {
+      throw new Error('Invalid block data: created_at is not a finite number');
+    }
+    if (!Array.isArray(tabs)) {
+      throw new Error('Invalid block data: tabs is not an array');
+    }
+    for (const tab of tabs) {
+      if (
+        tab == null ||
+        typeof tab !== 'object' ||
+        typeof (tab as model.Tab).url !== 'string' ||
+        typeof (tab as model.Tab).title !== 'string'
+      ) {
+        throw new Error('Invalid block data: tabs contains an invalid entry');
+      }
+    }
+  }
+
   function jsonObjToBlock(object: BlockJson, index: number): model.Block {
+    assertBlockJson(object);
     return {
       indexNum: index,
       createdAt: new Date(object.created_at),
-      tabs: object.tabs,
+      tabs: object.tabs.map((tab) => ({ url: tab.url, title: tab.title })),
     };
   }
 
@@ -52,18 +87,7 @@ export namespace blockService {
   }
 
   export function jsonToBlock(json: string, indexNum: number): model.Block {
-    const js = JSON.parse(json) as BlockJson;
-
-    const tabs: model.Tab[] = js.tabs.map((jsonArr) => ({
-      url: jsonArr.url,
-      title: jsonArr.title,
-    }));
-
-    return {
-      indexNum: indexNum,
-      createdAt: new Date(js.created_at),
-      tabs: tabs,
-    };
+    return jsonObjToBlock(JSON.parse(json) as BlockJson, indexNum);
   }
 
   export function inflateJson(jsonStr: string, indexNum: number): model.Block {
@@ -78,8 +102,9 @@ export namespace blockService {
         throw e;
       }
     }
-    // vフィールドを持たない従来形式は暗黙のv1
-    const version = js.v ?? 1;
+    // vフィールドを持たない従来形式は暗黙のv1。
+    // jsがnullなど非オブジェクトの場合もjsonObjToBlock側の検証で弾く
+    const version = js?.v ?? 1;
     switch (version) {
       case 1:
         // v1の非圧縮はブロックJSONそのもの
