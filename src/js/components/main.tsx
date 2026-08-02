@@ -1,29 +1,23 @@
 import { model } from '../types/interface';
-import React, { useState } from 'react';
+import React from 'react';
 import Block from './block';
 
 interface MainProps {
-  Block: model.Block[];
+  blocks: model.Block[];
+  updateBlock: (newBlock: model.Block) => void;
 }
 
+// ブロック一覧のstateはAppが所有し、Mainはpropsの表示に徹する
 const Main: React.FC<MainProps> = (props) => {
-  const [nowBlocks, setNowBlocks] = useState(props.Block);
-
-  const deleteBlock = (index: number) => {
-    setNowBlocks((blocks) => {
-      return blocks.filter((block) => block.indexNum != index);
-    });
-  };
-
-  if (nowBlocks.length > 0) {
+  if (props.blocks.length > 0) {
     return (
       <div>
-        {nowBlocks.map((block) => {
+        {props.blocks.map((block) => {
           return (
             <Block
               key={block.indexNum}
-              Block={block}
-              deleteBlock={() => deleteBlock(block.indexNum)}
+              block={block}
+              updateBlock={props.updateBlock}
             />
           );
         })}

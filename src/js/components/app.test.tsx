@@ -126,6 +126,40 @@ describe('App', (): void => {
     expect(container.textContent).toContain('content_msg_not_tab');
   });
 
+  test('ブロック削除時はAppのstateが更新され一覧から消える', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      },
+    ]);
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+
+    try {
+      await mount();
+      expect(container.textContent).toContain('title-test');
+
+      const deleteLink = container.querySelector(
+        '.all_tab_delete',
+      ) as HTMLElement;
+      await act(async () => {
+        deleteLink.click();
+      });
+
+      // storageへ空タブのブロックとして永続化され、一覧からも消える
+      expect(setBlockSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ indexNum: 0, tabs: [] }),
+      );
+      expect(container.textContent).not.toContain('title-test');
+      expect(container.textContent).toContain('content_msg_not_tab');
+    } finally {
+      setBlockSpy.mockRestore();
+    }
+  });
+
   test('ブロック読み込み失敗時もエラー表示は機能する', async (): Promise<void> => {
     getAllBlockSpy.mockRejectedValue(new Error('load failed'));
 
