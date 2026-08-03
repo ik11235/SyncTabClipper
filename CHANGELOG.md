@@ -1,3 +1,10 @@
+# v0.4.1 (2026-08-04)
+
+- [FIX] タブページの title の typo を修正 (syncTabCliper → SyncTabClipper) (#185)
+- [FIX] タブの URL・タイトルが二重に HTML エスケープされて表示される問題を修正 (#186)
+- [FIX] タブカードに未評価のテンプレートリテラルが data-created-at 属性として残っていたのを削除 (#187)
+- [DEV] html-webpack-plugin を導入し、tabs.html への script タグを自動注入に変更 (#189)
+
 # v0.4.0 (2026-08-03)
 
 - [DEV] タブページの描画を単一 React ルートに統合し、サイドバーの生 DOM 操作を React の state/ref に置き換え (#173, #174)
