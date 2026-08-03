@@ -68,10 +68,7 @@ const Block: React.FC<BlockProps> = (props) => {
   };
 
   return (
-    <div
-      className="tabs uk-card-default block-root-dom"
-      data-created-at="${created_at.getTime()}"
-    >
+    <div className="tabs uk-card-default block-root-dom">
       <div className="uk-card-header">
         <h3 className="uk-card-title uk-margin-remove-bottom">
           {chrome.i18n.getMessage('content_msg_tab_length', [
