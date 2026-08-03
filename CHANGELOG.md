@@ -4,6 +4,7 @@
 - [FIX] タブの URL・タイトルが二重に HTML エスケープされて表示される問題を修正 (#186)
 - [FIX] タブカードに未評価のテンプレートリテラルが data-created-at 属性として残っていたのを削除 (#187)
 - [DEV] html-webpack-plugin を導入し、tabs.html への script タグを自動注入に変更 (#189)
+- [UPDATE] ストア掲載の短い説明文 (manifest description) を日英とも刷新 (#203)
 
 # v0.4.0 (2026-08-03)
 
