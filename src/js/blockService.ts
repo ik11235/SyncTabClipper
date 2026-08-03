@@ -1,11 +1,14 @@
 import { model } from './types/interface';
 import { zlibWrapper } from './zlib-wrapper';
+import { compression } from './compression';
 import { chromeService } from './chromeService';
 
 export namespace blockService {
   // 保存データ・エクスポートJSONのスキーマ版数
   // バージョン情報を持たない従来形式を暗黙のv1とみなし、v2からフィールドを付与する
-  export const CURRENT_SCHEMA_VERSION = 2;
+  // v3から圧縮方式をzlib.jsからネイティブCompressionStream(deflate-raw)に変更
+  // 移行は遅延移行: 読み取りはv1/v2/v3すべてに対応し、保存は常にv3で行う
+  export const CURRENT_SCHEMA_VERSION = 3;
 
   export function createBlock(
     tabs: chrome.tabs.Tab[],
@@ -75,7 +78,10 @@ export namespace blockService {
     };
   }
 
-  export function inflateJson(jsonStr: string, indexNum: number): model.Block {
+  export async function inflateJson(
+    jsonStr: string,
+    indexNum: number,
+  ): Promise<model.Block> {
     let js: BlockJson;
     try {
       js = JSON.parse(jsonStr);
@@ -98,12 +104,17 @@ export namespace blockService {
         return js.d == null
           ? jsonObjToBlock(js, indexNum)
           : jsonToBlock(zlibWrapper.inflate(js.d), indexNum);
+      case 3:
+        // v3はdフィールドがdeflate-raw+UTF-8+base64の圧縮ペイロード
+        return js.d == null
+          ? jsonObjToBlock(js, indexNum)
+          : jsonToBlock(await compression.decompress(js.d), indexNum);
       default:
         throw new Error(`Unsupported data version: v=${version}`);
     }
   }
 
-  export function deflateBlock(block: model.Block): string {
+  export async function deflateBlock(block: model.Block): Promise<string> {
     // 圧縮アルゴリズムの変更に備え、バージョン情報は圧縮ペイロードの外側に置く
     const version = {
       v: CURRENT_SCHEMA_VERSION,
@@ -112,7 +123,7 @@ export namespace blockService {
     const blockStr = JSON.stringify({ ...version, ...blockToJsonObj(block) });
     const deflateStr = JSON.stringify({
       ...version,
-      d: zlibWrapper.deflate(blockToJson(block)),
+      d: await compression.compress(blockToJson(block)),
     });
     if (deflateStr.length < blockStr.length) {
       return deflateStr;
@@ -156,6 +167,8 @@ export namespace blockService {
     } else {
       switch (json.v) {
         case 2:
+        case 3:
+          // エクスポートJSONは非圧縮のため、v2/v3で形式は同一
           blockObjs = json.blocks;
           break;
         default:
