@@ -1,6 +1,6 @@
 {
   "Description": {
-    "message": "Consolidates all open tabs into one to reduce memory. Saved data will be shared with GoogleAccount and sync across multiple devices."
+    "message": "Save and close all open tabs in one click, onto a single page. Syncs across devices via your Chrome account. No external servers."
   },
   "content_msg_tab_length": {
     "message": "$length$ Tabs",
