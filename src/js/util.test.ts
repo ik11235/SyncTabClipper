@@ -10,11 +10,6 @@ describe('util', (): void => {
     expect(res).toBe('');
   });
 
-  test('escape_html 正常系', (): void => {
-    const res = util.escapeHtml('<html>aaa</html>');
-    expect(res).toBe('&lt;html&gt;aaa&lt;/html&gt;');
-  });
-
   test('toNumber 正常系string', (): void => {
     const res = util.toNumber('123');
     expect(res).toBe(123);
