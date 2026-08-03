@@ -41,7 +41,7 @@ export namespace chromeService {
       } else {
         return chromeService.storage.setTabData(
           block.indexNum,
-          blockService.deflateBlock(block),
+          await blockService.deflateBlock(block),
         );
       }
     }
@@ -89,14 +89,15 @@ export namespace chromeService {
         promiseArray.push(getSyncStorageReturnIndex(i));
       }
 
-      return Promise.all(promiseArray).then((result) =>
+      const result = await Promise.all(promiseArray);
+      const entries = await Promise.all(
         result
           // keyが存在しないindexは削除済みのブロックなので一覧に含めない。
           // 空文字列は書き込みが壊れた形跡なのでBrokenBlockとして扱う
           .filter((obj) => obj[1] != null)
-          .map((arr) => inflateEntry(arr[1], arr[0]))
-          .toSorted(sortBlock),
+          .map((arr) => inflateEntry(arr[1], arr[0])),
       );
+      return entries.toSorted(sortBlock);
     }
 
     /**
@@ -104,14 +105,17 @@ export namespace chromeService {
      * BrokenBlockを返す（1件の壊れたデータで一覧全体が失われないようにする）
      * @param {string} json 保存されていたデータ
      * @param {number} indexNum ブロックのindex
-     * @return {model.BlockEntry} 復元したBlock or BrokenBlock
+     * @return {Promise<model.BlockEntry>} 復元したBlock or BrokenBlock
      */
-    function inflateEntry(json: string, indexNum: number): model.BlockEntry {
+    async function inflateEntry(
+      json: string,
+      indexNum: number,
+    ): Promise<model.BlockEntry> {
       try {
         if (json.length <= 0) {
           throw new Error(`Empty block data: index=${indexNum}`);
         }
-        const block = blockService.inflateJson(json, indexNum);
+        const block = await blockService.inflateJson(json, indexNum);
         if (!Array.isArray(block.tabs)) {
           // タブの配列を持たないブロックは描画もエクスポートもできない。
           // ここで弾かないと、エクスポートにtabsのないブロックが出力され
