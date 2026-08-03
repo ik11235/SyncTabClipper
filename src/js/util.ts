@@ -20,27 +20,6 @@ export namespace util {
   }
 
   /**
-   * HTMLの特殊文字をエスケープして返す
-   * https://qiita.com/saekis/items/c2b41cd8940923863791
-   *
-   * @param {string} string htmlとしてエスケープしたい文字列
-   * @return {string} エスケープした文字列
-   */
-  export function escapeHtml(string: string): string {
-    // @ts-expect-error 置換マップの戻り値がstring | undefinedと推論されるため
-    return string.replace(/[&'`"<>]/g, function (match) {
-      return {
-        '&': '&amp;',
-        "'": '&#x27;',
-        '`': '&#x60;',
-        '"': '&quot;',
-        '<': '&lt;',
-        '>': '&gt;',
-      }[match];
-    });
-  }
-
-  /**
    * 渡された文字列をNumberに変換する
    * 変換できない場合、例外を出力
    *

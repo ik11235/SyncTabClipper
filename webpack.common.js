@@ -1,5 +1,6 @@
 const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
   entry: {
@@ -40,7 +41,6 @@ module.exports = {
   plugins: [
     new CopyPlugin({
       patterns: [
-        { from: 'src/tabs.html', to: path.join(__dirname, 'dist/') },
         { from: 'src/manifest.json', to: path.join(__dirname, 'dist/') },
         {
           context: 'src/_locales',
@@ -48,6 +48,12 @@ module.exports = {
           to: path.join(__dirname, 'dist/_locales/'),
         },
       ],
+    }),
+    new HtmlWebpackPlugin({
+      template: 'src/tabs.html',
+      filename: '../tabs.html',
+      chunks: ['tabs'],
+      scriptLoading: 'defer',
     }),
   ],
 };
