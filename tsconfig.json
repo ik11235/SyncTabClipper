@@ -1,19 +1,15 @@
 {
   "compilerOptions": {
     "target": "ES2019",
-    "module": "ES2015",
+    "module": "ESNext",
     "sourceMap": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": "./",
-    "paths": {
-      "interface": ["types/interface"]
-    },
-    "typeRoots": ["node_modules/@types", "types"],
+    "types": ["chrome", "jest", "node"],
     "jsx": "react-jsx"
   },
   "exclude": ["node_modules"]
