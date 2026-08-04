@@ -76,7 +76,7 @@ export namespace chromeService {
       } else {
         return chromeService.storage.setTabData(
           block.indexNum,
-          blockService.deflateBlock(block),
+          await blockService.deflateBlock(block),
         );
       }
     }
@@ -117,18 +117,17 @@ export namespace chromeService {
         promiseArray.push(getSyncStorageReturnIndex(i));
       }
 
-      return Promise.all(promiseArray).then((result) => {
-        const nonEmptyArr = result.filter((obj) => {
-          return obj[1] != null && obj[1].length > 0;
-        });
-        const newBlocks: model.Block[] = [];
-        for (const arr of nonEmptyArr) {
-          const block = blockService.inflateJson(arr[1], arr[0]);
-          newBlocks.push(block);
-        }
-
-        return newBlocks.sort(sortBlock);
+      const result = await Promise.all(promiseArray);
+      const nonEmptyArr = result.filter((obj) => {
+        return obj[1] != null && obj[1].length > 0;
       });
+      const newBlocks: model.Block[] = [];
+      for (const arr of nonEmptyArr) {
+        const block = await blockService.inflateJson(arr[1], arr[0]);
+        newBlocks.push(block);
+      }
+
+      return newBlocks.sort(sortBlock);
     }
 
     const sortBlock = (a: model.Block, b: model.Block): number => {

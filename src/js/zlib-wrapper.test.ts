@@ -1,8 +1,8 @@
 import { zlibWrapper } from './zlib-wrapper';
 
 // Manifest V2時点(master)のzlib実装で生成した圧縮データ。
-// zlibのバンドル方法を変えてもstorage.sync上の既存データを
-// 読み書きできることを保証するゴールデンフィクスチャ。
+// zlib.jsのdeflateはv3移行で削除済みだが、storage.sync上の
+// 既存データ(v1/v2)を読めることを保証するゴールデンフィクスチャ。
 const masterDeflatedBase64 =
   'eNqMj10OgjAQhE+zjxostJTH8tNrmIoNaDAg1MTjOy1IYpTEZLOZ2e432VKaE2P1aI2z56NxMBSrg4gyzoVIuEglsQJTZ07T/Eg8p0A9xm6ZMNY6N0xBapR9mtvQ2X3d3+CcnULunHNxnV2x4HbvhbT0Oz+z1+im75uPZLYRPS/+k/1993WAGYxrKdZ3ioHySqBlKZriqy289a2SXik/qzbuISDgQXtREDhQYEBUMUlGuV6ESoJAyUWonHREmaZMkYyW//AS/QUAAP//';
 
@@ -12,15 +12,5 @@ const originalJson =
 describe('zlibWrapper', () => {
   test('master時点の圧縮データを復元できる（既存データ互換）', (): void => {
     expect(zlibWrapper.inflate(masterDeflatedBase64)).toBe(originalJson);
-  });
-
-  test('deflateの出力がmaster時点と一致する', (): void => {
-    expect(zlibWrapper.deflate(originalJson)).toBe(masterDeflatedBase64);
-  });
-
-  test('deflate→inflateの往復で元に戻る', (): void => {
-    expect(zlibWrapper.inflate(zlibWrapper.deflate(originalJson))).toBe(
-      originalJson,
-    );
   });
 });
