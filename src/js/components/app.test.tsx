@@ -77,6 +77,10 @@ describe('App', (): void => {
             cb();
           },
         },
+        sync: {
+          QUOTA_BYTES: 102400,
+          getBytesInUse: (): Promise<number> => Promise.resolve(0),
+        },
         onChanged: {
           addListener: (
             listener: (
