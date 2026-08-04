@@ -8,9 +8,8 @@ import Main from './main';
 import SideBar from './sideBar';
 
 const App: React.FC = () => {
-  // ロード完了までMainをマウントしない（nullはロード中を表す）。
-  // Mainはpropsを初期値としてstateに取り込むため、常にロード済みの
-  // データでマウントされる必要がある
+  // chrome.storageを単一の情報源とし、その読み込み結果をAppが所有する。
+  // Main/Blockはpropsの表示に徹する（nullはロード中を表す）
   const [blocks, setBlocks] = useState<model.Block[] | null>(null);
 
   useEffect(() => {
@@ -21,6 +20,38 @@ const App: React.FC = () => {
         chromeService.errorLog.set(error).catch(console.error);
       });
   }, []);
+
+  // ブロックの変更をstorageへ永続化し、成功時のみstateへ反映する。
+  // タブが空になったブロックはstorage側で削除されるため一覧からも除く
+  const updateBlock = (newBlock: model.Block) => {
+    chromeService.storage
+      .setBlock(newBlock)
+      .then(() => {
+        setBlocks((prevBlocks) => {
+          if (prevBlocks == null) {
+            return prevBlocks;
+          }
+          if (newBlock.tabs.length <= 0) {
+            return prevBlocks.filter(
+              (block) => block.indexNum != newBlock.indexNum,
+            );
+          }
+          return prevBlocks.map((block) =>
+            block.indexNum == newBlock.indexNum ? newBlock : block,
+          );
+        });
+      })
+      .catch((error) => {
+        chromeService.errorLog.set(error).catch(console.error);
+      });
+  };
+
+  // 全データ削除をstorageへ反映し、成功時のみ一覧を空にする。
+  // 完了通知（alert）はUIを持つSideBar側で行うためPromiseを返す
+  const deleteAllBlocks = (): Promise<void> =>
+    chromeService.storage.allClear().then(() => {
+      setBlocks([]);
+    });
 
   return (
     <div className="uk-container">
@@ -43,10 +74,14 @@ const App: React.FC = () => {
               アンマウントされないよう境界で隔離する（旧・独立ルート構成が
               持っていたフォールトアイソレーションの維持） */}
           <ErrorBoundary>
-            {blocks != null && <Main Block={blocks} />}
+            {/* ロード中に「保存済みタブなし」を誤表示しないよう
+                ロード完了までMainをマウントしない */}
+            {blocks != null && (
+              <Main blocks={blocks} updateBlock={updateBlock} />
+            )}
           </ErrorBoundary>
         </div>
-        <SideBar />
+        <SideBar deleteAllBlocks={deleteAllBlocks} />
       </div>
     </div>
   );

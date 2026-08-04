@@ -1,50 +1,37 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { model } from '../types/interface';
 import { chromeService } from '../chromeService';
 import { Tab } from './tab';
 
 interface BlockProps {
-  Block: model.Block;
-  deleteBlock: VoidFunction;
+  block: model.Block;
+  // storageへの永続化とブロック一覧stateの更新はApp側で行う
+  updateBlock: (newBlock: model.Block) => void;
 }
 
+// ブロックのstateはAppが所有し、Blockはpropsの表示と操作イベントの発火に徹する
 const Block: React.FC<BlockProps> = (props) => {
-  const [nowBlock, setNowBlock] = useState(props.Block);
-  const createdAt = nowBlock.createdAt;
+  const block = props.block;
+  const createdAt = block.createdAt;
+
   const openLink = (index: number) => {
-    const url = nowBlock.tabs[index]!.url;
+    const url = block.tabs[index]!.url;
     chrome.tabs.create({ url: url, active: false }, function () {
       deleteClick(index);
     });
   };
 
-  const changeBlock = (newBlock: model.Block) => {
-    chromeService.storage
-      .setBlock(newBlock)
-      .then(() => {
-        setNowBlock(newBlock);
-        if (newBlock.tabs.length <= 0) {
-          props.deleteBlock();
-        }
-      })
-      .catch((error) => {
-        chromeService.errorLog.set(error).catch(console.error);
-      });
-  };
-
   const deleteClick = (index: number) => {
-    nowBlock.tabs.splice(index, 1);
-    const newBlock = {
-      tabs: nowBlock.tabs,
-      indexNum: nowBlock.indexNum,
-      createdAt: nowBlock.createdAt,
-    };
-    changeBlock(newBlock);
+    props.updateBlock({
+      tabs: block.tabs.filter((_, i) => i != index),
+      indexNum: block.indexNum,
+      createdAt: block.createdAt,
+    });
   };
 
   const openAllTab = () => {
     const promiseArray: Promise<void>[] = [];
-    for (const tab of nowBlock.tabs) {
+    for (const tab of block.tabs) {
       promiseArray.push(
         chromeService.tab.createTabs({ url: tab.url, active: false }),
       );
@@ -59,12 +46,11 @@ const Block: React.FC<BlockProps> = (props) => {
   };
 
   const deleteBlock = () => {
-    const newBlock = {
+    props.updateBlock({
       tabs: [],
-      indexNum: nowBlock.indexNum,
-      createdAt: nowBlock.createdAt,
-    };
-    changeBlock(newBlock);
+      indexNum: block.indexNum,
+      createdAt: block.createdAt,
+    });
   };
 
   return (
@@ -72,7 +58,7 @@ const Block: React.FC<BlockProps> = (props) => {
       <div className="uk-card-header">
         <h3 className="uk-card-title uk-margin-remove-bottom">
           {chrome.i18n.getMessage('content_msg_tab_length', [
-            nowBlock.tabs.length,
+            block.tabs.length,
           ])}
         </h3>
         <p className="uk-text-meta uk-margin-remove-top">
@@ -97,7 +83,7 @@ const Block: React.FC<BlockProps> = (props) => {
       </div>
       <div className="uk-card-body">
         <ul>
-          {nowBlock.tabs.map((tab, index) => {
+          {block.tabs.map((tab, index) => {
             return (
               <Tab
                 tab={tab}
