@@ -1,3 +1,9 @@
+# v0.4.2 (2026-08-04)
+
+- [FIX] 全データ削除後も一覧にブロックが表示されたままになる問題を修正 (#188)
+- [DEV] ブロック一覧の state を App に持ち上げ、Main/Block の props→useState コピーを廃止 (#188)
+- [DEV] TypeScript を 6.0.3 に更新し、TS6 の deprecation に対応 (#206)
+
 # v0.4.1 (2026-08-04)
 
 - [FIX] タブページの title の typo を修正 (syncTabCliper → SyncTabClipper) (#185)
