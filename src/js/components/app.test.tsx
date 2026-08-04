@@ -160,6 +160,42 @@ describe('App', (): void => {
     }
   });
 
+  test('全データ削除時はAppのstateが空になり未保存メッセージを表示する', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      },
+    ]);
+    const allClearSpy = jest
+      .spyOn(chromeService.storage, 'allClear')
+      .mockResolvedValue(undefined);
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    const alertSpy = jest
+      .spyOn(window, 'alert')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+      expect(container.textContent).toContain('title-test');
+
+      const allClearLink = container.querySelector('#all_clear') as HTMLElement;
+      await act(async () => {
+        allClearLink.click();
+      });
+
+      // storageが全削除され、一覧も空表示に切り替わる
+      expect(allClearSpy).toHaveBeenCalled();
+      expect(container.textContent).not.toContain('title-test');
+      expect(container.textContent).toContain('content_msg_not_tab');
+    } finally {
+      allClearSpy.mockRestore();
+      confirmSpy.mockRestore();
+      alertSpy.mockRestore();
+    }
+  });
+
   test('ブロック読み込み失敗時もエラー表示は機能する', async (): Promise<void> => {
     getAllBlockSpy.mockRejectedValue(new Error('load failed'));
 

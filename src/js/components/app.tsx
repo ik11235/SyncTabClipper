@@ -46,6 +46,13 @@ const App: React.FC = () => {
       });
   };
 
+  // 全データ削除をstorageへ反映し、成功時のみ一覧を空にする。
+  // 完了通知（alert）はUIを持つSideBar側で行うためPromiseを返す
+  const deleteAllBlocks = (): Promise<void> =>
+    chromeService.storage.allClear().then(() => {
+      setBlocks([]);
+    });
+
   return (
     <div className="uk-container">
       <div className="uk-grid">
@@ -74,7 +81,7 @@ const App: React.FC = () => {
             )}
           </ErrorBoundary>
         </div>
-        <SideBar />
+        <SideBar deleteAllBlocks={deleteAllBlocks} />
       </div>
     </div>
   );

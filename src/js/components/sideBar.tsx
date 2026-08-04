@@ -2,7 +2,12 @@ import React, { useRef, useState } from 'react';
 import { blockService } from '../blockService';
 import { chromeService } from '../chromeService';
 
-const SideBar: React.FC = () => {
+interface SideBarProps {
+  // storageの全削除とブロック一覧stateの更新はApp側で行う
+  deleteAllBlocks: () => Promise<void>;
+}
+
+const SideBar: React.FC<SideBarProps> = (props) => {
   const [exportText, setExportText] = useState('');
   const importRef = useRef<HTMLTextAreaElement>(null);
 
@@ -31,8 +36,8 @@ const SideBar: React.FC = () => {
     if (
       window.confirm(chrome.i18n.getMessage('content_msg_all_delete_confirm'))
     ) {
-      chromeService.storage
-        .allClear()
+      props
+        .deleteAllBlocks()
         .then(() =>
           alert(chrome.i18n.getMessage('content_msg_all_delete_finish')),
         )
