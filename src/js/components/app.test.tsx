@@ -164,6 +164,57 @@ describe('App', (): void => {
     }
   });
 
+  test('あるブロックの更新時に他のブロックは再レンダリングされない', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [
+          { url: 'https://example.com/a1', title: 'title-a1' },
+          { url: 'https://example.com/a2', title: 'title-a2' },
+        ],
+      },
+      {
+        indexNum: 1,
+        createdAt: new Date('2021-01-03T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/b1', title: 'title-b1' }],
+      },
+    ]);
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    // Blockはレンダリングのたびにcontent_msg_tab_lengthを必ず1回取得するため、
+    // その呼び出し回数を再レンダリング回数の代理指標として使う
+    const getMessageSpy = jest.fn((key: string): string => key);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome.i18n.getMessage = getMessageSpy;
+
+    try {
+      await mount();
+      getMessageSpy.mockClear();
+
+      // 先頭ブロック（ブロックA）のタブを1件削除する
+      const tabCloseLink = container.querySelector(
+        '.tab_close',
+      ) as HTMLElement;
+      await act(async () => {
+        tabCloseLink.click();
+      });
+
+      expect(container.textContent).not.toContain('title-a1');
+      expect(container.textContent).toContain('title-a2');
+      expect(container.textContent).toContain('title-b1');
+      // 再レンダリングされたのは更新したブロックAのみ
+      // （ブロックBも再レンダリングされると2になる）
+      const blockRenderCount = getMessageSpy.mock.calls.filter(
+        ([key]) => key === 'content_msg_tab_length',
+      ).length;
+      expect(blockRenderCount).toBe(1);
+    } finally {
+      setBlockSpy.mockRestore();
+    }
+  });
+
   test('全データ削除時はAppのstateが空になり未保存メッセージを表示する', async (): Promise<void> => {
     getAllBlockSpy.mockResolvedValue([
       {

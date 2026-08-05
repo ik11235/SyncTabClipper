@@ -9,8 +9,10 @@ interface BlockProps {
   updateBlock: (newBlock: model.Block) => void;
 }
 
-// ブロックのstateはAppが所有し、Blockはpropsの表示と操作イベントの発火に徹する
-const Block: React.FC<BlockProps> = (props) => {
+// ブロックのstateはAppが所有し、Blockはpropsの表示と操作イベントの発火に徹する。
+// memo化により、他ブロック更新時の再レンダリングを避ける
+// （updateBlockはApp側でuseCallbackにより参照が安定している前提）
+const Block: React.FC<BlockProps> = React.memo((props) => {
   const block = props.block;
   const createdAt = block.createdAt;
 
@@ -97,6 +99,8 @@ const Block: React.FC<BlockProps> = (props) => {
       </div>
     </div>
   );
-};
+});
+
+Block.displayName = 'Block';
 
 export default Block;

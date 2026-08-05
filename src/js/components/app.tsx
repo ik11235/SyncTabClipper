@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { model } from '../types/interface';
 import { chromeService } from '../chromeService';
 import Header from './header';
@@ -22,8 +22,9 @@ const App: React.FC = () => {
   }, []);
 
   // ブロックの変更をstorageへ永続化し、成功時のみstateへ反映する。
-  // タブが空になったブロックはstorage側で削除されるため一覧からも除く
-  const updateBlock = (newBlock: model.Block) => {
+  // タブが空になったブロックはstorage側で削除されるため一覧からも除く。
+  // React.memo化したBlockの再レンダリングを防ぐため参照を安定させる
+  const updateBlock = useCallback((newBlock: model.Block) => {
     chromeService.storage
       .setBlock(newBlock)
       .then(() => {
@@ -44,14 +45,17 @@ const App: React.FC = () => {
       .catch((error) => {
         chromeService.errorLog.set(error).catch(console.error);
       });
-  };
+  }, []);
 
   // 全データ削除をstorageへ反映し、成功時のみ一覧を空にする。
   // 完了通知（alert）はUIを持つSideBar側で行うためPromiseを返す
-  const deleteAllBlocks = (): Promise<void> =>
-    chromeService.storage.allClear().then(() => {
-      setBlocks([]);
-    });
+  const deleteAllBlocks = useCallback(
+    (): Promise<void> =>
+      chromeService.storage.allClear().then(() => {
+        setBlocks([]);
+      }),
+    [],
+  );
 
   return (
     <div className="uk-container">
