@@ -82,18 +82,12 @@ export namespace chromeService {
         promiseArray.push(getSyncStorageReturnIndex(i));
       }
 
-      return Promise.all(promiseArray).then((result) => {
-        const nonEmptyArr = result.filter((obj) => {
-          return obj[1] != null && obj[1].length > 0;
-        });
-        const newBlocks: model.Block[] = [];
-        for (const arr of nonEmptyArr) {
-          const block = blockService.inflateJson(arr[1], arr[0]);
-          newBlocks.push(block);
-        }
-
-        return newBlocks.sort(sortBlock);
-      });
+      return Promise.all(promiseArray).then((result) =>
+        result
+          .filter((obj) => obj[1] != null && obj[1].length > 0)
+          .map((arr) => blockService.inflateJson(arr[1], arr[0]))
+          .sort(sortBlock),
+      );
     }
 
     const sortBlock = (a: model.Block, b: model.Block): number => {
@@ -113,18 +107,7 @@ export namespace chromeService {
     }
 
     export async function closeTabs(tabs: chrome.tabs.Tab[]): Promise<void> {
-      const promiseArray: Promise<void>[] = [];
-
-      for (const tab of tabs) {
-        promiseArray.push(closeTab(tab));
-      }
-
-      try {
-        await Promise.all(promiseArray);
-        return Promise.resolve();
-      } catch (err) {
-        return Promise.reject(err);
-      }
+      await Promise.all(tabs.map((tab) => closeTab(tab)));
     }
 
     export function queryTabs(
