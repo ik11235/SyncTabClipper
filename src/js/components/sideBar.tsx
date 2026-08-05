@@ -58,15 +58,6 @@ const SideBar: React.FC<SideBarProps> = (props) => {
           <li className="uk-nav-header">
             {chrome.i18n.getMessage('content_msg_menu')}
           </li>
-          <li className="uk-active">
-            <a href="#" id="all_clear" onClick={deleteAllData}>
-              <span
-                className="uk-margin-small-right"
-                data-uk-icon="icon: trash"
-              />
-              {chrome.i18n.getMessage('content_msg_all_data_delete')}
-            </a>
-          </li>
           <li className="uk-parent uk-active">
             <a href="#">
               <span
@@ -109,6 +100,39 @@ const SideBar: React.FC<SideBarProps> = (props) => {
                 <button id="import_link" onClick={importJson}>
                   {chrome.i18n.getMessage('content_msg_import_exec')}
                 </button>
+              </li>
+            </ul>
+          </li>
+          {/* 破壊的操作は誤クリックを防ぐためデフォルトで閉じたメニューに隠す (#207) */}
+          <li className="uk-parent">
+            <a href="#">
+              <span
+                className="uk-margin-small-right"
+                data-uk-icon="icon: settings"
+              />
+              {chrome.i18n.getMessage('content_msg_advanced_menu')}
+            </a>
+            <ul className="uk-nav-sub">
+              <li>
+                <a
+                  href="#"
+                  id="all_clear"
+                  className="uk-text-danger"
+                  onClick={deleteAllData}
+                >
+                  <span
+                    className="uk-margin-small-right"
+                    data-uk-icon="icon: trash"
+                  />
+                  {chrome.i18n.getMessage('content_msg_all_data_delete')}
+                </a>
+                <div className="uk-text-danger uk-text-small">
+                  <span
+                    className="uk-margin-small-right"
+                    data-uk-icon="icon: warning; ratio: 0.8"
+                  />
+                  {chrome.i18n.getMessage('content_msg_destructive_warning')}
+                </div>
               </li>
             </ul>
           </li>
