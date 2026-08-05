@@ -194,9 +194,7 @@ describe('App', (): void => {
       getMessageSpy.mockClear();
 
       // 先頭ブロック（ブロックA）のタブを1件削除する
-      const tabCloseLink = container.querySelector(
-        '.tab_close',
-      ) as HTMLElement;
+      const tabCloseLink = container.querySelector('.tab_close') as HTMLElement;
       await act(async () => {
         tabCloseLink.click();
       });
