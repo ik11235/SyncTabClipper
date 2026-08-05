@@ -80,9 +80,9 @@ const App: React.FC = () => {
           <ErrorBoundary>
             {/* ロード中に「保存済みタブなし」を誤表示しないよう
                 ロード完了までMainをマウントしない */}
-            {blocks != null && (
+            {blocks != null ? (
               <Main blocks={blocks} updateBlock={updateBlock} />
-            )}
+            ) : null}
           </ErrorBoundary>
         </div>
         <SideBar deleteAllBlocks={deleteAllBlocks} />
