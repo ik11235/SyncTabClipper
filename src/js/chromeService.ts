@@ -86,7 +86,7 @@ export namespace chromeService {
         result
           .filter((obj) => obj[1] != null && obj[1].length > 0)
           .map((arr) => blockService.inflateJson(arr[1], arr[0]))
-          .sort(sortBlock),
+          .toSorted(sortBlock),
       );
     }
 
