@@ -35,13 +35,11 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   };
 
   const openAllTab = () => {
-    const promiseArray: Promise<void>[] = [];
-    for (const tab of block.tabs) {
-      promiseArray.push(
+    Promise.all(
+      block.tabs.map((tab) =>
         chromeService.tab.createTabs({ url: tab.url, active: false }),
-      );
-    }
-    Promise.all(promiseArray)
+      ),
+    )
       .then(() => {
         deleteBlock();
       })

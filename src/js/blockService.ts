@@ -12,15 +12,10 @@ export namespace blockService {
     createdAt: Date,
     index: number,
   ): model.Block {
-    const blockTabs: model.Tab[] = [];
-
-    tabs.forEach((tab) => {
-      const tabData: model.Tab = {
-        url: tab.url!,
-        title: tab.title!,
-      };
-      blockTabs.push(tabData);
-    });
+    const blockTabs: model.Tab[] = tabs.map((tab) => ({
+      url: tab.url!,
+      title: tab.title!,
+    }));
 
     return {
       indexNum: index,
@@ -59,14 +54,10 @@ export namespace blockService {
   export function jsonToBlock(json: string, indexNum: number): model.Block {
     const js = JSON.parse(json) as BlockJson;
 
-    const tabs: model.Tab[] = [];
-
-    js.tabs.forEach((jsonArr) => {
-      tabs.push({
-        url: jsonArr.url,
-        title: jsonArr.title,
-      });
-    });
+    const tabs: model.Tab[] = js.tabs.map((jsonArr) => ({
+      url: jsonArr.url,
+      title: jsonArr.title,
+    }));
 
     return {
       indexNum: indexNum,
@@ -135,17 +126,11 @@ export namespace blockService {
     json: BlockJson[],
     startIndex: number,
   ): model.Block[] {
-    let idx = startIndex;
-    return json.map((obj) => {
-      const o = jsonObjToBlock(obj, idx);
-      idx += 1;
-      return o;
-    });
+    return json.map((obj, i) => jsonObjToBlock(obj, startIndex + i));
   }
 
   export async function importAllDataJson(jsonStr: string): Promise<void> {
     const tabLength = await chromeService.storage.getTabLength();
-    const promiseArray: Promise<void>[] = [];
     const idx = tabLength;
 
     const json = JSON.parse(jsonStr);
@@ -164,11 +149,9 @@ export namespace blockService {
     }
     const blocks = blockListForJsonObject(blockObjs, idx);
 
-    blocks.forEach((block) => {
-      promiseArray.push(chromeService.storage.setBlock(block));
-    });
-
-    await Promise.all(promiseArray);
+    await Promise.all(
+      blocks.map((block) => chromeService.storage.setBlock(block)),
+    );
     await chromeService.storage.setTabLength(tabLength + blockObjs.length);
     chrome.tabs.reload({ bypassCache: true });
   }
