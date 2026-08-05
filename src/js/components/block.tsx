@@ -18,9 +18,12 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
 
   const openLink = (index: number) => {
     const url = block.tabs[index]!.url;
-    chrome.tabs.create({ url: url, active: false }, function () {
-      deleteClick(index);
-    });
+    chromeService.tab
+      .createTabs({ url: url, active: false })
+      .then(() => deleteClick(index))
+      .catch((error) => {
+        chromeService.errorLog.set(error).catch(console.error);
+      });
   };
 
   const deleteClick = (index: number) => {
