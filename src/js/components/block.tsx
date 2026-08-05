@@ -89,7 +89,7 @@ const Block: React.FC<BlockProps> = (props) => {
                 tab={tab}
                 deleteClick={() => deleteClick(index)}
                 openLinkClick={() => openLink(index)}
-                key={index}
+                key={`${tab.url}-${index}`}
               />
             );
           })}
