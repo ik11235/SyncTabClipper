@@ -1,3 +1,13 @@
+# v0.5.0 (2026-08-05)
+
+- [NEW] タブを開く操作が失敗した際に、バッジとアラートでエラーを通知するように (#220)
+- [FIX] タブ一覧の key を配列 index 単体から URL との複合 key に変更し、並び替え時の再利用ミスを防止 (#218)
+- [UPDATE] 対応ブラウザを Chrome 110 以降に設定 (minimum_chrome_version) (#224)
+- [DEV] Block の再レンダリングを useCallback + React.memo で最適化 (#219)
+- [DEV] 条件レンダリングを && から三項演算子に統一 (#221)
+- [DEV] chromeService のコールバック手動 Promise 化を MV3 の Promise API に置き換え (#222)
+- [DEV] forEach+push の反復処理を map/filter().map() に統合、sort を非破壊の toSorted に変更 (#223, #224)
+
 # v0.4.2 (2026-08-04)
 
 - [FIX] 全データ削除後も一覧にブロックが表示されたままになる問題を修正 (#188)
