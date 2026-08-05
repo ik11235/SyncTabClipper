@@ -14,14 +14,11 @@ describe('chromeService.errorLog', (): void => {
       runtime: {},
       storage: {
         local: {
-          set: (obj: { [key: string]: string }, cb: () => void): void => {
+          set: (obj: { [key: string]: string }): Promise<void> => {
             Object.assign(localData, obj);
-            cb();
+            return Promise.resolve();
           },
-          get: (
-            keys: string[],
-            cb: (items: { [key: string]: string }) => void,
-          ): void => {
+          get: (keys: string[]): Promise<{ [key: string]: string }> => {
             const res: { [key: string]: string } = {};
             for (const key of keys) {
               const value = localData[key];
@@ -29,11 +26,11 @@ describe('chromeService.errorLog', (): void => {
                 res[key] = value;
               }
             }
-            cb(res);
+            return Promise.resolve(res);
           },
-          remove: (key: string, cb: () => void): void => {
+          remove: (key: string): Promise<void> => {
             delete localData[key];
-            cb();
+            return Promise.resolve();
           },
         },
       },
@@ -71,22 +68,16 @@ describe('chromeService.errorLog', (): void => {
     await expect(chromeService.errorLog.get()).resolves.toBeNull();
   });
 
-  test('lastError発生時はErrorインスタンスでrejectする', async (): Promise<void> => {
+  test('storage失敗時はErrorインスタンスでrejectしバッジは立たない', async (): Promise<void> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (global as any).chrome.storage.local.set = (
-      _obj: { [key: string]: string },
-      cb: () => void,
-    ): void => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (global as any).chrome.runtime.lastError = { message: 'quota exceeded' };
-      cb();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (global as any).chrome.runtime.lastError;
+    (global as any).chrome.storage.local.set = (): Promise<void> => {
+      return Promise.reject(new Error('quota exceeded'));
     };
 
     const result = chromeService.errorLog.set('boom');
     await expect(result).rejects.toBeInstanceOf(Error);
     await expect(result).rejects.toThrow('quota exceeded');
+    expect(setBadgeText).not.toHaveBeenCalled();
   });
 
   test('clearで保存とバッジが消える', async (): Promise<void> => {

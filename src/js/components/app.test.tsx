@@ -46,9 +46,8 @@ describe('App', (): void => {
       },
       storage: {
         local: {
-          set: (obj: { [key: string]: string }, cb: () => void): void => {
+          set: (obj: { [key: string]: string }): Promise<void> => {
             Object.assign(localData, obj);
-            cb();
             // 実際のChromeと同様に、変更をonChangedリスナーへ通知する
             for (const listener of onChangedListeners) {
               const changes: { [key: string]: chrome.storage.StorageChange } =
@@ -58,11 +57,9 @@ describe('App', (): void => {
               }
               listener(changes, 'local');
             }
+            return Promise.resolve();
           },
-          get: (
-            keys: string[],
-            cb: (items: { [key: string]: string }) => void,
-          ): void => {
+          get: (keys: string[]): Promise<{ [key: string]: string }> => {
             const res: { [key: string]: string } = {};
             for (const key of keys) {
               const value = localData[key];
@@ -70,11 +67,11 @@ describe('App', (): void => {
                 res[key] = value;
               }
             }
-            cb(res);
+            return Promise.resolve(res);
           },
-          remove: (key: string, cb: () => void): void => {
+          remove: (key: string): Promise<void> => {
             delete localData[key];
-            cb();
+            return Promise.resolve();
           },
         },
         sync: {
