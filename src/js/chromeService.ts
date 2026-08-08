@@ -73,7 +73,31 @@ export namespace chromeService {
       });
     }
 
+    /**
+     * 全ブロックを復元して返す。復元に失敗したブロックはスキップし、
+     * その事実をユーザーへ通知する
+     * @return {Promise<model.Block[]>} 復元できたブロックの一覧
+     */
     export async function getAllBlock(): Promise<model.Block[]> {
+      const { blocks, brokenKeys } = await getAllBlockWithBrokenKeys();
+      if (brokenKeys.length > 0) {
+        await notifyBrokenBlocks(brokenKeys);
+      }
+      return blocks;
+    }
+
+    /**
+     * 全ブロックを復元し、復元に失敗したブロックのstorage keyも併せて返す。
+     * エクスポートのように「欠損の扱いを自分で決めたい」呼び出し側のための口で、
+     * 通知は行わない（通知したい側はgetAllBlockを使う）。
+     * ここで通知すると、呼び出し側自身の通知と二重に発火して
+     * どちらが表示されるかがレースで決まってしまう
+     * @return {Promise<{blocks: model.Block[], brokenKeys: string[]}>}
+     */
+    export async function getAllBlockWithBrokenKeys(): Promise<{
+      blocks: model.Block[];
+      brokenKeys: string[];
+    }> {
       const tabLength = await getTabLength();
 
       const promiseArray: Promise<[number, string]>[] = [];
@@ -82,12 +106,52 @@ export namespace chromeService {
         promiseArray.push(getSyncStorageReturnIndex(i));
       }
 
-      return Promise.all(promiseArray).then((result) =>
-        result
-          .filter((obj) => obj[1] != null && obj[1].length > 0)
-          .map((arr) => blockService.inflateJson(arr[1], arr[0]))
-          .toSorted(sortBlock),
-      );
+      const result = await Promise.all(promiseArray);
+      const brokenKeys: string[] = [];
+      const blocks = result
+        // キー自体が存在しない場合は削除済みブロックであり、正常な状態として扱う。
+        // 一方、空文字列は書き込みが壊れた形跡なのでスキップ扱いにして通知する
+        .filter((obj) => obj[1] != null)
+        .map((arr) => {
+          // 壊れた・解釈不能な保存データが1件あっても一覧全体が
+          // 表示されなくならないよう、復元失敗したブロックはスキップする
+          try {
+            if (arr[1].length <= 0) {
+              throw new Error('Invalid block data: empty');
+            }
+            return blockService.inflateJson(arr[1], arr[0]);
+          } catch (e) {
+            console.error(`Failed to inflate block (key=${tabKey(arr[0])})`, e);
+            brokenKeys.push(tabKey(arr[0]));
+            return null;
+          }
+        })
+        .filter((block) => block != null)
+        .toSorted(sortBlock);
+
+      return { blocks: blocks, brokenKeys: brokenKeys };
+    }
+
+    /**
+     * 復元に失敗したブロックがあることをユーザーへ通知する。
+     * 通知に失敗してもgetAllBlock自体は成功させる
+     * @param {string[]} brokenKeys 復元に失敗したブロックのstorage key
+     * @return {Promise<void>}
+     */
+    async function notifyBrokenBlocks(brokenKeys: string[]): Promise<void> {
+      try {
+        // 保存失敗など、ユーザーがまだ見ていない先行のエラーを上書きしない
+        if ((await errorLog.get()) != null) {
+          return;
+        }
+        await errorLog.set(
+          chrome.i18n.getMessage('content_msg_broken_block', [
+            brokenKeys.join(', '),
+          ]),
+        );
+      } catch (e) {
+        console.error(e);
+      }
     }
 
     const sortBlock = (a: model.Block, b: model.Block): number => {
