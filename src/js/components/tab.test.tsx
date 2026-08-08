@@ -44,6 +44,19 @@ describe('Tab', (): void => {
     expect(link.getAttribute('href')).toBe('https://example.com/');
   });
 
+  // urlが空文字列のタブでもgetDomainが例外を投げないことの回帰テスト。
+  // 投げるとErrorBoundaryがMainごと落として一覧全体が表示されなくなる
+  test('urlが空文字列でも例外にならず表示する', async (): Promise<void> => {
+    await mount({ url: '', title: 'no url' });
+
+    const link = container.querySelector<HTMLAnchorElement>('a.tab_link')!;
+    expect(link.textContent).toBe('no url');
+    // ドメインを取れないタブのファビコンは空白扱いになる
+    expect(container.querySelector('img')!.getAttribute('src')).toBe(
+      'https://www.google.com/s2/favicons?domain=%20',
+    );
+  });
+
   test('&を含むタイトルとURLを二重エスケープせず表示する', async (): Promise<void> => {
     await mount({
       url: 'https://example.com/?a=1&b=2',

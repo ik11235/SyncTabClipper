@@ -10,12 +10,12 @@ export namespace util {
     try {
       const parser = new URL(str);
       return parser.hostname;
-    } catch (e) {
-      if ((e as { code?: string }).code === 'ERR_INVALID_URL') {
-        return '';
-      } else {
-        throw e;
-      }
+    } catch {
+      // ブラウザのURLコンストラクタはcodeを持たないTypeErrorを投げるため、
+      // エラーの種類で分岐すると再スローになり、空文字列のurlを持つタブ1件で
+      // ErrorBoundaryが一覧全体を落とす。URL.canParseはChrome 120以降で、
+      // manifestのminimum_chrome_version(110)では使えないためtry/catchで握り潰す
+      return '';
     }
   }
 

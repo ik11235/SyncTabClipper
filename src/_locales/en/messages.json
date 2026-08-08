@@ -58,7 +58,7 @@
     }
   },
   "content_msg_export_broken_block": {
-    "message": "Export was aborted because some saved data is corrupted (key: $keys$). Exporting now would produce a backup that is missing the corrupted data.",
+    "message": "Some saved data is corrupted and is not included in the exported data (key: $keys$). This backup is incomplete. Please review it before deleting all data.",
     "placeholders": {
       "keys": {
         "content": "$1"

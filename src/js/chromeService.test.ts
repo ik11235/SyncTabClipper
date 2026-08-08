@@ -90,10 +90,6 @@ describe('chromeService.storage.getAllBlock', (): void => {
     ['オブジェクトでない（配列）', '[]'],
     ['オブジェクトでない（数値）', '123'],
     ['nullである', 'null'],
-    [
-      'tabsの要素がTabになっていない',
-      JSON.stringify({ created_at: 1000, tabs: [null] }),
-    ],
   ])(
     '1件が%sデータでも残りのブロックが返る',
     async (_name: string, broken: string): Promise<void> => {
@@ -125,6 +121,24 @@ describe('chromeService.storage.getAllBlock', (): void => {
     expect(localData[chromeService.errorLog.errorKey]).toBeUndefined();
   });
 
+  // タブ1件が壊れていても、同じブロックの残りのタブは一覧に残す
+  test('tabsの要素がTabになっていないブロックは壊れた要素だけを落として残る', async (): Promise<void> => {
+    jest.spyOn(console, 'warn').mockImplementation((): void => {});
+    syncData['t_len'] = '1';
+    syncData['td_0'] = JSON.stringify({
+      created_at: 1000,
+      tabs: [null, { url: 'https://example.com/', title: 'example' }],
+    });
+
+    const blocks = await chromeService.storage.getAllBlock();
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.tabs).toStrictEqual([
+      { url: 'https://example.com/', title: 'example' },
+    ]);
+    expect(localData[chromeService.errorLog.errorKey]).toBeUndefined();
+  });
+
   test('getAllBlockWithBrokenKeysは壊れたkeyを呼び出し側に返す', async (): Promise<void> => {
     syncData['t_len'] = '3';
     syncData['td_0'] = blockJson(1000);
@@ -135,6 +149,19 @@ describe('chromeService.storage.getAllBlock', (): void => {
 
     expect(result.blocks.map((b) => b.indexNum)).toEqual([0]);
     expect(result.brokenKeys).toEqual(['td_1', 'td_2']);
+  });
+
+  // 通知はgetAllBlock側の責務。ここで通知すると、エクスポート失敗時の通知と
+  // 二重に発火してどちらが表示されるかがレースで決まってしまう
+  test('getAllBlockWithBrokenKeysは通知しない', async (): Promise<void> => {
+    syncData['t_len'] = '2';
+    syncData['td_0'] = blockJson(1000);
+    syncData['td_1'] = 'broken-data-not-json';
+
+    await chromeService.storage.getAllBlockWithBrokenKeys();
+
+    expect(localData[chromeService.errorLog.errorKey]).toBeUndefined();
+    expect(setBadgeText).not.toHaveBeenCalled();
   });
 
   test('複数件壊れている場合は全てのkeyが通知される', async (): Promise<void> => {

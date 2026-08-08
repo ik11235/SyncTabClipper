@@ -8,6 +8,7 @@ import { zlibWrapper } from './zlib-wrapper';
 let deflateSpy: jest.SpyInstance;
 let inflateSpy: jest.SpyInstance;
 let versionSpy: jest.SpyInstance;
+let warnSpy: jest.SpyInstance;
 
 beforeAll(() => {
   deflateSpy = jest.spyOn(zlibWrapper, 'deflate');
@@ -17,12 +18,15 @@ beforeAll(() => {
 
 beforeEach(() => {
   versionSpy.mockReturnValue('9.9.9');
+  // 壊れたタブ要素のスキップはconsole.warnに出るため、テスト出力を汚さないよう抑制する
+  warnSpy = jest.spyOn(console, 'warn').mockImplementation((): void => {});
 });
 
 afterEach(() => {
   deflateSpy.mockReset();
   inflateSpy.mockReset();
   versionSpy.mockReset();
+  warnSpy.mockRestore();
 });
 
 describe('blockService', (): void => {
@@ -77,6 +81,45 @@ describe('blockService', (): void => {
         },
       ],
     });
+  });
+
+  // 読み込みが確定していないタブのurlは空文字列になりうる。
+  // 空のurlを保存すると開き直せないタブになるため、pendingUrlで補う
+  test('createBlock urlが空のタブはpendingUrlで補う', (): void => {
+    const baseTab = {
+      index: 0,
+      pinned: false,
+      highlighted: false,
+      windowId: 0,
+      active: false,
+      incognito: false,
+      selected: false,
+      discarded: false,
+      autoDiscardable: false,
+      frozen: false,
+      lastAccessed: 0,
+      groupId: 0,
+    };
+    const tabs: chrome.tabs.Tab[] = [
+      {
+        ...baseTab,
+        title: 'pending',
+        url: '',
+        pendingUrl: 'https://example.com/pending',
+      },
+      { ...baseTab, index: 1, url: '' },
+    ];
+
+    const res = blockService.createBlock(
+      tabs,
+      new Date(`2021-01-02T03:04:05.678Z`),
+      1,
+    );
+
+    expect(res.tabs).toStrictEqual([
+      { url: 'https://example.com/pending', title: 'pending' },
+      { url: '', title: '' },
+    ]);
   });
 
   test('blockToJson 正常系', (): void => {
@@ -323,19 +366,43 @@ describe('blockService', (): void => {
     ['文字列JSON', '"foo"'],
     ['null', 'null'],
     ['tabsが配列でない', '{"created_at":1609556645678,"tabs":{}}'],
-    ['tabsの要素がnull', '{"created_at":1609556645678,"tabs":[null]}'],
-    [
-      'tabsの要素にurlがない',
-      '{"created_at":1609556645678,"tabs":[{"title":"t"}]}',
-    ],
-    [
-      'tabsの要素にtitleがない',
-      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/"}]}',
-    ],
+    ['圧縮データのdが文字列でない', '{"v":2,"d":123}'],
   ])('inflateJson %s はエラー', (_name: string, input: string): void => {
     expect(() => blockService.inflateJson(input, 1)).toThrow(
-      /^Invalid block data:/,
+      /^Invalid (block|export) data:/,
     );
+  });
+
+  // タブ1件の破損でブロックごと捨てると、同じブロックの正常なタブまで
+  // 一覧から消える。ブロックは残し、壊れた要素だけを落とす
+  test.each([
+    ['要素がnull', '[null,{"url":"https://example.com/","title":"t"}]'],
+    ['要素が数値', '[1,{"url":"https://example.com/","title":"t"}]'],
+    [
+      '要素にurlがない',
+      '[{"title":"no-url"},{"url":"https://example.com/","title":"t"}]',
+    ],
+  ])(
+    'inflateJson tabsの壊れた要素(%s)は落としてブロックは残す',
+    (_name: string, tabsJson: string): void => {
+      const input = `{"created_at":1609556645678,"tabs":${tabsJson}}`;
+      expect(blockService.inflateJson(input, 1)).toStrictEqual({
+        indexNum: 1,
+        createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+        tabs: [{ url: 'https://example.com/', title: 't' }],
+      });
+    },
+  );
+
+  // titleは欠けていてもタブを開き直せるので、空文字列で補って残す
+  test('inflateJson tabsの要素にtitleがない場合は空文字で補う', (): void => {
+    const input =
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/"}]}';
+    expect(blockService.inflateJson(input, 1)).toStrictEqual({
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [{ url: 'https://example.com/', title: '' }],
+    });
   });
 });
 
@@ -345,6 +412,7 @@ describe('blockService import/export', (): void => {
   let getTabLengthSpy: jest.SpyInstance;
   let setBlockSpy: jest.SpyInstance;
   let setTabLengthSpy: jest.SpyInstance;
+  let errorLogSetSpy: jest.SpyInstance;
   const reload = jest.fn();
 
   beforeEach(() => {
@@ -361,6 +429,9 @@ describe('blockService import/export', (): void => {
       .mockResolvedValue(undefined);
     setTabLengthSpy = jest
       .spyOn(chromeService.storage, 'setTabLength')
+      .mockResolvedValue(undefined);
+    errorLogSetSpy = jest
+      .spyOn(chromeService.errorLog, 'set')
       .mockResolvedValue(undefined);
     reload.mockClear();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -380,6 +451,7 @@ describe('blockService import/export', (): void => {
     getTabLengthSpy.mockRestore();
     setBlockSpy.mockRestore();
     setTabLengthSpy.mockRestore();
+    errorLogSetSpy.mockRestore();
   });
 
   const exportBlock = {
@@ -404,14 +476,32 @@ describe('blockService import/export', (): void => {
   });
 
   // 壊れたブロックが黙って欠けたバックアップは、全データ削除後のimportで
-  // 復旧不能になるため、エクスポート自体を失敗させる
-  test('exportAllDataJson 壊れたブロックがある場合は失敗する', async (): Promise<void> => {
+  // 復旧不能になる。かといって失敗させるとバックアップを取る手段自体がなくなるため、
+  // 欠けたkeyをJSONに明記し、警告を通知したうえで成功させる
+  test('exportAllDataJson 壊れたブロックがある場合はbroken_keys付きで出力し警告する', async (): Promise<void> => {
     getAllBlockWithBrokenKeysSpy.mockResolvedValue({
       blocks: [exportBlock],
       brokenKeys: ['td_1', 'td_3'],
     });
-    await expect(blockService.exportAllDataJson()).rejects.toThrow(
+
+    await expect(blockService.exportAllDataJson()).resolves.toBe(
+      '{"v":2,"ev":"9.9.9","broken_keys":["td_1","td_3"],"blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
+    );
+    expect(errorLogSetSpy).toHaveBeenCalledWith(
       'content_msg_export_broken_block:td_1, td_3',
+    );
+  });
+
+  // 通知の失敗でバックアップが取れなくなるほうが害が大きい
+  test('exportAllDataJson 警告の通知に失敗してもエクスポートは成功する', async (): Promise<void> => {
+    getAllBlockWithBrokenKeysSpy.mockResolvedValue({
+      blocks: [exportBlock],
+      brokenKeys: ['td_1'],
+    });
+    errorLogSetSpy.mockRejectedValue(new Error('quota exceeded'));
+
+    await expect(blockService.exportAllDataJson()).resolves.toContain(
+      '"broken_keys":["td_1"]',
     );
   });
 

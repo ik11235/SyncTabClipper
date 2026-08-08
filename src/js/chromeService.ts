@@ -73,14 +73,25 @@ export namespace chromeService {
       });
     }
 
+    /**
+     * 全ブロックを復元して返す。復元に失敗したブロックはスキップし、
+     * その事実をユーザーへ通知する
+     * @return {Promise<model.Block[]>} 復元できたブロックの一覧
+     */
     export async function getAllBlock(): Promise<model.Block[]> {
-      return (await getAllBlockWithBrokenKeys()).blocks;
+      const { blocks, brokenKeys } = await getAllBlockWithBrokenKeys();
+      if (brokenKeys.length > 0) {
+        await notifyBrokenBlocks(brokenKeys);
+      }
+      return blocks;
     }
 
     /**
      * 全ブロックを復元し、復元に失敗したブロックのstorage keyも併せて返す。
-     * エクスポートのように「欠損したまま成功させてはいけない」呼び出し側が
-     * 壊れたデータの有無を判断できるようにする
+     * エクスポートのように「欠損の扱いを自分で決めたい」呼び出し側のための口で、
+     * 通知は行わない（通知したい側はgetAllBlockを使う）。
+     * ここで通知すると、呼び出し側自身の通知と二重に発火して
+     * どちらが表示されるかがレースで決まってしまう
      * @return {Promise<{blocks: model.Block[], brokenKeys: string[]}>}
      */
     export async function getAllBlockWithBrokenKeys(): Promise<{
@@ -117,10 +128,6 @@ export namespace chromeService {
         })
         .filter((block) => block != null)
         .toSorted(sortBlock);
-
-      if (brokenKeys.length > 0) {
-        await notifyBrokenBlocks(brokenKeys);
-      }
 
       return { blocks: blocks, brokenKeys: brokenKeys };
     }
