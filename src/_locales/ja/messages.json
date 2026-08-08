@@ -57,6 +57,14 @@
       }
     }
   },
+  "content_msg_export_broken_block": {
+    "message": "保存データの一部が壊れているため、エクスポートを中止しました（key: $keys$）。このままエクスポートすると壊れたデータが欠けたバックアップになります。",
+    "placeholders": {
+      "keys": {
+        "content": "$1"
+      }
+    }
+  },
   "content_msg_open_tab_page": {
     "message": "保存済みタブのページを開く"
   },

@@ -74,6 +74,19 @@ export namespace chromeService {
     }
 
     export async function getAllBlock(): Promise<model.Block[]> {
+      return (await getAllBlockWithBrokenKeys()).blocks;
+    }
+
+    /**
+     * 全ブロックを復元し、復元に失敗したブロックのstorage keyも併せて返す。
+     * エクスポートのように「欠損したまま成功させてはいけない」呼び出し側が
+     * 壊れたデータの有無を判断できるようにする
+     * @return {Promise<{blocks: model.Block[], brokenKeys: string[]}>}
+     */
+    export async function getAllBlockWithBrokenKeys(): Promise<{
+      blocks: model.Block[];
+      brokenKeys: string[];
+    }> {
       const tabLength = await getTabLength();
 
       const promiseArray: Promise<[number, string]>[] = [];
@@ -85,11 +98,16 @@ export namespace chromeService {
       const result = await Promise.all(promiseArray);
       const brokenKeys: string[] = [];
       const blocks = result
-        .filter((obj) => obj[1] != null && obj[1].length > 0)
+        // キー自体が存在しない場合は削除済みブロックであり、正常な状態として扱う。
+        // 一方、空文字列は書き込みが壊れた形跡なのでスキップ扱いにして通知する
+        .filter((obj) => obj[1] != null)
         .map((arr) => {
           // 壊れた・解釈不能な保存データが1件あっても一覧全体が
           // 表示されなくならないよう、復元失敗したブロックはスキップする
           try {
+            if (arr[1].length <= 0) {
+              throw new Error('Invalid block data: empty');
+            }
             return blockService.inflateJson(arr[1], arr[0]);
           } catch (e) {
             console.error(`Failed to inflate block (key=${tabKey(arr[0])})`, e);
@@ -104,7 +122,7 @@ export namespace chromeService {
         await notifyBrokenBlocks(brokenKeys);
       }
 
-      return blocks;
+      return { blocks: blocks, brokenKeys: brokenKeys };
     }
 
     /**

@@ -55,8 +55,15 @@ export namespace blockService {
       created_at?: unknown;
       tabs?: unknown;
     };
-    if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) {
-      throw new Error('Invalid block data: created_at is not a finite number');
+    // Number.isFiniteだけではDateの表現範囲(±8.64e15)を超える値を通してしまい、
+    // Invalid Dateのまま描画時のtoISOString()でRangeErrorになる
+    if (
+      typeof createdAt !== 'number' ||
+      Number.isNaN(new Date(createdAt).getTime())
+    ) {
+      throw new Error(
+        'Invalid block data: created_at is not a valid timestamp',
+      );
     }
     if (!Array.isArray(tabs)) {
       throw new Error('Invalid block data: tabs is not an array');
@@ -137,14 +144,23 @@ export namespace blockService {
     }
   }
 
-  export function exportAllDataJson(): Promise<string> {
-    return chromeService.storage.getAllBlock().then((blocks) =>
-      JSON.stringify({
-        v: CURRENT_SCHEMA_VERSION,
-        ev: chromeService.runtime.getExtensionVersion(),
-        blocks: blocks.map(blockToJsonObj),
-      }),
-    );
+  export async function exportAllDataJson(): Promise<string> {
+    const { blocks, brokenKeys } =
+      await chromeService.storage.getAllBlockWithBrokenKeys();
+    // 壊れたブロックを黙って落としたバックアップは「一見成功した部分バックアップ」になり、
+    // export→全データ削除→import で復旧不能なデータ喪失を確定させるため失敗させる
+    if (brokenKeys.length > 0) {
+      throw new Error(
+        chrome.i18n.getMessage('content_msg_export_broken_block', [
+          brokenKeys.join(', '),
+        ]),
+      );
+    }
+    return JSON.stringify({
+      v: CURRENT_SCHEMA_VERSION,
+      ev: chromeService.runtime.getExtensionVersion(),
+      blocks: blocks.map(blockToJsonObj),
+    });
   }
 
   function blockListForJsonObject(

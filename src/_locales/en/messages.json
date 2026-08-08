@@ -57,6 +57,14 @@
       }
     }
   },
+  "content_msg_export_broken_block": {
+    "message": "Export was aborted because some saved data is corrupted (key: $keys$). Exporting now would produce a backup that is missing the corrupted data.",
+    "placeholders": {
+      "keys": {
+        "content": "$1"
+      }
+    }
+  },
   "content_msg_open_tab_page": {
     "message": "Open Saved tabs Page"
   },

@@ -85,6 +85,8 @@ describe('chromeService.storage.getAllBlock', (): void => {
       JSON.stringify({ tabs: [{ url: 'https://example.com/', title: 'e' }] }),
     ],
     ['created_atが数値でない', JSON.stringify({ created_at: 'x', tabs: [] })],
+    ['created_atがDateの範囲を超える', '{"created_at":1e20,"tabs":[]}'],
+    ['空文字列である', ''],
     ['オブジェクトでない（配列）', '[]'],
     ['オブジェクトでない（数値）', '123'],
     ['nullである', 'null'],
@@ -110,6 +112,30 @@ describe('chromeService.storage.getAllBlock', (): void => {
       expect(setBadgeText).toHaveBeenCalledWith({ text: '!' });
     },
   );
+
+  // 削除済みブロックはkey自体が存在しない。正常な状態なので通知してはいけない
+  test('keyが存在しないブロックは通知されない', async (): Promise<void> => {
+    syncData['t_len'] = '3';
+    syncData['td_0'] = blockJson(1000);
+    syncData['td_2'] = blockJson(3000);
+
+    const blocks = await chromeService.storage.getAllBlock();
+
+    expect(blocks.map((b) => b.indexNum)).toEqual([2, 0]);
+    expect(localData[chromeService.errorLog.errorKey]).toBeUndefined();
+  });
+
+  test('getAllBlockWithBrokenKeysは壊れたkeyを呼び出し側に返す', async (): Promise<void> => {
+    syncData['t_len'] = '3';
+    syncData['td_0'] = blockJson(1000);
+    syncData['td_1'] = 'broken-data-not-json';
+    syncData['td_2'] = '';
+
+    const result = await chromeService.storage.getAllBlockWithBrokenKeys();
+
+    expect(result.blocks.map((b) => b.indexNum)).toEqual([0]);
+    expect(result.brokenKeys).toEqual(['td_1', 'td_2']);
+  });
 
   test('複数件壊れている場合は全てのkeyが通知される', async (): Promise<void> => {
     syncData['t_len'] = '3';

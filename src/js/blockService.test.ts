@@ -314,6 +314,10 @@ describe('blockService', (): void => {
     ],
     ['created_atが数値でない', '{"created_at":"x","tabs":[]}'],
     ['created_atが有限数でない', '{"created_at":null,"tabs":[]}'],
+    // Dateの表現範囲(±8.64e15)外はInvalid Dateになり、描画時の
+    // toISOString()でRangeErrorになる
+    ['created_atがDateの範囲を超える', '{"created_at":1e20,"tabs":[]}'],
+    ['created_atがDateの範囲を下回る', '{"created_at":-1e20,"tabs":[]}'],
     ['配列', '[]'],
     ['数値', '123'],
     ['文字列JSON', '"foo"'],
@@ -337,6 +341,7 @@ describe('blockService', (): void => {
 
 describe('blockService import/export', (): void => {
   let getAllBlockSpy: jest.SpyInstance;
+  let getAllBlockWithBrokenKeysSpy: jest.SpyInstance;
   let getTabLengthSpy: jest.SpyInstance;
   let setBlockSpy: jest.SpyInstance;
   let setTabLengthSpy: jest.SpyInstance;
@@ -344,6 +349,10 @@ describe('blockService import/export', (): void => {
 
   beforeEach(() => {
     getAllBlockSpy = jest.spyOn(chromeService.storage, 'getAllBlock');
+    getAllBlockWithBrokenKeysSpy = jest.spyOn(
+      chromeService.storage,
+      'getAllBlockWithBrokenKeys',
+    );
     getTabLengthSpy = jest
       .spyOn(chromeService.storage, 'getTabLength')
       .mockResolvedValue(3);
@@ -355,31 +364,54 @@ describe('blockService import/export', (): void => {
       .mockResolvedValue(undefined);
     reload.mockClear();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (global as any).chrome = { tabs: { reload: reload } };
+    (global as any).chrome = {
+      tabs: { reload: reload },
+      i18n: {
+        // 実際のメッセージ本文ではなく、キーと置換値の受け渡しを検証する
+        getMessage: (key: string, substitutions?: string[]): string =>
+          `${key}:${(substitutions ?? []).join(',')}`,
+      },
+    };
   });
 
   afterEach(() => {
     getAllBlockSpy.mockRestore();
+    getAllBlockWithBrokenKeysSpy.mockRestore();
     getTabLengthSpy.mockRestore();
     setBlockSpy.mockRestore();
     setTabLengthSpy.mockRestore();
   });
 
-  test('exportAllDataJson バージョン情報付きで出力する', async (): Promise<void> => {
-    getAllBlockSpy.mockResolvedValue([
+  const exportBlock = {
+    indexNum: 0,
+    createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+    tabs: [
       {
-        indexNum: 0,
-        createdAt: new Date(`2021-01-02T03:04:05.678Z`),
-        tabs: [
-          {
-            url: 'https://example.com/test',
-            title: 'title-test',
-          },
-        ],
+        url: 'https://example.com/test',
+        title: 'title-test',
       },
-    ]);
+    ],
+  };
+
+  test('exportAllDataJson バージョン情報付きで出力する', async (): Promise<void> => {
+    getAllBlockWithBrokenKeysSpy.mockResolvedValue({
+      blocks: [exportBlock],
+      brokenKeys: [],
+    });
     await expect(blockService.exportAllDataJson()).resolves.toBe(
       '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
+    );
+  });
+
+  // 壊れたブロックが黙って欠けたバックアップは、全データ削除後のimportで
+  // 復旧不能になるため、エクスポート自体を失敗させる
+  test('exportAllDataJson 壊れたブロックがある場合は失敗する', async (): Promise<void> => {
+    getAllBlockWithBrokenKeysSpy.mockResolvedValue({
+      blocks: [exportBlock],
+      brokenKeys: ['td_1', 'td_3'],
+    });
+    await expect(blockService.exportAllDataJson()).rejects.toThrow(
+      'content_msg_export_broken_block:td_1, td_3',
     );
   });
 
