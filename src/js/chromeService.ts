@@ -37,7 +37,7 @@ export namespace chromeService {
 
     export async function setBlock(block: model.Block): Promise<void> {
       if (block.tabs.length <= 0) {
-        return removeBlock(block);
+        return removeBlock(block.indexNum);
       } else {
         return chromeService.storage.setTabData(
           block.indexNum,
@@ -46,8 +46,15 @@ export namespace chromeService {
       }
     }
 
-    export async function removeBlock(block: model.Block): Promise<void> {
-      const key = tabKey(block.indexNum);
+    /**
+     * ブロックの保存データを削除する。
+     * 復元できなかったブロック（model.BrokenBlock）も削除できるよう、
+     * model.Blockではなくindexだけを受け取る
+     * @param {number} indexNum 削除するブロックのindex
+     * @return {Promise<void>}
+     */
+    export async function removeBlock(indexNum: number): Promise<void> {
+      const key = tabKey(indexNum);
       return deleteSyncStorage(key);
     }
 
@@ -73,7 +80,7 @@ export namespace chromeService {
       });
     }
 
-    export async function getAllBlock(): Promise<model.Block[]> {
+    export async function getAllBlock(): Promise<model.BlockEntry[]> {
       const tabLength = await getTabLength();
 
       const promiseArray: Promise<[number, string]>[] = [];
@@ -84,13 +91,40 @@ export namespace chromeService {
 
       return Promise.all(promiseArray).then((result) =>
         result
-          .filter((obj) => obj[1] != null && obj[1].length > 0)
-          .map((arr) => blockService.inflateJson(arr[1], arr[0]))
+          // keyが存在しないindexは削除済みのブロックなので一覧に含めない。
+          // 空文字列は書き込みが壊れた形跡なのでBrokenBlockとして扱う
+          .filter((obj) => obj[1] != null)
+          .map((arr) => inflateEntry(arr[1], arr[0]))
           .toSorted(sortBlock),
       );
     }
 
-    const sortBlock = (a: model.Block, b: model.Block): number => {
+    /**
+     * 保存データ1件を復元する。復元に失敗した場合は例外を伝播させず
+     * BrokenBlockを返す（1件の壊れたデータで一覧全体が失われないようにする）
+     * @param {string} json 保存されていたデータ
+     * @param {number} indexNum ブロックのindex
+     * @return {model.BlockEntry} 復元したBlock or BrokenBlock
+     */
+    function inflateEntry(json: string, indexNum: number): model.BlockEntry {
+      try {
+        if (json.length <= 0) {
+          throw new Error(`Empty block data: index=${indexNum}`);
+        }
+        return blockService.inflateJson(json, indexNum);
+      } catch (e) {
+        console.error(e);
+        return { indexNum: indexNum, broken: true };
+      }
+    }
+
+    const sortBlock = (a: model.BlockEntry, b: model.BlockEntry): number => {
+      const aBroken = blockService.isBrokenBlock(a);
+      const bBroken = blockService.isBrokenBlock(b);
+      if (aBroken || bBroken) {
+        // BrokenBlockはcreatedAtが分からないため末尾に寄せる
+        return Number(aBroken) - Number(bBroken);
+      }
       return b.createdAt.getTime() - a.createdAt.getTime();
     };
   }

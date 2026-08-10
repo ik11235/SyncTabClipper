@@ -49,6 +49,12 @@
   "content_msg_not_tab": {
     "message": "There are no saved tabs."
   },
+  "content_msg_broken_block": {
+    "message": "Failed to load the data of this block."
+  },
+  "content_msg_broken_block_delete": {
+    "message": "Delete this block"
+  },
   "content_msg_open_tab_page": {
     "message": "Open Saved tabs Page"
   },

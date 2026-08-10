@@ -353,6 +353,27 @@ describe('blockService import/export', (): void => {
     );
   });
 
+  // 復元できなかったブロックはブロックJSONに戻せないため出力できない。
+  // 正常なブロックがそれに巻き込まれて欠けないことを担保する
+  test('exportAllDataJson 復元できなかったブロックは除いて出力する', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+        tabs: [
+          {
+            url: 'https://example.com/test',
+            title: 'title-test',
+          },
+        ],
+      },
+      { indexNum: 1, broken: true },
+    ]);
+    await expect(blockService.exportAllDataJson()).resolves.toBe(
+      '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
+    );
+  });
+
   test('importAllDataJson v2形式', async (): Promise<void> => {
     const json =
       '{"v":2,"ev":"0.3.0","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}';

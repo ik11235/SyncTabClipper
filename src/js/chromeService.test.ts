@@ -1,4 +1,5 @@
 import { chromeService } from './chromeService';
+import { blockService } from './blockService';
 
 describe('chromeService.errorLog', (): void => {
   let localData: { [key: string]: string };
@@ -86,5 +87,115 @@ describe('chromeService.errorLog', (): void => {
 
     expect(localData[chromeService.errorLog.errorKey]).toBeUndefined();
     expect(setBadgeText).toHaveBeenLastCalledWith({ text: '' });
+  });
+});
+
+describe('chromeService.storage.getAllBlock', (): void => {
+  let syncData: { [key: string]: string };
+  let consoleErrorSpy: jest.SpyInstance;
+
+  // 正常に復元できる非圧縮v2ブロックのJSON
+  const validJson = (createdAt: number, title: string): string =>
+    JSON.stringify({
+      v: 2,
+      ev: '9.9.9',
+      created_at: createdAt,
+      tabs: [{ url: `https://example.com/${title}`, title: title }],
+    });
+
+  beforeEach((): void => {
+    syncData = {};
+    // 復元失敗の内容はconsole.errorに出るため、テスト出力を汚さないよう抑止する
+    consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      storage: {
+        sync: {
+          get: (keys: string[]): Promise<{ [key: string]: string }> => {
+            const res: { [key: string]: string } = {};
+            for (const key of keys) {
+              const value = syncData[key];
+              if (value != null) {
+                res[key] = value;
+              }
+            }
+            return Promise.resolve(res);
+          },
+        },
+      },
+    };
+  });
+
+  afterEach((): void => {
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('全ブロックが正常なら作成日の降順で全件返る', async (): Promise<void> => {
+    syncData['t_len'] = '2';
+    syncData['td_0'] = validJson(1609556645678, 'old');
+    syncData['td_1'] = validJson(1640000000000, 'new');
+
+    const res = await chromeService.storage.getAllBlock();
+
+    expect(res).toHaveLength(2);
+    expect(res.map((entry) => entry.indexNum)).toEqual([1, 0]);
+    expect(res.some((entry) => blockService.isBrokenBlock(entry))).toBe(false);
+  });
+
+  // 1件の壊れたデータで一覧全体が失われないことの回帰テスト(#192)
+  test.each([
+    ['JSONとして壊れている', '{"v":2,"created_at":1'],
+    ['未対応バージョン', '{"v":99,"created_at":1609556645678,"tabs":[]}'],
+    ['空文字列(書き込みが壊れた形跡)', ''],
+  ])(
+    '1件が復元できない(%s)場合もBrokenBlockとして返り他のブロックは残る',
+    async (_name: string, brokenValue: string): Promise<void> => {
+      syncData['t_len'] = '2';
+      syncData['td_0'] = brokenValue;
+      syncData['td_1'] = validJson(1640000000000, 'valid');
+
+      const res = await chromeService.storage.getAllBlock();
+
+      expect(res).toHaveLength(2);
+      // BrokenBlockはcreatedAtが分からないため末尾に並ぶ
+      expect(res[0]).toStrictEqual({
+        indexNum: 1,
+        createdAt: new Date(1640000000000),
+        tabs: [{ url: 'https://example.com/valid', title: 'valid' }],
+      });
+      expect(res[1]).toStrictEqual({ indexNum: 0, broken: true });
+    },
+  );
+
+  test('復元できないブロックが複数あってもすべてBrokenBlockとして返る', async (): Promise<void> => {
+    syncData['t_len'] = '3';
+    syncData['td_0'] = '{"v":2,"created_at":1';
+    syncData['td_1'] = validJson(1640000000000, 'valid');
+    syncData['td_2'] = '';
+
+    const res = await chromeService.storage.getAllBlock();
+
+    expect(res).toHaveLength(3);
+    expect(res.filter((entry) => blockService.isBrokenBlock(entry))).toEqual([
+      { indexNum: 0, broken: true },
+      { indexNum: 2, broken: true },
+    ]);
+  });
+
+  test('keyが存在しないブロックは削除済みとして一覧に含めない', async (): Promise<void> => {
+    syncData['t_len'] = '2';
+    syncData['td_1'] = validJson(1640000000000, 'valid');
+
+    const res = await chromeService.storage.getAllBlock();
+
+    expect(res).toStrictEqual([
+      {
+        indexNum: 1,
+        createdAt: new Date(1640000000000),
+        tabs: [{ url: 'https://example.com/valid', title: 'valid' }],
+      },
+    ]);
   });
 });

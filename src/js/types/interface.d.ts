@@ -12,4 +12,18 @@ export namespace model {
     url: string;
     title: string;
   }
+
+  /**
+   * 保存データが復元できずBlockにできなかった要素
+   * indexNumだけは分かるため、一覧に出して削除だけはできるようにする
+   */
+  interface BrokenBlock {
+    indexNum: number;
+    broken: true;
+  }
+
+  /**
+   * storageから読み込んだ一覧の要素。復元できたBlockか、できなかったBrokenBlock
+   */
+  type BlockEntry = Block | BrokenBlock;
 }

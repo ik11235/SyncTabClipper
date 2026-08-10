@@ -257,6 +257,73 @@ describe('App', (): void => {
     expect(container.textContent).toContain('content_msg_menu');
   });
 
+  // 壊れたデータ1件で一覧全体が表示されなくなる不具合(#192)の回帰テスト
+  test('レンダリングで落ちるブロックがあっても他のブロックは表示される', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        // createdAtが不正なDateだとblock.tsxのtoISOString()がRangeErrorを投げる
+        createdAt: new Date('invalid'),
+        tabs: [{ url: 'https://example.com/broken', title: 'title-broken' }],
+      },
+      {
+        indexNum: 1,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/valid', title: 'title-valid' }],
+      },
+    ]);
+    // Reactが境界で捕捉した例外をconsole.errorへ出力するため抑止する
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      // 落ちたブロックは削除できるカードに差し替わり、他のブロックは残る
+      expect(container.textContent).toContain('content_msg_broken_block');
+      expect(container.textContent).not.toContain('title-broken');
+      expect(container.textContent).toContain('title-valid');
+      expect(container.textContent).not.toContain('content_msg_not_tab');
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  test('復元できなかったブロックはカードとして表示され削除できる', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/valid', title: 'title-valid' }],
+      },
+      { indexNum: 1, broken: true },
+    ]);
+    const removeBlockSpy = jest
+      .spyOn(chromeService.storage, 'removeBlock')
+      .mockResolvedValue(undefined);
+
+    try {
+      await mount();
+      expect(container.textContent).toContain('content_msg_broken_block');
+      expect(container.textContent).toContain('title-valid');
+
+      const deleteLink = container.querySelector(
+        '.broken_block_delete',
+      ) as HTMLElement;
+      await act(async () => {
+        deleteLink.click();
+      });
+
+      // indexNumだけでstorageから削除され、一覧からも消える
+      expect(removeBlockSpy).toHaveBeenCalledWith(1);
+      expect(container.textContent).not.toContain('content_msg_broken_block');
+      expect(container.textContent).toContain('title-valid');
+    } finally {
+      removeBlockSpy.mockRestore();
+    }
+  });
+
   test('Mainのレンダリング時例外でもページ全体は生き残りエラーを表示する', async (): Promise<void> => {
     // createdAtが不正なDateだとblock.tsxのtoISOString()がRangeErrorを投げる
     getAllBlockSpy.mockResolvedValue([

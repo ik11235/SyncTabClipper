@@ -44,6 +44,15 @@ describe('Tab', (): void => {
     expect(link.getAttribute('href')).toBe('https://example.com/');
   });
 
+  // chrome.tabs.Tab.urlはコミット前のタブでは空文字列になりうるため、
+  // 空urlのタブが保存されうる。ここで例外になると一覧全体が落ちる(#192)
+  test('urlが空文字列でも例外にならず描画する', async (): Promise<void> => {
+    await mount({ url: '', title: 'empty url title' });
+
+    const link = container.querySelector<HTMLAnchorElement>('a.tab_link')!;
+    expect(link.textContent).toBe('empty url title');
+  });
+
   test('&を含むタイトルとURLを二重エスケープせず表示する', async (): Promise<void> => {
     await mount({
       url: 'https://example.com/?a=1&b=2',

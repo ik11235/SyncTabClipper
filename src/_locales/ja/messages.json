@@ -49,6 +49,12 @@
   "content_msg_not_tab": {
     "message": "保存済みのタブはありません。"
   },
+  "content_msg_broken_block": {
+    "message": "このブロックのデータを読み込めませんでした。"
+  },
+  "content_msg_broken_block_delete": {
+    "message": "このブロックを削除する"
+  },
   "content_msg_open_tab_page": {
     "message": "保存済みタブのページを開く"
   },

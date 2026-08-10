@@ -24,6 +24,17 @@ export namespace blockService {
     };
   }
 
+  /**
+   * 一覧の要素が復元できなかったブロックかを判定する
+   * @param {model.BlockEntry} entry 判定する要素
+   * @return {boolean} 復元できなかったブロックならtrue
+   */
+  export function isBrokenBlock(
+    entry: model.BlockEntry,
+  ): entry is model.BrokenBlock {
+    return 'broken' in entry;
+  }
+
   function blockToJsonObj(block: model.Block): object {
     return {
       created_at: block.createdAt.getTime(),
@@ -113,11 +124,16 @@ export namespace blockService {
   }
 
   export function exportAllDataJson(): Promise<string> {
-    return chromeService.storage.getAllBlock().then((blocks) =>
+    return chromeService.storage.getAllBlock().then((entries) =>
       JSON.stringify({
         v: CURRENT_SCHEMA_VERSION,
         ev: chromeService.runtime.getExtensionVersion(),
-        blocks: blocks.map(blockToJsonObj),
+        // 復元できなかったブロックはブロックJSONに戻せないため出力できない。
+        // 対象はJSONとしてもzlibとしても解釈できなかったデータに限られるため、
+        // エクスポートから欠ける「読めるデータ」は存在しない
+        blocks: entries.flatMap((entry) =>
+          isBrokenBlock(entry) ? [] : [blockToJsonObj(entry)],
+        ),
       }),
     );
   }

@@ -3,6 +3,8 @@ import { chromeService } from '../chromeService';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
+  // 例外を捕捉したときに代わりに表示する要素。省略時は何も表示しない
+  fallback?: React.ReactNode;
 }
 
 interface ErrorBoundaryState {
@@ -29,7 +31,7 @@ export class ErrorBoundary extends React.Component<
 
   render(): React.ReactNode {
     if (this.state.hasError) {
-      return null;
+      return this.props.fallback ?? null;
     }
     return this.props.children;
   }
