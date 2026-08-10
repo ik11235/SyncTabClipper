@@ -50,10 +50,24 @@ export namespace blockService {
     d?: string;
   };
 
+  /**
+   * 保存データのcreated_atをDateに変換する。
+   * Dateとして解釈できない値（Dateの表現範囲±8.64e15を超える数値など）は
+   * エポックにフォールバックする。Invalid Dateのまま扱うと
+   * block.tsxのtoISOString()がRangeErrorになり、ソートの比較関数もNaNで
+   * 非一貫になるため。作成日が壊れていてもタブ自体は読めるので捨てない
+   * @param {number} createdAt 保存されていたcreated_at
+   * @return {Date} 作成日。解釈できない場合はエポック
+   */
+  function toCreatedAt(createdAt: number): Date {
+    const date = new Date(createdAt);
+    return Number.isNaN(date.getTime()) ? new Date(0) : date;
+  }
+
   function jsonObjToBlock(object: BlockJson, index: number): model.Block {
     return {
       indexNum: index,
-      createdAt: new Date(object.created_at),
+      createdAt: toCreatedAt(object.created_at),
       tabs: object.tabs,
     };
   }
@@ -72,7 +86,7 @@ export namespace blockService {
 
     return {
       indexNum: indexNum,
-      createdAt: new Date(js.created_at),
+      createdAt: toCreatedAt(js.created_at),
       tabs: tabs,
     };
   }
@@ -124,18 +138,29 @@ export namespace blockService {
   }
 
   export function exportAllDataJson(): Promise<string> {
-    return chromeService.storage.getAllBlock().then((entries) =>
-      JSON.stringify({
+    return chromeService.storage.getAllBlock().then((entries) => {
+      // 復元できなかったブロックはブロックJSONに戻せないため出力できない
+      const blocks = entries.flatMap((entry) =>
+        isBrokenBlock(entry) ? [] : [blockToJsonObj(entry)],
+      );
+      const brokenCount = entries.length - blocks.length;
+      if (brokenCount > 0) {
+        // 欠けたバックアップを完全なものと誤解して全データ削除に進むのを防ぐ。
+        // 通知の失敗でエクスポート自体を失敗させない
+        chromeService.errorLog
+          .set(
+            chrome.i18n.getMessage('content_msg_export_broken_block', [
+              brokenCount,
+            ]),
+          )
+          .catch(console.error);
+      }
+      return JSON.stringify({
         v: CURRENT_SCHEMA_VERSION,
         ev: chromeService.runtime.getExtensionVersion(),
-        // 復元できなかったブロックはブロックJSONに戻せないため出力できない。
-        // 対象はJSONとしてもzlibとしても解釈できなかったデータに限られるため、
-        // エクスポートから欠ける「読めるデータ」は存在しない
-        blocks: entries.flatMap((entry) =>
-          isBrokenBlock(entry) ? [] : [blockToJsonObj(entry)],
-        ),
-      }),
-    );
+        blocks: blocks,
+      });
+    });
   }
 
   function blockListForJsonObject(
@@ -162,6 +187,15 @@ export namespace blockService {
         default:
           throw new Error(`Unsupported data version: v=${json.v}`);
       }
+    }
+    // 1件でも書き込めないブロックが混ざっていると、一部だけ書き込まれた状態で
+    // setTabLengthに到達せず、書き込んだブロックが一覧に出ないまま
+    // 次回保存で上書きされる。書き込みを始める前にまとめて弾く
+    if (!Array.isArray(blockObjs)) {
+      throw new Error('Invalid data: blocks is not an array');
+    }
+    if (blockObjs.some((obj) => !Array.isArray(obj?.tabs))) {
+      throw new Error('Invalid data: block has no tabs array');
     }
     const blocks = blockListForJsonObject(blockObjs, idx);
 

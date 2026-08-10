@@ -324,7 +324,7 @@ describe('App', (): void => {
     }
   });
 
-  test('Mainのレンダリング時例外でもページ全体は生き残りエラーを表示する', async (): Promise<void> => {
+  test('ブロックのレンダリング時例外でもページ全体は生き残る', async (): Promise<void> => {
     // createdAtが不正なDateだとblock.tsxのtoISOString()がRangeErrorを投げる
     getAllBlockSpy.mockResolvedValue([
       {
@@ -341,10 +341,13 @@ describe('App', (): void => {
     try {
       await mount();
 
-      // ヘッダー・サイドバーはアンマウントされず、エラーが表示される
+      // ヘッダー・サイドバーはアンマウントされず、落ちたブロックはカードになる
       expect(container.textContent).toContain('SyncTabClipper');
       expect(container.textContent).toContain('content_msg_menu');
-      expect(container.textContent).toContain('Invalid time value');
+      expect(container.textContent).toContain('content_msg_broken_block');
+      // カード自体が表示になるため、生の例外メッセージはアラートに出さない
+      expect(container.textContent).not.toContain('Invalid time value');
+      expect(localData[chromeService.errorLog.errorKey]).toBeUndefined();
     } finally {
       consoleErrorSpy.mockRestore();
     }

@@ -111,7 +111,14 @@ export namespace chromeService {
         if (json.length <= 0) {
           throw new Error(`Empty block data: index=${indexNum}`);
         }
-        return blockService.inflateJson(json, indexNum);
+        const block = blockService.inflateJson(json, indexNum);
+        if (!Array.isArray(block.tabs)) {
+          // タブの配列を持たないブロックは描画もエクスポートもできない。
+          // ここで弾かないと、エクスポートにtabsのないブロックが出力され
+          // インポートで失敗する不完全なバックアップになる
+          throw new Error(`Invalid block data: tabs is not an array`);
+        }
+        return block;
       } catch (e) {
         console.error(e);
         return { indexNum: indexNum, broken: true };

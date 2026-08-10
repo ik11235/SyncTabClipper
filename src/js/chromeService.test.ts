@@ -1,3 +1,9 @@
+/**
+ * @jest-environment jsdom
+ *
+ * getAllBlockはブラウザ上で動くコードで、復元処理(inflateJson/zlibWrapper)も
+ * 実データで通す。node環境との差異で実挙動と乖離しないようjsdomで検証する
+ */
 import { chromeService } from './chromeService';
 import { blockService } from './blockService';
 
@@ -149,6 +155,8 @@ describe('chromeService.storage.getAllBlock', (): void => {
     ['JSONとして壊れている', '{"v":2,"created_at":1'],
     ['未対応バージョン', '{"v":99,"created_at":1609556645678,"tabs":[]}'],
     ['空文字列(書き込みが壊れた形跡)', ''],
+    ['tabsがない', '{"v":2,"created_at":1609556645678}'],
+    ['tabsが配列でない', '{"v":2,"created_at":1609556645678,"tabs":"oops"}'],
   ])(
     '1件が復元できない(%s)場合もBrokenBlockとして返り他のブロックは残る',
     async (_name: string, brokenValue: string): Promise<void> => {
@@ -181,6 +189,25 @@ describe('chromeService.storage.getAllBlock', (): void => {
     expect(res.filter((entry) => blockService.isBrokenBlock(entry))).toEqual([
       { indexNum: 0, broken: true },
       { indexNum: 2, broken: true },
+    ]);
+  });
+
+  // 作成日が壊れていてもタブ自体は読めるので、ブロックごと捨てずに残す。
+  // Invalid Dateのまま返すとblock.tsxのtoISOString()がRangeErrorになり、
+  // sortBlockの比較関数もNaNで非一貫になる
+  test('created_atがDateの表現範囲外でもタブを保ったまま返る', async (): Promise<void> => {
+    syncData['t_len'] = '1';
+    syncData['td_0'] =
+      '{"v":2,"created_at":1e20,"tabs":[{"url":"https://example.com/keep","title":"keep"}]}';
+
+    const res = await chromeService.storage.getAllBlock();
+
+    expect(res).toStrictEqual([
+      {
+        indexNum: 0,
+        createdAt: new Date(0),
+        tabs: [{ url: 'https://example.com/keep', title: 'keep' }],
+      },
     ]);
   });
 

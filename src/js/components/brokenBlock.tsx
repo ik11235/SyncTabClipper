@@ -11,7 +11,7 @@ interface BrokenBlockProps {
 // 読み込めなかったことを示して削除導線だけを提供する
 const BrokenBlock: React.FC<BrokenBlockProps> = (props) => {
   return (
-    <div className="tabs uk-card-default block-root-dom broken-block-root-dom">
+    <div className="tabs uk-card-default block-root-dom">
       <div className="uk-card-header">
         <h3 className="uk-card-title uk-margin-remove-bottom">
           {chrome.i18n.getMessage('content_msg_broken_block')}
