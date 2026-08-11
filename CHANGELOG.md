@@ -1,6 +1,9 @@
-# Unreleased
+# v0.6.0 (2026-08-11)
 
-- [UPDATE] 対応ブラウザを Chrome 120 以降に変更 (minimum_chrome_version)、URL 判定を try/catch から `URL.canParse` に置き換え
+- [UPDATE] 対応ブラウザを Chrome 120 以降に変更 (minimum_chrome_version)、URL 判定を try/catch から `URL.canParse` に置き換え (#234)
+- [UPDATE] 「すべてのデータを削除する」をメニュー末尾の折りたたみ式「上級者向け」サブメニューへ移動し、警告色と注意書きを追加 (#207, #208)
+- [FIX] ブラウザがダークテーマのときツールバーアイコンが視認しづらい問題を修正 (半透明白の縁取りを追加、アイコンを 16/32/48/128 の全サイズ登録) (#193, #198)
+- [DEV] uikit を 3.25.21 に更新 (#231)
 
 # v0.5.1 (2026-08-11)
 
