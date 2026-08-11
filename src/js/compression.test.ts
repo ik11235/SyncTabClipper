@@ -19,10 +19,14 @@ describe('compression', () => {
     );
   });
 
-  test('compressの出力がゴールデンフィクスチャと一致する', async (): Promise<void> => {
-    await expect(compression.compress(originalJson)).resolves.toBe(
-      v3CompressedBase64,
-    );
+  // deflate-rawの圧縮出力バイト列は仕様で定まっておらず実装依存のため、
+  // 「compressの出力がフィクスチャと一致する」ことは検証しない（Chromeでの
+  // 出力を保証せず、Nodeのzlib実装が変われば偽陽性で落ちる）。
+  // 互換性の本質はdecompress側にあり、compress側は往復で担保する
+  test('compressの出力を自前でdecompressできる', async (): Promise<void> => {
+    await expect(
+      compression.compress(originalJson).then(compression.decompress),
+    ).resolves.toBe(originalJson);
   });
 
   test('compress→decompressの往復で元に戻る', async (): Promise<void> => {
