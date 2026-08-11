@@ -1,3 +1,8 @@
+# Unreleased
+
+- [FIX] uikit の CSS が npm の JS より古いバージョンのまま取り残されていた問題を修正 (`src/css` のコピーを廃止し npm パッケージから直接読み込むように変更)
+- [DEV] `build` / `build:prod` を `npm ci` から始めるようにし、あわせて `build:prod` では `dist` / `archive.zip` を作り直して、古い依存や前回の成果物が配布パッケージに混入しないように
+
 # v0.6.0 (2026-08-11)
 
 - [UPDATE] 対応ブラウザを Chrome 120 以降に変更 (minimum_chrome_version)、URL 判定を try/catch から `URL.canParse` に置き換え (#234)
