@@ -4,10 +4,12 @@
 import { blockService } from './blockService';
 import { chromeService } from './chromeService';
 import { compression } from './compression';
+import { model } from './types/interface';
 import { zlibWrapper } from './zlib-wrapper';
 
 // spyOnで差し替える前の実装をゴールデンフィクスチャのテスト用に確保する
 const actualZlibInflate = zlibWrapper.inflate;
+const actualCompress = compression.compress;
 const actualDecompress = compression.decompress;
 
 let compressSpy: jest.SpyInstance;
@@ -444,6 +446,31 @@ describe('blockService 旧形式ゴールデンフィクスチャ(実データ�
       expected,
     );
   });
+
+  // 他のdeflateBlockテストはcompressをモックしており、エンベロープ生成と
+  // 実圧縮の合成は検証されていない。実装を通した往復で担保する
+  test.each([
+    ['圧縮が選ばれるブロック', expected],
+    [
+      '非圧縮が選ばれるブロック',
+      {
+        indexNum: 1,
+        createdAt: new Date(1609556645678),
+        tabs: [{ url: 'https://example.com/a', title: 'a' }],
+      },
+    ],
+  ])(
+    'deflateBlock→inflateJson(%s)がモックなしで元に戻る',
+    async (_name: string, block: model.Block): Promise<void> => {
+      compressSpy.mockImplementationOnce(actualCompress);
+      decompressSpy.mockImplementationOnce(actualDecompress);
+
+      const stored = await blockService.deflateBlock(block);
+      await expect(blockService.inflateJson(stored, 1)).resolves.toStrictEqual(
+        block,
+      );
+    },
+  );
 });
 
 describe('blockService import/export', (): void => {
