@@ -46,6 +46,12 @@
   "content_msg_menu": {
     "message": "メニュー"
   },
+  "content_msg_advanced_menu": {
+    "message": "上級者向け"
+  },
+  "content_msg_destructive_warning": {
+    "message": "保存したすべてのタブを削除します。元に戻せません。"
+  },
   "content_msg_not_tab": {
     "message": "保存済みのタブはありません。"
   },

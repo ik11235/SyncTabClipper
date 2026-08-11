@@ -46,6 +46,12 @@
   "content_msg_menu": {
     "message": "Menu"
   },
+  "content_msg_advanced_menu": {
+    "message": "Advanced"
+  },
+  "content_msg_destructive_warning": {
+    "message": "Deletes all saved tabs. This cannot be undone."
+  },
   "content_msg_not_tab": {
     "message": "There are no saved tabs."
   },
