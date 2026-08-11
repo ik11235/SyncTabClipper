@@ -1,9 +1,7 @@
 /**
  * @jest-environment jsdom
  *
- * node環境のURLはURLでない文字列に対しcode: 'ERR_INVALID_URL'を持つエラーを投げるが、
- * ブラウザのURLはcodeを持たないTypeErrorを投げる。この差でnode環境のテストは
- * 実挙動を検証できないため、拡張機能と同じjsdomで検証する
+ * URLの解釈はnode環境とブラウザで挙動が異なるため、拡張機能と同じjsdomで検証する
  */
 import { util } from './util';
 

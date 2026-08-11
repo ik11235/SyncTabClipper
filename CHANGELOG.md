@@ -1,3 +1,7 @@
+# Unreleased
+
+- [UPDATE] 対応ブラウザを Chrome 120 以降に変更 (minimum_chrome_version)、URL 判定を try/catch から `URL.canParse` に置き換え
+
 # v0.5.1 (2026-08-11)
 
 - [FIX] 読み込めない保存データが 1 件あるとタブ一覧全体が表示されなくなる問題を修正 (#192, #230)
