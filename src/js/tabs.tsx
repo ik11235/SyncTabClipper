@@ -2,7 +2,8 @@ import UIkit from 'uikit';
 import Icons from 'uikit/dist/js/uikit-icons';
 import { createRoot } from 'react-dom/client';
 import App from './components/app';
-import '../css/uikit.min.css';
+// CSSもnpmのuikitから読み込む。src/cssにコピーを置くとJS側とバージョンがずれるため
+import 'uikit/dist/css/uikit.min.css';
 // UIkitを上書きするため必ずuikitの後に読み込む
 import '../css/app.css';
 

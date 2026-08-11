@@ -1,3 +1,7 @@
+# Unreleased
+
+- [FIX] uikit の CSS が npm の JS より古いバージョンのまま取り残されていた問題を修正 (`src/css` のコピーを廃止し npm パッケージから直接読み込むように変更)
+
 # v0.6.0 (2026-08-11)
 
 - [UPDATE] 対応ブラウザを Chrome 120 以降に変更 (minimum_chrome_version)、URL 判定を try/catch から `URL.canParse` に置き換え (#234)
