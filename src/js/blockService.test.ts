@@ -463,6 +463,8 @@ describe('blockService import/export', (): void => {
     setTabLengthSpy.mockRestore();
   });
 
+  // 保存側がv3になってもエクスポート形式はv2から変わらない。ここでv3を出すと
+  // 旧バージョンの拡張機能でインポートできなくなるだけなので据え置く
   test('exportAllDataJson バージョン情報付きで出力する', async (): Promise<void> => {
     getAllBlockSpy.mockResolvedValue([
       {
@@ -477,7 +479,7 @@ describe('blockService import/export', (): void => {
       },
     ]);
     await expect(blockService.exportAllDataJson()).resolves.toStrictEqual({
-      json: '{"v":3,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
+      json: '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
       brokenCount: 0,
     });
   });
@@ -501,7 +503,7 @@ describe('blockService import/export', (): void => {
     ]);
 
     await expect(blockService.exportAllDataJson()).resolves.toStrictEqual({
-      json: '{"v":3,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
+      json: '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
       brokenCount: 2,
     });
   });
@@ -522,26 +524,6 @@ describe('blockService import/export', (): void => {
     } finally {
       errorLogSetSpy.mockRestore();
     }
-  });
-
-  test('importAllDataJson v3形式', async (): Promise<void> => {
-    const json =
-      '{"v":3,"ev":"1.0.0","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}';
-
-    await blockService.importAllDataJson(json);
-    expect(setBlockSpy).toHaveBeenCalledTimes(1);
-    expect(setBlockSpy.mock.calls[0][0]).toStrictEqual({
-      indexNum: 3,
-      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
-      tabs: [
-        {
-          url: 'https://example.com/test',
-          title: 'title-test',
-        },
-      ],
-    });
-    expect(setTabLengthSpy).toHaveBeenCalledWith(4);
-    expect(reload).toHaveBeenCalledTimes(1);
   });
 
   test('importAllDataJson v2形式', async (): Promise<void> => {

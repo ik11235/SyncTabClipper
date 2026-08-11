@@ -4,11 +4,16 @@ import { compression } from './compression';
 import { chromeService } from './chromeService';
 
 export namespace blockService {
-  // 保存データ・エクスポートJSONのスキーマ版数
+  // storage.syncに保存するデータのスキーマ版数
   // バージョン情報を持たない従来形式を暗黙のv1とみなし、v2からフィールドを付与する
   // v3から圧縮方式をzlib.jsからネイティブCompressionStream(deflate-raw)に変更
   // 移行は遅延移行: 読み取りはv1/v2/v3すべてに対応し、保存は常にv3で行う
   export const CURRENT_SCHEMA_VERSION = 3;
+
+  // エクスポートJSONのスキーマ版数。エクスポートは非圧縮のため圧縮方式の変更に
+  // 影響されず、v2から形式が変わっていない。保存側に追随して上げると旧バージョンの
+  // 拡張機能でインポートできなくなるだけなので、形式が変わるまでv2に据え置く
+  export const CURRENT_EXPORT_VERSION = 2;
 
   export function createBlock(
     tabs: chrome.tabs.Tab[],
@@ -179,7 +184,7 @@ export namespace blockService {
       );
       return {
         json: JSON.stringify({
-          v: CURRENT_SCHEMA_VERSION,
+          v: CURRENT_EXPORT_VERSION,
           ev: chromeService.runtime.getExtensionVersion(),
           blocks: blocks,
         }),
@@ -207,8 +212,6 @@ export namespace blockService {
     } else {
       switch (json.v) {
         case 2:
-        case 3:
-          // エクスポートJSONは非圧縮のため、v2/v3で形式は同一
           blockObjs = json.blocks;
           break;
         default:
