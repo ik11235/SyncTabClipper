@@ -3,14 +3,23 @@
  */
 import { blockService } from './blockService';
 import { chromeService } from './chromeService';
+import { compression } from './compression';
+import { model } from './types/interface';
 import { zlibWrapper } from './zlib-wrapper';
 
-let deflateSpy: jest.SpyInstance;
+// spyOnで差し替える前の実装をゴールデンフィクスチャのテスト用に確保する
+const actualZlibInflate = zlibWrapper.inflate;
+const actualCompress = compression.compress;
+const actualDecompress = compression.decompress;
+
+let compressSpy: jest.SpyInstance;
+let decompressSpy: jest.SpyInstance;
 let inflateSpy: jest.SpyInstance;
 let versionSpy: jest.SpyInstance;
 
 beforeAll(() => {
-  deflateSpy = jest.spyOn(zlibWrapper, 'deflate');
+  compressSpy = jest.spyOn(compression, 'compress');
+  decompressSpy = jest.spyOn(compression, 'decompress');
   inflateSpy = jest.spyOn(zlibWrapper, 'inflate');
   versionSpy = jest.spyOn(chromeService.runtime, 'getExtensionVersion');
 });
@@ -20,7 +29,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  deflateSpy.mockReset();
+  compressSpy.mockReset();
+  decompressSpy.mockReset();
   inflateSpy.mockReset();
   versionSpy.mockReset();
 });
@@ -124,8 +134,8 @@ describe('blockService', (): void => {
     expect(res).toStrictEqual(expected);
   });
 
-  test('deflateBlock 非圧縮時', (): void => {
-    deflateSpy.mockReturnValueOnce(
+  test('deflateBlock 非圧縮時', async (): Promise<void> => {
+    compressSpy.mockResolvedValueOnce(
       'eNpSNXdSNTJKLkpNLElNiU8sAXJUjR0NzQwsTU3NzExMzcwtVI2cgaIliUnFEElVUydVsK7SohyoiJFRRklJQTGY6QZEqRWJuQU5qXrJ+blAXklqMdhciDmZJTmpcG1gni5MgbmLqqkLkAQAAAD//w==',
     );
 
@@ -140,17 +150,17 @@ describe('blockService', (): void => {
       ],
     };
     const expected =
-      '{"v":2,"ev":"9.9.9","created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}';
-    expect(blockService.deflateBlock(block)).toBe(expected);
-    expect(deflateSpy.mock.calls[0]).toEqual([
+      '{"v":3,"ev":"9.9.9","created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}';
+    await expect(blockService.deflateBlock(block)).resolves.toBe(expected);
+    expect(compressSpy.mock.calls[0]).toEqual([
       '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}',
     ]);
-    expect(deflateSpy).toHaveBeenCalledTimes(1);
+    expect(compressSpy).toHaveBeenCalledTimes(1);
   });
 
-  test('deflateBlock 圧縮時', (): void => {
-    deflateSpy.mockReturnValueOnce(
-      'eNqkzNEKwjAMBdCvyaOiadPqo3P4G1JnmEJHxxrBz7e2cyAoA4VSetObA7YCxGZgJ3w+OkkB1G5tVlsiYzQZuwHcp6m4UyyfQBXkrdvgxwniRaSP+XlIh++u6z0vm9ClJByzW5yreJ7Wclq8CrZ+dj7aE92G0L7J+IUuxf9sNW8r9bOu53WtR53qdD8AAAD//w==',
+  test('deflateBlock 圧縮時', async (): Promise<void> => {
+    compressSpy.mockResolvedValueOnce(
+      'q1ZKLkpNLElNiU8sUbIyNDOwNDU1MzMxNTO30FEqSUwqVrKKrlYqLcpRslLKKCkpKLbS10+tSMwtyEnVS87P1S9JLS5R0lEqySzJSVWygtC6YMFaHWR9Vvr66fn5SLqMkLRBpHTBOmv1cxLzUnNK9JJz4pOTgFYUJyZDzDWGmVsLCAAA//8=',
     );
 
     const block = {
@@ -176,19 +186,37 @@ describe('blockService', (): void => {
       ],
     };
     const expected =
-      '{"v":2,"ev":"9.9.9","d":"eNqkzNEKwjAMBdCvyaOiadPqo3P4G1JnmEJHxxrBz7e2cyAoA4VSetObA7YCxGZgJ3w+OkkB1G5tVlsiYzQZuwHcp6m4UyyfQBXkrdvgxwniRaSP+XlIh++u6z0vm9ClJByzW5yreJ7Wclq8CrZ+dj7aE92G0L7J+IUuxf9sNW8r9bOu53WtR53qdD8AAAD//w=="}';
-    expect(blockService.deflateBlock(block)).toBe(expected);
-    expect(deflateSpy.mock.calls[0]).toEqual([
+      '{"v":3,"ev":"9.9.9","d":"q1ZKLkpNLElNiU8sUbIyNDOwNDU1MzMxNTO30FEqSUwqVrKKrlYqLcpRslLKKCkpKLbS10+tSMwtyEnVS87P1S9JLS5R0lEqySzJSVWygtC6YMFaHWR9Vvr66fn5SLqMkLRBpHTBOmv1cxLzUnNK9JJz4pOTgFYUJyZDzDWGmVsLCAAA//8="}';
+    await expect(blockService.deflateBlock(block)).resolves.toBe(expected);
+    expect(compressSpy.mock.calls[0]).toEqual([
       '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"},{"url":"http://google.com/test2","title":"google-test"},{"url":"http://google.com/test3","title":"google-test33"},{"url":"http://google.com/test4","title":"google-test44"}]}',
     ]);
-    expect(deflateSpy).toHaveBeenCalledTimes(1);
+    expect(compressSpy).toHaveBeenCalledTimes(1);
   });
 
-  test('inflateJson v1非圧縮データ(バージョン表記なし)', (): void => {
-    inflateSpy.mockReturnValueOnce(
-      '{"created_at":1627200615501,"tabs":[{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"SyncTabClipper"},{"url":"chrome://extensions/","title":"拡張機能"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"SyncTabClipper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"SyncTabClipper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"SyncTabClipper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"SyncTabClipper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"SyncTabClipper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"SyncTabClipper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"SyncTabClipper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"SyncTabClipper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"SyncTabClipper"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"SyncTabClipper"},{"url":"chrome://newtab/","title":"新しいタブ"},{"url":"chrome-extension://djamgplmdfdnghbcpfgpbfadipbgihbi/tabs.html","title":"SyncTabClipper"}]}',
-    );
+  // storage.syncの8KB/item制限はUTF-8バイト数で数えるため、文字数で比べると
+  // 日本語主体のブロックで非圧縮側が選ばれ、バイト数では制限を超えうる
+  test('deflateBlock 圧縮/非圧縮の判定は文字数ではなくUTF-8バイト数で行う', async (): Promise<void> => {
+    const compressed = 'A'.repeat(160);
+    compressSpy.mockResolvedValueOnce(compressed);
 
+    const block = {
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [{ url: 'https://example.com/t', title: 'あ'.repeat(80) }],
+    };
+    const res = await blockService.deflateBlock(block);
+
+    const plain = `{"v":3,"ev":"9.9.9","created_at":1609556645678,"tabs":[{"url":"https://example.com/t","title":"${'あ'.repeat(80)}"}]}`;
+    // 文字数では非圧縮の方が短いが、UTF-8バイト数では圧縮の方が短い状況
+    expect(res.length).toBeGreaterThan(plain.length);
+    expect(new TextEncoder().encode(res).length).toBeLessThan(
+      new TextEncoder().encode(plain).length,
+    );
+    expect(res).toBe(`{"v":3,"ev":"9.9.9","d":"${compressed}"}`);
+  });
+
+  test('inflateJson v1非圧縮データ(バージョン表記なし)', async (): Promise<void> => {
     const input =
       '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"},{"url":"http://google.com/test2","title":"google-test"}]}';
     const indexNum = 1;
@@ -206,11 +234,13 @@ describe('blockService', (): void => {
         },
       ],
     };
-    expect(blockService.inflateJson(input, indexNum)).toStrictEqual(expected);
+    await expect(
+      blockService.inflateJson(input, indexNum),
+    ).resolves.toStrictEqual(expected);
     expect(inflateSpy).toHaveBeenCalledTimes(0);
   });
 
-  test('inflateJson v1圧縮データ(バージョン表記なし)', (): void => {
+  test('inflateJson v1圧縮データ(バージョン表記なし)', async (): Promise<void> => {
     inflateSpy.mockReturnValueOnce(
       '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"},{"url":"http://google.com/test2","title":"google-test"},{"url":"http://google.com/test3","title":"google-test33"},{"url":"http://google.com/test4","title":"google-test44"}]}',
     );
@@ -241,7 +271,9 @@ describe('blockService', (): void => {
         },
       ],
     };
-    expect(blockService.inflateJson(input, indexNum)).toStrictEqual(expected);
+    await expect(
+      blockService.inflateJson(input, indexNum),
+    ).resolves.toStrictEqual(expected);
     expect(inflateSpy.mock.calls[0]).toEqual([
       'eNqkzNEKwjAMBdCvyaOiadPqo3P4G1JnmEJHxxrBz7e2cyAoA4VSetObA7YCxGZgJ3w+OkkB1G5tVlsiYzQZuwHcp6m4UyyfQBXkrdvgxwniRaSP+XlIh++u6z0vm9ClJByzW5yreJ7Wclq8CrZ+dj7aE92G0L7J+IUuxf9sNW8r9bOu53WtR53qdD8AAAD//w==',
     ]);
@@ -249,7 +281,7 @@ describe('blockService', (): void => {
     expect(inflateSpy).toHaveBeenCalledTimes(1);
   });
 
-  test('inflateJson v2非圧縮データ', (): void => {
+  test('inflateJson v2非圧縮データ', async (): Promise<void> => {
     const input =
       '{"v":2,"ev":"0.3.0","created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}';
     const expected = {
@@ -262,11 +294,13 @@ describe('blockService', (): void => {
         },
       ],
     };
-    expect(blockService.inflateJson(input, 1)).toStrictEqual(expected);
+    await expect(blockService.inflateJson(input, 1)).resolves.toStrictEqual(
+      expected,
+    );
     expect(inflateSpy).toHaveBeenCalledTimes(0);
   });
 
-  test('inflateJson v2圧縮データ', (): void => {
+  test('inflateJson v2圧縮データ', async (): Promise<void> => {
     inflateSpy.mockReturnValueOnce(
       '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}',
     );
@@ -282,27 +316,161 @@ describe('blockService', (): void => {
         },
       ],
     };
-    expect(blockService.inflateJson(input, 1)).toStrictEqual(expected);
+    await expect(blockService.inflateJson(input, 1)).resolves.toStrictEqual(
+      expected,
+    );
     expect(inflateSpy.mock.calls[0]).toEqual(['compressed-data']);
     expect(inflateSpy).toHaveBeenCalledTimes(1);
+    expect(decompressSpy).toHaveBeenCalledTimes(0);
   });
 
-  test('inflateJson 未対応バージョンはエラー(圧縮)', (): void => {
-    const input = '{"v":99,"ev":"99.0.0","d":"compressed-data"}';
-    expect(() => blockService.inflateJson(input, 1)).toThrow(
-      'Unsupported data version: v=99',
+  test('inflateJson v3非圧縮データ', async (): Promise<void> => {
+    const input =
+      '{"v":3,"ev":"1.0.0","created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}';
+    const expected = {
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [
+        {
+          url: 'https://example.com/test',
+          title: 'title-test',
+        },
+      ],
+    };
+    await expect(blockService.inflateJson(input, 1)).resolves.toStrictEqual(
+      expected,
     );
+    expect(decompressSpy).toHaveBeenCalledTimes(0);
     expect(inflateSpy).toHaveBeenCalledTimes(0);
   });
 
-  test('inflateJson 未対応バージョンはエラー(非圧縮)', (): void => {
+  test('inflateJson v3圧縮データ', async (): Promise<void> => {
+    decompressSpy.mockResolvedValueOnce(
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}',
+    );
+
+    const input = '{"v":3,"ev":"1.0.0","d":"compressed-data"}';
+    const expected = {
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [
+        {
+          url: 'https://example.com/test',
+          title: 'title-test',
+        },
+      ],
+    };
+    await expect(blockService.inflateJson(input, 1)).resolves.toStrictEqual(
+      expected,
+    );
+    expect(decompressSpy.mock.calls[0]).toEqual(['compressed-data']);
+    expect(decompressSpy).toHaveBeenCalledTimes(1);
+    expect(inflateSpy).toHaveBeenCalledTimes(0);
+  });
+
+  test('inflateJson 未対応バージョンはエラー(圧縮)', async (): Promise<void> => {
+    const input = '{"v":99,"ev":"99.0.0","d":"compressed-data"}';
+    await expect(blockService.inflateJson(input, 1)).rejects.toThrow(
+      'Unsupported data version: v=99',
+    );
+    expect(inflateSpy).toHaveBeenCalledTimes(0);
+    expect(decompressSpy).toHaveBeenCalledTimes(0);
+  });
+
+  test('inflateJson 未対応バージョンはエラー(非圧縮)', async (): Promise<void> => {
     const input =
       '{"v":99,"ev":"99.0.0","created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}';
-    expect(() => blockService.inflateJson(input, 1)).toThrow(
+    await expect(blockService.inflateJson(input, 1)).rejects.toThrow(
       'Unsupported data version: v=99',
     );
     expect(inflateSpy).toHaveBeenCalledTimes(0);
+    expect(decompressSpy).toHaveBeenCalledTimes(0);
   });
+});
+
+describe('blockService 旧形式ゴールデンフィクスチャ(実データ互換)', (): void => {
+  // Manifest V2時点(master)のzlib実装で生成した圧縮データ
+  const masterDeflatedBase64 =
+    'eNqMj10OgjAQhE+zjxostJTH8tNrmIoNaDAg1MTjOy1IYpTEZLOZ2e432VKaE2P1aI2z56NxMBSrg4gyzoVIuEglsQJTZ07T/Eg8p0A9xm6ZMNY6N0xBapR9mtvQ2X3d3+CcnULunHNxnV2x4HbvhbT0Oz+z1+im75uPZLYRPS/+k/1993WAGYxrKdZ3ioHySqBlKZriqy289a2SXik/qzbuISDgQXtREDhQYEBUMUlGuV6ESoJAyUWonHREmaZMkYyW//AS/QUAAP//';
+
+  // v3(deflate-raw + UTF-8 + base64)形式で生成した同一内容の圧縮データ
+  const v3CompressedBase64 =
+    'q1ZKLkpNLElNiU8sUbIyNDOwNDU1MzMxNTO30FEqSUwqVrKKrlYqLcpRslLKKCkpKLbS10+tSMwtyEnVS87P1S9JLS5R0lEqySzJSVWygtC6YMFaHWR9Vvr66fn56Ui6jJC0QaSw6UO2L6tAvyCxJMO+0FbV1UzV0lzV0RTMcFZ1dFZ1tVB1dFS1dEUy9dn0pc/mrHmxat7jpv2Pm5Y8bu543Lz6w/xZDUq1sbUA';
+
+  const expected = {
+    indexNum: 1,
+    createdAt: new Date(1609556645678),
+    tabs: [
+      {
+        url: 'https://example.com/test',
+        title: 'title-test',
+      },
+      {
+        url: 'http://google.com/test2',
+        title: 'google-test',
+      },
+      {
+        url: 'https://example.jp/path?q=%E6%97%A5%E6%9C%AC%E8%AA%9E',
+        title: '日本語タイトル🚀',
+      },
+    ],
+  };
+
+  test('v1圧縮データ(素のzlib+base64文字列)を読める', async (): Promise<void> => {
+    inflateSpy.mockImplementationOnce(actualZlibInflate);
+    await expect(
+      blockService.inflateJson(masterDeflatedBase64, 1),
+    ).resolves.toStrictEqual(expected);
+  });
+
+  test('v2圧縮データ(エンベロープ形式)を読める', async (): Promise<void> => {
+    inflateSpy.mockImplementationOnce(actualZlibInflate);
+    const input = JSON.stringify({
+      v: 2,
+      ev: '0.3.0',
+      d: masterDeflatedBase64,
+    });
+    await expect(blockService.inflateJson(input, 1)).resolves.toStrictEqual(
+      expected,
+    );
+  });
+
+  test('v3圧縮データ(エンベロープ形式)を読める', async (): Promise<void> => {
+    decompressSpy.mockImplementationOnce(actualDecompress);
+    const input = JSON.stringify({
+      v: 3,
+      ev: '1.0.0',
+      d: v3CompressedBase64,
+    });
+    await expect(blockService.inflateJson(input, 1)).resolves.toStrictEqual(
+      expected,
+    );
+  });
+
+  // 他のdeflateBlockテストはcompressをモックしており、エンベロープ生成と
+  // 実圧縮の合成は検証されていない。実装を通した往復で担保する
+  test.each([
+    ['圧縮が選ばれるブロック', expected],
+    [
+      '非圧縮が選ばれるブロック',
+      {
+        indexNum: 1,
+        createdAt: new Date(1609556645678),
+        tabs: [{ url: 'https://example.com/a', title: 'a' }],
+      },
+    ],
+  ])(
+    'deflateBlock→inflateJson(%s)がモックなしで元に戻る',
+    async (_name: string, block: model.Block): Promise<void> => {
+      compressSpy.mockImplementationOnce(actualCompress);
+      decompressSpy.mockImplementationOnce(actualDecompress);
+
+      const stored = await blockService.deflateBlock(block);
+      await expect(blockService.inflateJson(stored, 1)).resolves.toStrictEqual(
+        block,
+      );
+    },
+  );
 });
 
 describe('blockService import/export', (): void => {
@@ -344,6 +512,16 @@ describe('blockService import/export', (): void => {
     setTabLengthSpy.mockRestore();
   });
 
+  // エクスポート版数を上げたときにインポート側の受け入れ追加を忘れると、
+  // 自分が出力したJSONを読めなくなる
+  test('エクスポートした版数はインポートで受け付けられる', (): void => {
+    expect(blockService.SUPPORTED_EXPORT_VERSIONS).toContain(
+      blockService.CURRENT_EXPORT_VERSION,
+    );
+  });
+
+  // 保存側がv3になってもエクスポート形式はv2から変わらない。ここでv3を出すと
+  // 旧バージョンの拡張機能でインポートできなくなるだけなので据え置く
   test('exportAllDataJson バージョン情報付きで出力する', async (): Promise<void> => {
     getAllBlockSpy.mockResolvedValue([
       {

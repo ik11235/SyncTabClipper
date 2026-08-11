@@ -1,11 +1,24 @@
 import { model } from './types/interface';
 import { zlibWrapper } from './zlib-wrapper';
+import { compression } from './compression';
 import { chromeService } from './chromeService';
 
 export namespace blockService {
-  // 保存データ・エクスポートJSONのスキーマ版数
+  // storage.syncに保存するデータのスキーマ版数
   // バージョン情報を持たない従来形式を暗黙のv1とみなし、v2からフィールドを付与する
-  export const CURRENT_SCHEMA_VERSION = 2;
+  // v3から圧縮方式をzlib.jsからネイティブCompressionStream(deflate-raw)に変更
+  // 移行は遅延移行: 読み取りはv1/v2/v3すべてに対応し、保存は常にv3で行う
+  export const CURRENT_SCHEMA_VERSION = 3;
+
+  // エクスポートJSONのスキーマ版数。エクスポートは非圧縮のため圧縮方式の変更に
+  // 影響されず、v2から形式が変わっていない。保存側に追随して上げると旧バージョンの
+  // 拡張機能でインポートできなくなるだけなので、形式が変わるまでv2に据え置く
+  export const CURRENT_EXPORT_VERSION = 2;
+
+  // インポートで受け付けるエクスポートJSONの版数。過去に出力したJSONを読めなく
+  // しないため、CURRENT_EXPORT_VERSIONを上げるときは古い版数を残したまま追加する
+  // （v1のエクスポートはブロックの素の配列で版数を持たないため、ここには含めない）
+  export const SUPPORTED_EXPORT_VERSIONS: readonly number[] = [2];
 
   export function createBlock(
     tabs: chrome.tabs.Tab[],
@@ -100,7 +113,10 @@ export namespace blockService {
     };
   }
 
-  export function inflateJson(jsonStr: string, indexNum: number): model.Block {
+  export async function inflateJson(
+    jsonStr: string,
+    indexNum: number,
+  ): Promise<model.Block> {
     let js: BlockJson;
     try {
       js = JSON.parse(jsonStr);
@@ -123,6 +139,11 @@ export namespace blockService {
         return js.d == null
           ? jsonObjToBlock(js, indexNum)
           : jsonToBlock(zlibWrapper.inflate(js.d), indexNum);
+      case 3:
+        // v3はdフィールドがdeflate-raw+UTF-8+base64の圧縮ペイロード
+        return js.d == null
+          ? jsonObjToBlock(js, indexNum)
+          : jsonToBlock(await compression.decompress(js.d), indexNum);
       default:
         throw new UnsupportedVersionError(
           `Unsupported data version: v=${version}`,
@@ -130,7 +151,7 @@ export namespace blockService {
     }
   }
 
-  export function deflateBlock(block: model.Block): string {
+  export async function deflateBlock(block: model.Block): Promise<string> {
     // 圧縮アルゴリズムの変更に備え、バージョン情報は圧縮ペイロードの外側に置く
     const version = {
       v: CURRENT_SCHEMA_VERSION,
@@ -139,13 +160,20 @@ export namespace blockService {
     const blockStr = JSON.stringify({ ...version, ...blockToJsonObj(block) });
     const deflateStr = JSON.stringify({
       ...version,
-      d: zlibWrapper.deflate(blockToJson(block)),
+      d: await compression.compress(blockToJson(block)),
     });
-    if (deflateStr.length < blockStr.length) {
+    // storage.syncの8KB/item制限はUTF-8バイト数で数えるため、文字数ではなく
+    // バイト数で比較する。日本語主体のブロックでは1文字が3バイトになり、
+    // 文字数では短く見える非圧縮側が制限を超えることがある
+    if (utf8ByteLength(deflateStr) < utf8ByteLength(blockStr)) {
       return deflateStr;
     } else {
       return blockStr;
     }
+  }
+
+  function utf8ByteLength(val: string): number {
+    return new TextEncoder().encode(val).length;
   }
 
   /**
@@ -168,7 +196,7 @@ export namespace blockService {
       );
       return {
         json: JSON.stringify({
-          v: CURRENT_SCHEMA_VERSION,
+          v: CURRENT_EXPORT_VERSION,
           ev: chromeService.runtime.getExtensionVersion(),
           blocks: blocks,
         }),
@@ -194,13 +222,10 @@ export namespace blockService {
       // v1のエクスポートはブロックの素の配列
       blockObjs = json;
     } else {
-      switch (json.v) {
-        case 2:
-          blockObjs = json.blocks;
-          break;
-        default:
-          throw new Error(`Unsupported data version: v=${json.v}`);
+      if (!SUPPORTED_EXPORT_VERSIONS.includes(json.v)) {
+        throw new Error(`Unsupported data version: v=${json.v}`);
       }
+      blockObjs = json.blocks;
     }
     // 1件でも書き込めないブロックが混ざっていると、一部だけ書き込まれた状態で
     // setTabLengthに到達せず、書き込んだブロックが一覧に出ないまま
