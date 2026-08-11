@@ -13,6 +13,7 @@ import { chromeService } from '../chromeService';
 
 describe('App', (): void => {
   let localData: { [key: string]: string };
+  let syncData: { [key: string]: string };
   let onChangedListeners: Array<
     (
       changes: { [key: string]: chrome.storage.StorageChange },
@@ -32,6 +33,7 @@ describe('App', (): void => {
 
   beforeEach((): void => {
     localData = {};
+    syncData = {};
     onChangedListeners = [];
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -77,6 +79,16 @@ describe('App', (): void => {
         sync: {
           QUOTA_BYTES: 102400,
           getBytesInUse: (): Promise<number> => Promise.resolve(0),
+          get: (keys: string[]): Promise<{ [key: string]: string }> => {
+            const res: { [key: string]: string } = {};
+            for (const key of keys) {
+              const value = syncData[key];
+              if (value != null) {
+                res[key] = value;
+              }
+            }
+            return Promise.resolve(res);
+          },
         },
         onChanged: {
           addListener: (
@@ -257,7 +269,434 @@ describe('App', (): void => {
     expect(container.textContent).toContain('content_msg_menu');
   });
 
-  test('Mainのレンダリング時例外でもページ全体は生き残りエラーを表示する', async (): Promise<void> => {
+  // 壊れたデータ1件で一覧全体が表示されなくなる不具合(#192)の回帰テスト
+  test('レンダリングで落ちるブロックがあっても他のブロックは表示される', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        // createdAtが不正なDateだとblock.tsxのtoISOString()がRangeErrorを投げる
+        createdAt: new Date('invalid'),
+        tabs: [{ url: 'https://example.com/broken', title: 'title-broken' }],
+      },
+      {
+        indexNum: 1,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/valid', title: 'title-valid' }],
+      },
+    ]);
+    // Reactが境界で捕捉した例外をconsole.errorへ出力するため抑止する
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      // 落ちたブロックは削除できるカードに差し替わり、他のブロックは残る
+      expect(container.textContent).toContain('content_msg_broken_block');
+      expect(container.textContent).not.toContain('title-broken');
+      expect(container.textContent).toContain('title-valid');
+      expect(container.textContent).not.toContain('content_msg_not_tab');
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  test('復元できなかったブロックはカードとして表示され削除できる', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/valid', title: 'title-valid' }],
+      },
+      { indexNum: 1, broken: true, unsupported: false },
+    ]);
+    const removeBlockSpy = jest
+      .spyOn(chromeService.storage, 'removeBlock')
+      .mockResolvedValue(undefined);
+
+    try {
+      await mount();
+      expect(container.textContent).toContain('content_msg_broken_block');
+      expect(container.textContent).toContain('title-valid');
+
+      const deleteLink = container.querySelector(
+        '.broken_block_delete',
+      ) as HTMLElement;
+      await act(async () => {
+        deleteLink.click();
+      });
+
+      // indexNumだけでstorageから削除され、一覧からも消える
+      expect(removeBlockSpy).toHaveBeenCalledWith(1);
+      expect(container.textContent).not.toContain('content_msg_broken_block');
+      expect(container.textContent).toContain('title-valid');
+    } finally {
+      removeBlockSpy.mockRestore();
+    }
+  });
+
+  // getAllBlockをモックせず実際のstorage経由で検証する。
+  // モックした一覧を渡すテストだけでは、実データから到達しうる壊れ方を
+  // 取りこぼす（#192がnode環境のテストで2年隠れたのと同型のリスク）
+  test('実データが壊れていても壊れた要素だけがカードになる', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '3';
+    // タブ要素がnullだとtab.tsxがレンダリング時に例外を投げる
+    syncData['td_0'] =
+      '{"v":2,"created_at":1609556645678,"tabs":[null,{"url":"https://example.com/x","title":"title-x"}]}';
+    // JSONとして壊れており復元自体ができない
+    syncData['td_1'] = '{"v":2,"created_at":1';
+    syncData['td_2'] =
+      '{"v":2,"created_at":1640000000000,"tabs":[{"url":"https://example.com/ok","title":"title-ok"}]}';
+    // Reactが境界で捕捉した例外をconsole.errorへ出力するため抑止する
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      // 壊れたタブ1件はブロック全体を巻き込まず、同じブロックの正常なタブは残る
+      expect(container.textContent).toContain('title-x');
+      expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(1);
+      // 復元できなかったブロックだけがカードになる
+      expect(container.textContent).toContain('title-ok');
+      expect(container.querySelectorAll('.broken_block_delete')).toHaveLength(
+        1,
+      );
+      expect(container.textContent).not.toContain('content_msg_not_tab');
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  test('壊れたタブを削除しても同じブロックの正常なタブは残る', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '1';
+    syncData['td_0'] =
+      '{"v":2,"created_at":1609556645678,"tabs":[null,{"url":"https://example.com/x","title":"title-x"}]}';
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      const closeLink = container.querySelector(
+        '.broken_tab_close',
+      ) as HTMLElement;
+      await act(async () => {
+        closeLink.click();
+      });
+
+      expect(setBlockSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          indexNum: 0,
+          tabs: [{ url: 'https://example.com/x', title: 'title-x' }],
+        }),
+      );
+      expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(0);
+      expect(container.textContent).toContain('title-x');
+    } finally {
+      setBlockSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  // 欠けたバックアップを完全なものと誤解して全データ削除に進むのを防ぐ。
+  // エクスポート自体は成功しているため、errorLog（赤バッジ+アラート）ではなく
+  // ユーザー操作への応答としてその場で伝える
+  test('復元できなかったブロックがあるとエクスポート時に欠損を伝える', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '2';
+    syncData['td_0'] = '{"v":2,"created_at":1';
+    syncData['td_1'] =
+      '{"v":2,"created_at":1640000000000,"tabs":[{"url":"https://example.com/ok","title":"title-ok"}]}';
+    const alertSpy = jest
+      .spyOn(window, 'alert')
+      .mockImplementation(() => undefined);
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      const exportLink = container.querySelector('#export_link') as HTMLElement;
+      await act(async () => {
+        exportLink.click();
+      });
+
+      expect(alertSpy).toHaveBeenCalledWith('content_msg_export_broken_block');
+      // 読めたブロックはエクスポートされ、赤バッジのエラー通知は立てない
+      const exportBody = container.querySelector(
+        '#export_body',
+      ) as HTMLTextAreaElement;
+      expect(exportBody.value).toContain('title-ok');
+      expect(localData[chromeService.errorLog.errorKey]).toBeUndefined();
+    } finally {
+      alertSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  // 新しいバージョンで保存されただけのデータは実データが生きている可能性があり、
+  // 削除するとすべての同期端末から消える。ただし削除自体を塞ぐと
+  // 「すべてのデータを削除」以外に消す手段がなくなるため、警告して委ねる
+  test('未対応バージョンのブロックは警告に同意しないと削除されない', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '1';
+    syncData['td_0'] =
+      '{"v":99,"created_at":1609556645678,"tabs":[{"url":"https://example.com/v3","title":"title-v3"}]}';
+    const removeBlockSpy = jest
+      .spyOn(chromeService.storage, 'removeBlock')
+      .mockResolvedValue(undefined);
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+      expect(container.textContent).toContain('content_msg_unsupported_block');
+
+      const deleteLink = container.querySelector(
+        '.broken_block_delete',
+      ) as HTMLElement;
+      await act(async () => {
+        deleteLink.click();
+      });
+
+      // 同意しなければ削除されない
+      expect(confirmSpy).toHaveBeenCalledWith(
+        'content_msg_unsupported_block_delete_confirm',
+      );
+      expect(removeBlockSpy).not.toHaveBeenCalled();
+      expect(container.textContent).toContain('content_msg_unsupported_block');
+
+      // 同意すれば削除できる（袋小路にしない）
+      confirmSpy.mockReturnValue(true);
+      await act(async () => {
+        deleteLink.click();
+      });
+      expect(removeBlockSpy).toHaveBeenCalledWith(0);
+      expect(container.textContent).toContain('content_msg_not_tab');
+    } finally {
+      removeBlockSpy.mockRestore();
+      confirmSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  // 壊れたブロックの削除には確認を挟まない（実データが読めないため）
+  test('壊れたブロックの削除には確認を求めない', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      { indexNum: 0, broken: true, unsupported: false },
+    ]);
+    const removeBlockSpy = jest
+      .spyOn(chromeService.storage, 'removeBlock')
+      .mockResolvedValue(undefined);
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+
+    try {
+      await mount();
+      const deleteLink = container.querySelector(
+        '.broken_block_delete',
+      ) as HTMLElement;
+      await act(async () => {
+        deleteLink.click();
+      });
+
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(removeBlockSpy).toHaveBeenCalledWith(0);
+    } finally {
+      removeBlockSpy.mockRestore();
+      confirmSpy.mockRestore();
+    }
+  });
+
+  // 境界を下げた結果、壊れたタブを含むブロックでも「すべてのリンクを開く」が
+  // 押せるようになった。mapの途中で例外になると残りのタブが開かれないまま
+  // イベントハンドラの外へ抜け、通知もされない
+  test('壊れたタブがあってもすべてのリンクを開くは正常なタブを全部開く', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '1';
+    syncData['td_0'] =
+      '{"v":2,"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a"},null,{"url":"https://example.com/b","title":"b"}]}';
+    const createTabsSpy = jest
+      .spyOn(chromeService.tab, 'createTabs')
+      .mockResolvedValue(undefined);
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      const openAllLink = container.querySelector(
+        '.all_tab_link',
+      ) as HTMLElement;
+      await act(async () => {
+        openAllLink.click();
+      });
+
+      expect(createTabsSpy).toHaveBeenCalledTimes(2);
+      expect(createTabsSpy).toHaveBeenCalledWith({
+        url: 'https://example.com/a',
+        active: false,
+      });
+      expect(createTabsSpy).toHaveBeenCalledWith({
+        url: 'https://example.com/b',
+        active: false,
+      });
+      // 開いたタブだけが消え、開けなかったタブは残る
+      // （ブロックごと消すと、一覧に見えていたタブが開かれもせず失われる）
+      expect(setBlockSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ indexNum: 0, tabs: [null] }),
+      );
+    } finally {
+      createTabsSpy.mockRestore();
+      setBlockSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  // urlを持たないタブはリンクとして機能せず、クリックすると空の新規タブが
+  // 開いて元のデータが消えるため、壊れたタブとして扱う
+  test('urlを持たないタブは壊れたタブとして表示し個別に削除できる', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '1';
+    // tab自体がnullのタブと、urlを持たないタブが共存する
+    syncData['td_0'] =
+      '{"v":2,"created_at":1609556645678,"tabs":[null,{"title":"title-no-url"},{"url":"https://example.com/ok","title":"title-ok"}]}';
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+      // urlのないタブはリンクとして描画されない
+      expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(2);
+      expect(container.textContent).not.toContain('title-no-url');
+      expect(container.textContent).toContain('title-ok');
+
+      const closeLink = container.querySelector(
+        '.broken_tab_close',
+      ) as HTMLElement;
+      await act(async () => {
+        closeLink.click();
+      });
+
+      // 先頭の壊れたタブだけが消え、残りは巻き添えにならない
+      expect(setBlockSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          indexNum: 0,
+          tabs: [
+            { title: 'title-no-url' },
+            { url: 'https://example.com/ok', title: 'title-ok' },
+          ],
+        }),
+      );
+      expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(1);
+      expect(container.textContent).toContain('title-ok');
+    } finally {
+      setBlockSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  // 開くものがないのに書き戻すと、storage.syncの書き込みクォータを
+  // 無駄に消費するだけで一覧も変わらない
+  test('開けるタブが1件もないブロックではすべてのリンクを開くが何もしない', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '1';
+    syncData['td_0'] =
+      '{"v":2,"created_at":1609556645678,"tabs":[null,{"url":"","title":"title-empty"}]}';
+    const createTabsSpy = jest
+      .spyOn(chromeService.tab, 'createTabs')
+      .mockResolvedValue(undefined);
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      const openAllLink = container.querySelector(
+        '.all_tab_link',
+      ) as HTMLElement;
+      await act(async () => {
+        openAllLink.click();
+      });
+
+      expect(createTabsSpy).not.toHaveBeenCalled();
+      expect(setBlockSpy).not.toHaveBeenCalled();
+      expect(container.textContent).toContain('title-empty');
+    } finally {
+      createTabsSpy.mockRestore();
+      setBlockSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  // urlが空文字列のタブ(#192で特定したchrome.tabs.Tab.urlの挙動)は
+  // titleが読めるので通常のタブとして表示し、開けないので開くときだけ除く
+  test('urlが空文字列のタブは表示されるが、すべてのリンクを開くでは開かず残る', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '1';
+    syncData['td_0'] =
+      '{"v":2,"created_at":1609556645678,"tabs":[{"url":"","title":"title-empty"},{"url":"https://example.com/ok","title":"title-ok"}]}';
+    const createTabsSpy = jest
+      .spyOn(chromeService.tab, 'createTabs')
+      .mockResolvedValue(undefined);
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+
+    try {
+      await mount();
+      expect(container.textContent).toContain('title-empty');
+      expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(0);
+
+      const openAllLink = container.querySelector(
+        '.all_tab_link',
+      ) as HTMLElement;
+      await act(async () => {
+        openAllLink.click();
+      });
+
+      // 空urlはchrome.tabs.createに渡さず、開けなかったタブとして残す
+      expect(createTabsSpy).toHaveBeenCalledTimes(1);
+      expect(createTabsSpy).toHaveBeenCalledWith({
+        url: 'https://example.com/ok',
+        active: false,
+      });
+      expect(setBlockSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          indexNum: 0,
+          tabs: [{ url: '', title: 'title-empty' }],
+        }),
+      );
+    } finally {
+      createTabsSpy.mockRestore();
+      setBlockSpy.mockRestore();
+    }
+  });
+
+  test('ブロックのレンダリング時例外でもページ全体は生き残る', async (): Promise<void> => {
     // createdAtが不正なDateだとblock.tsxのtoISOString()がRangeErrorを投げる
     getAllBlockSpy.mockResolvedValue([
       {
@@ -274,10 +713,13 @@ describe('App', (): void => {
     try {
       await mount();
 
-      // ヘッダー・サイドバーはアンマウントされず、エラーが表示される
+      // ヘッダー・サイドバーはアンマウントされず、落ちたブロックはカードになる
       expect(container.textContent).toContain('SyncTabClipper');
       expect(container.textContent).toContain('content_msg_menu');
-      expect(container.textContent).toContain('Invalid time value');
+      expect(container.textContent).toContain('content_msg_broken_block');
+      // カード自体が表示になるため、生の例外メッセージはアラートに出さない
+      expect(container.textContent).not.toContain('Invalid time value');
+      expect(localData[chromeService.errorLog.errorKey]).toBeUndefined();
     } finally {
       consoleErrorSpy.mockRestore();
     }

@@ -24,6 +24,24 @@ export namespace blockService {
     };
   }
 
+  /**
+   * この拡張機能が知らないスキーマ版数のデータを読もうとしたときの例外。
+   * 壊れたデータと違い、新しいバージョンで保存された正常なデータでありうる
+   * （sync経由で新しい端末から降りてくる）ため、呼び出し側で区別できるようにする
+   */
+  export class UnsupportedVersionError extends Error {}
+
+  /**
+   * 一覧の要素が復元できなかったブロックかを判定する
+   * @param {model.BlockEntry} entry 判定する要素
+   * @return {boolean} 復元できなかったブロックならtrue
+   */
+  export function isBrokenBlock(
+    entry: model.BlockEntry,
+  ): entry is model.BrokenBlock {
+    return 'broken' in entry;
+  }
+
   function blockToJsonObj(block: model.Block): object {
     return {
       created_at: block.createdAt.getTime(),
@@ -39,10 +57,26 @@ export namespace blockService {
     d?: string;
   };
 
+  /**
+   * 保存データのcreated_atをDateに変換する。
+   * Dateとして解釈できない値（Dateの表現範囲±8.64e15を超える数値など）は
+   * エポックにフォールバックする。Invalid Dateのまま扱うと
+   * block.tsxのtoISOString()がRangeErrorになり、ソートの比較関数もNaNで
+   * 非一貫になるため。作成日が壊れていてもタブ自体は読めるので捨てない
+   * @param {number} createdAt 保存されていたcreated_at
+   * @return {Date} 作成日。解釈できない場合はエポック
+   */
+  function toCreatedAt(createdAt: number): Date {
+    // 数値以外（数値文字列など）はnew Dateの解釈に委ね、
+    // Invalid Dateになるものだけをエポックに寄せる
+    const date = new Date(createdAt);
+    return Number.isNaN(date.getTime()) ? new Date(0) : date;
+  }
+
   function jsonObjToBlock(object: BlockJson, index: number): model.Block {
     return {
       indexNum: index,
-      createdAt: new Date(object.created_at),
+      createdAt: toCreatedAt(object.created_at),
       tabs: object.tabs,
     };
   }
@@ -61,7 +95,7 @@ export namespace blockService {
 
     return {
       indexNum: indexNum,
-      createdAt: new Date(js.created_at),
+      createdAt: toCreatedAt(js.created_at),
       tabs: tabs,
     };
   }
@@ -90,7 +124,9 @@ export namespace blockService {
           ? jsonObjToBlock(js, indexNum)
           : jsonToBlock(zlibWrapper.inflate(js.d), indexNum);
       default:
-        throw new Error(`Unsupported data version: v=${version}`);
+        throw new UnsupportedVersionError(
+          `Unsupported data version: v=${version}`,
+        );
     }
   }
 
@@ -112,14 +148,33 @@ export namespace blockService {
     }
   }
 
-  export function exportAllDataJson(): Promise<string> {
-    return chromeService.storage.getAllBlock().then((blocks) =>
-      JSON.stringify({
-        v: CURRENT_SCHEMA_VERSION,
-        ev: chromeService.runtime.getExtensionVersion(),
-        blocks: blocks.map(blockToJsonObj),
-      }),
-    );
+  /**
+   * エクスポート結果。欠けたバックアップを完全なものと誤解させないよう、
+   * 出力できなかったブロックの件数を呼び出し側へ返す
+   */
+  export type ExportResult = {
+    json: string;
+    // 出力できなかったブロックの件数。復元に失敗したブロックのみを数える。
+    // 描画に失敗するブロックは復元自体は成功していて出力にも含まれるため、
+    // 一覧に出る破損カードの枚数とは一致しない
+    brokenCount: number;
+  };
+
+  export function exportAllDataJson(): Promise<ExportResult> {
+    return chromeService.storage.getAllBlock().then((entries) => {
+      // 復元できなかったブロックはブロックJSONに戻せないため出力できない
+      const blocks = entries.flatMap((entry) =>
+        isBrokenBlock(entry) ? [] : [blockToJsonObj(entry)],
+      );
+      return {
+        json: JSON.stringify({
+          v: CURRENT_SCHEMA_VERSION,
+          ev: chromeService.runtime.getExtensionVersion(),
+          blocks: blocks,
+        }),
+        brokenCount: entries.length - blocks.length,
+      };
+    });
   }
 
   function blockListForJsonObject(
@@ -146,6 +201,16 @@ export namespace blockService {
         default:
           throw new Error(`Unsupported data version: v=${json.v}`);
       }
+    }
+    // 1件でも書き込めないブロックが混ざっていると、一部だけ書き込まれた状態で
+    // setTabLengthに到達せず、書き込んだブロックが一覧に出ないまま
+    // 次回保存で上書きされる。スキーマ由来のものは書き込む前にまとめて弾く。
+    // 書き込み自体の失敗（8KB制限超過など）による部分書き込みは別課題
+    if (!Array.isArray(blockObjs)) {
+      throw new Error('Invalid data: blocks is not an array');
+    }
+    if (blockObjs.some((obj) => !Array.isArray(obj?.tabs))) {
+      throw new Error('Invalid data: block has no tabs array');
     }
     const blocks = blockListForJsonObject(blockObjs, idx);
 

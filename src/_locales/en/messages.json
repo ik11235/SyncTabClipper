@@ -49,6 +49,29 @@
   "content_msg_not_tab": {
     "message": "There are no saved tabs."
   },
+  "content_msg_broken_block": {
+    "message": "Failed to load the data of this block."
+  },
+  "content_msg_broken_block_delete": {
+    "message": "Delete this block"
+  },
+  "content_msg_unsupported_block": {
+    "message": "This block was saved by a newer version and cannot be displayed. Please update the extension."
+  },
+  "content_msg_unsupported_block_delete_confirm": {
+    "message": "This data may become readable after updating the extension. Deleting it removes the data from all synced devices. Delete it?"
+  },
+  "content_msg_broken_tab": {
+    "message": "Failed to load the data of this tab."
+  },
+  "content_msg_export_broken_block": {
+    "message": "$count$ block(s) could not be loaded and are not included in the exported data. This backup is incomplete. Please check its contents before deleting all data.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
   "content_msg_open_tab_page": {
     "message": "Open Saved tabs Page"
   },

@@ -1,7 +1,9 @@
 import React from 'react';
 import { model } from '../types/interface';
 import { chromeService } from '../chromeService';
-import { Tab } from './tab';
+import { openableTab, Tab } from './tab';
+import BrokenTab from './brokenTab';
+import { ErrorBoundary } from './errorBoundary';
 
 interface BlockProps {
   block: model.Block;
@@ -35,13 +37,27 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   };
 
   const openAllTab = () => {
+    // 壊れたタブを踏むとmapの途中で例外になり、残りのタブが開かれないまま
+    // イベントハンドラの外へ抜けて通知もされないため、開ける分だけに絞る
+    const openTabs = block.tabs.filter(openableTab);
+    if (openTabs.length <= 0) {
+      // 開くものがないのに書き戻すと、storage.syncの書き込みクォータを
+      // 無駄に消費するだけで一覧も変わらない
+      return;
+    }
     Promise.all(
-      block.tabs.map((tab) =>
+      openTabs.map((tab) =>
         chromeService.tab.createTabs({ url: tab.url, active: false }),
       ),
     )
       .then(() => {
-        deleteBlock();
+        // 開いたタブだけを消す。開けなかったタブまでブロックごと消すと、
+        // 一覧に見えていたタブが開かれもせず失われる
+        props.updateBlock({
+          tabs: block.tabs.filter((tab) => !openableTab(tab)),
+          indexNum: block.indexNum,
+          createdAt: block.createdAt,
+        });
       })
       .catch((error) => {
         chromeService.errorLog.set(error).catch(console.error);
@@ -86,16 +102,33 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       </div>
       <div className="uk-card-body">
         <ul>
-          {block.tabs.map((tab, index) => {
-            return (
-              <Tab
-                tab={tab}
+          {block.tabs.map((tab, index) =>
+            // urlを持たないタブはリンクとして機能せず、クリックすると
+            // 空の新規タブが開いて元のデータが消えるため壊れたタブとして扱う。
+            // urlが空文字列のタブ(#192で特定したchrome.tabs.Tab.urlの挙動)は
+            // titleが読めるので通常のタブとして表示する
+            tab?.url == null ? (
+              <BrokenTab
+                key={`${index}-broken`}
                 deleteClick={() => deleteClick(index)}
-                openLinkClick={() => openLink(index)}
-                key={`${tab.url}-${index}`}
               />
-            );
-          })}
+            ) : (
+              // タブ1件の破損でブロックごと落ちると、同じブロックの正常なタブまで
+              // 表示されなくなるため、境界はタブ単位に置く。
+              // 一次防御は上のurlの明示チェックで、この境界は
+              // 想定していない壊れ方（titleが文字列でない等）への保険
+              <ErrorBoundary
+                key={`${index}-${tab.url}`}
+                fallback={<BrokenTab deleteClick={() => deleteClick(index)} />}
+              >
+                <Tab
+                  tab={tab}
+                  deleteClick={() => deleteClick(index)}
+                  openLinkClick={() => openLink(index)}
+                />
+              </ErrorBoundary>
+            ),
+          )}
         </ul>
       </div>
     </div>

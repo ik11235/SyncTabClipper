@@ -7,15 +7,14 @@ export namespace util {
    * @return {string} strのドメイン部分 or 空文字列
    */
   export function getDomain(str: string): string {
+    // URL.canParseはChrome 120以降で、manifestのminimum_chrome_version(110)では
+    // 使えないためtry/catchで判定する。ブラウザのURLはcodeを持たないTypeErrorを
+    // 投げるため、エラーの種類で分岐せず一律で空文字列を返す
     try {
       const parser = new URL(str);
       return parser.hostname;
-    } catch (e) {
-      if ((e as { code?: string }).code === 'ERR_INVALID_URL') {
-        return '';
-      } else {
-        throw e;
-      }
+    } catch {
+      return '';
     }
   }
 

@@ -49,6 +49,29 @@
   "content_msg_not_tab": {
     "message": "保存済みのタブはありません。"
   },
+  "content_msg_broken_block": {
+    "message": "このブロックのデータを読み込めませんでした。"
+  },
+  "content_msg_broken_block_delete": {
+    "message": "このブロックを削除する"
+  },
+  "content_msg_unsupported_block": {
+    "message": "このブロックは新しいバージョンで保存されたデータのため表示できません。拡張機能を更新してください。"
+  },
+  "content_msg_unsupported_block_delete_confirm": {
+    "message": "このデータは拡張機能を更新すると読める可能性があります。削除するとすべての同期端末から消えます。削除しますか？"
+  },
+  "content_msg_broken_tab": {
+    "message": "このタブのデータを読み込めませんでした。"
+  },
+  "content_msg_export_broken_block": {
+    "message": "$count$個のブロックはデータを読み込めなかったため、エクスポートしたデータに含まれていません。このバックアップは不完全です。すべてのデータを削除する前に内容を確認してください。",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
   "content_msg_open_tab_page": {
     "message": "保存済みタブのページを開く"
   },

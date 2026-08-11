@@ -10,7 +10,7 @@ import SideBar from './sideBar';
 const App: React.FC = () => {
   // chrome.storageを単一の情報源とし、その読み込み結果をAppが所有する。
   // Main/Blockはpropsの表示に徹する（nullはロード中を表す）
-  const [blocks, setBlocks] = useState<model.Block[] | null>(null);
+  const [blocks, setBlocks] = useState<model.BlockEntry[] | null>(null);
 
   useEffect(() => {
     chromeService.storage
@@ -40,6 +40,24 @@ const App: React.FC = () => {
           return prevBlocks.map((block) =>
             block.indexNum == newBlock.indexNum ? newBlock : block,
           );
+        });
+      })
+      .catch((error) => {
+        chromeService.errorLog.set(error).catch(console.error);
+      });
+  }, []);
+
+  // 復元・描画できなかったブロックはmodel.Blockを作れないため、
+  // indexNumだけを渡してstorageから削除する
+  const deleteBrokenBlock = useCallback((indexNum: number) => {
+    chromeService.storage
+      .removeBlock(indexNum)
+      .then(() => {
+        setBlocks((prevBlocks) => {
+          if (prevBlocks == null) {
+            return prevBlocks;
+          }
+          return prevBlocks.filter((block) => block.indexNum != indexNum);
         });
       })
       .catch((error) => {
@@ -81,7 +99,11 @@ const App: React.FC = () => {
             {/* ロード中に「保存済みタブなし」を誤表示しないよう
                 ロード完了までMainをマウントしない */}
             {blocks != null ? (
-              <Main blocks={blocks} updateBlock={updateBlock} />
+              <Main
+                blocks={blocks}
+                updateBlock={updateBlock}
+                deleteBrokenBlock={deleteBrokenBlock}
+              />
             ) : null}
           </ErrorBoundary>
         </div>

@@ -325,7 +325,16 @@ describe('blockService import/export', (): void => {
       .mockResolvedValue(undefined);
     reload.mockClear();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (global as any).chrome = { tabs: { reload: reload } };
+    (global as any).chrome = {
+      tabs: { reload: reload },
+      // 置換文字列（件数など）まで検証できるよう、substitutionsも文字列に含める
+      i18n: {
+        getMessage: (key: string, substitutions?: string[]): string =>
+          substitutions == null
+            ? key
+            : `${key}:${JSON.stringify(substitutions)}`,
+      },
+    };
   });
 
   afterEach(() => {
@@ -348,9 +357,52 @@ describe('blockService import/export', (): void => {
         ],
       },
     ]);
-    await expect(blockService.exportAllDataJson()).resolves.toBe(
-      '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
-    );
+    await expect(blockService.exportAllDataJson()).resolves.toStrictEqual({
+      json: '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
+      brokenCount: 0,
+    });
+  });
+
+  // 復元できなかったブロックはブロックJSONに戻せないため出力できない。
+  // 正常なブロックがそれに巻き込まれて欠けないことを担保する
+  test('exportAllDataJson 復元できなかったブロックは除いて出力し件数を返す', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+        tabs: [
+          {
+            url: 'https://example.com/test',
+            title: 'title-test',
+          },
+        ],
+      },
+      { indexNum: 1, broken: true, unsupported: false },
+      { indexNum: 2, broken: true, unsupported: true },
+    ]);
+
+    await expect(blockService.exportAllDataJson()).resolves.toStrictEqual({
+      json: '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
+      brokenCount: 2,
+    });
+  });
+
+  // エクスポートは成功しているため、赤バッジ+アラートのerrorLogには流さない
+  // （欠損の通知はユーザー操作への応答としてSideBar側でalertする）
+  test('exportAllDataJson 欠損があってもerrorLogには流さない', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      { indexNum: 0, broken: true, unsupported: false },
+    ]);
+    const errorLogSetSpy = jest
+      .spyOn(chromeService.errorLog, 'set')
+      .mockResolvedValue(undefined);
+
+    try {
+      await blockService.exportAllDataJson();
+      expect(errorLogSetSpy).not.toHaveBeenCalled();
+    } finally {
+      errorLogSetSpy.mockRestore();
+    }
   });
 
   test('importAllDataJson v2形式', async (): Promise<void> => {
@@ -399,4 +451,28 @@ describe('blockService import/export', (): void => {
     expect(setBlockSpy).not.toHaveBeenCalled();
     expect(setTabLengthSpy).not.toHaveBeenCalled();
   });
+
+  // 途中まで書き込んだ状態でsetTabLengthに到達すると、書き込んだブロックが
+  // 一覧に出ないまま次回保存で上書きされるため、書き込む前に弾く
+  test.each([
+    ['blocksが配列でない', '{"v":2,"blocks":"oops"}'],
+    [
+      'tabsがないブロックが混ざっている',
+      '{"v":2,"blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a"}]},{"created_at":1609556645678}]}',
+    ],
+    [
+      'tabsが配列でないブロックが混ざっている',
+      '{"v":2,"blocks":[{"created_at":1609556645678,"tabs":"oops"}]}',
+    ],
+  ])(
+    'importAllDataJson 書き込めないデータ(%s)は1件も書き込まずエラーにする',
+    async (_name: string, json: string): Promise<void> => {
+      await expect(blockService.importAllDataJson(json)).rejects.toThrow(
+        /^Invalid data:/,
+      );
+      expect(setBlockSpy).not.toHaveBeenCalled();
+      expect(setTabLengthSpy).not.toHaveBeenCalled();
+      expect(reload).not.toHaveBeenCalled();
+    },
+  );
 });
