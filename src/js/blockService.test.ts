@@ -192,6 +192,28 @@ describe('blockService', (): void => {
     expect(compressSpy).toHaveBeenCalledTimes(1);
   });
 
+  // storage.syncの8KB/item制限はUTF-8バイト数で数えるため、文字数で比べると
+  // 日本語主体のブロックで非圧縮側が選ばれ、バイト数では制限を超えうる
+  test('deflateBlock 圧縮/非圧縮の判定は文字数ではなくUTF-8バイト数で行う', async (): Promise<void> => {
+    const compressed = 'A'.repeat(160);
+    compressSpy.mockResolvedValueOnce(compressed);
+
+    const block = {
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [{ url: 'https://example.com/t', title: 'あ'.repeat(80) }],
+    };
+    const res = await blockService.deflateBlock(block);
+
+    const plain = `{"v":3,"ev":"9.9.9","created_at":1609556645678,"tabs":[{"url":"https://example.com/t","title":"${'あ'.repeat(80)}"}]}`;
+    // 文字数では非圧縮の方が短いが、UTF-8バイト数では圧縮の方が短い状況
+    expect(res.length).toBeGreaterThan(plain.length);
+    expect(new TextEncoder().encode(res).length).toBeLessThan(
+      new TextEncoder().encode(plain).length,
+    );
+    expect(res).toBe(`{"v":3,"ev":"9.9.9","d":"${compressed}"}`);
+  });
+
   test('inflateJson v1非圧縮データ(バージョン表記なし)', async (): Promise<void> => {
     const input =
       '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"},{"url":"http://google.com/test2","title":"google-test"}]}';

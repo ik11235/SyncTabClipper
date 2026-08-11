@@ -157,11 +157,18 @@ export namespace blockService {
       ...version,
       d: await compression.compress(blockToJson(block)),
     });
-    if (deflateStr.length < blockStr.length) {
+    // storage.syncの8KB/item制限はUTF-8バイト数で数えるため、文字数ではなく
+    // バイト数で比較する。日本語主体のブロックでは1文字が3バイトになり、
+    // 文字数では短く見える非圧縮側が制限を超えることがある
+    if (utf8ByteLength(deflateStr) < utf8ByteLength(blockStr)) {
       return deflateStr;
     } else {
       return blockStr;
     }
+  }
+
+  function utf8ByteLength(val: string): number {
+    return new TextEncoder().encode(val).length;
   }
 
   /**
