@@ -327,7 +327,13 @@ describe('blockService import/export', (): void => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (global as any).chrome = {
       tabs: { reload: reload },
-      i18n: { getMessage: (key: string): string => key },
+      // 置換文字列（件数など）まで検証できるよう、substitutionsも文字列に含める
+      i18n: {
+        getMessage: (key: string, substitutions?: string[]): string =>
+          substitutions == null
+            ? key
+            : `${key}:${JSON.stringify(substitutions)}`,
+      },
     };
   });
 
@@ -371,6 +377,7 @@ describe('blockService import/export', (): void => {
         ],
       },
       { indexNum: 1, broken: true },
+      { indexNum: 2, broken: true },
     ]);
     const errorLogSetSpy = jest
       .spyOn(chromeService.errorLog, 'set')
@@ -382,7 +389,7 @@ describe('blockService import/export', (): void => {
       );
       // 欠けたバックアップを完全なものと誤解させないため件数を通知する
       expect(errorLogSetSpy).toHaveBeenCalledWith(
-        'content_msg_export_broken_block',
+        'content_msg_export_broken_block:[2]',
       );
     } finally {
       errorLogSetSpy.mockRestore();

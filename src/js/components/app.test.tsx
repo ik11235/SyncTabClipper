@@ -13,6 +13,7 @@ import { chromeService } from '../chromeService';
 
 describe('App', (): void => {
   let localData: { [key: string]: string };
+  let syncData: { [key: string]: string };
   let onChangedListeners: Array<
     (
       changes: { [key: string]: chrome.storage.StorageChange },
@@ -32,6 +33,7 @@ describe('App', (): void => {
 
   beforeEach((): void => {
     localData = {};
+    syncData = {};
     onChangedListeners = [];
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -77,6 +79,16 @@ describe('App', (): void => {
         sync: {
           QUOTA_BYTES: 102400,
           getBytesInUse: (): Promise<number> => Promise.resolve(0),
+          get: (keys: string[]): Promise<{ [key: string]: string }> => {
+            const res: { [key: string]: string } = {};
+            for (const key of keys) {
+              const value = syncData[key];
+              if (value != null) {
+                res[key] = value;
+              }
+            }
+            return Promise.resolve(res);
+          },
         },
         onChanged: {
           addListener: (
@@ -321,6 +333,39 @@ describe('App', (): void => {
       expect(container.textContent).toContain('title-valid');
     } finally {
       removeBlockSpy.mockRestore();
+    }
+  });
+
+  // getAllBlockをモックせず実際のstorage経由で検証する。
+  // モックした一覧を渡すテストだけでは、実データから到達しうる壊れ方を
+  // 取りこぼす（#192がnode環境のテストで2年隠れたのと同型のリスク）
+  test('実データが壊れていても壊れたブロックだけがカードになる', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '3';
+    // タブ要素がnullだとtab.tsxがレンダリング時に例外を投げる
+    syncData['td_0'] =
+      '{"v":2,"created_at":1609556645678,"tabs":[null,{"url":"https://example.com/x","title":"title-x"}]}';
+    // JSONとして壊れており復元自体ができない
+    syncData['td_1'] = '{"v":2,"created_at":1';
+    syncData['td_2'] =
+      '{"v":2,"created_at":1640000000000,"tabs":[{"url":"https://example.com/ok","title":"title-ok"}]}';
+    // Reactが境界で捕捉した例外をconsole.errorへ出力するため抑止する
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      // 正常なブロックは表示され、壊れた2件はカードに差し替わる
+      expect(container.textContent).toContain('title-ok');
+      expect(container.textContent).not.toContain('title-x');
+      expect(container.querySelectorAll('.broken_block_delete')).toHaveLength(
+        2,
+      );
+      expect(container.textContent).not.toContain('content_msg_not_tab');
+    } finally {
+      consoleErrorSpy.mockRestore();
     }
   });
 

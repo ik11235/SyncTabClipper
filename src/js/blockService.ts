@@ -60,6 +60,8 @@ export namespace blockService {
    * @return {Date} 作成日。解釈できない場合はエポック
    */
   function toCreatedAt(createdAt: number): Date {
+    // 数値以外（数値文字列など）はnew Dateの解釈に委ね、
+    // Invalid Dateになるものだけをエポックに寄せる
     const date = new Date(createdAt);
     return Number.isNaN(date.getTime()) ? new Date(0) : date;
   }
@@ -190,7 +192,8 @@ export namespace blockService {
     }
     // 1件でも書き込めないブロックが混ざっていると、一部だけ書き込まれた状態で
     // setTabLengthに到達せず、書き込んだブロックが一覧に出ないまま
-    // 次回保存で上書きされる。書き込みを始める前にまとめて弾く
+    // 次回保存で上書きされる。スキーマ由来のものは書き込む前にまとめて弾く。
+    // 書き込み自体の失敗（8KB制限超過など）による部分書き込みは別課題
     if (!Array.isArray(blockObjs)) {
       throw new Error('Invalid data: blocks is not an array');
     }
