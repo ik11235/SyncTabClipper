@@ -38,9 +38,13 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
 
   const openAllTab = () => {
     Promise.all(
-      block.tabs.map((tab) =>
-        chromeService.tab.createTabs({ url: tab.url, active: false }),
-      ),
+      // 壊れたタブを踏むとmapの途中で例外になり、残りのタブが開かれないまま
+      // イベントハンドラの外へ抜けて通知もされないため、開ける分だけに絞る
+      block.tabs
+        .filter((tab) => tab?.url != null)
+        .map((tab) =>
+          chromeService.tab.createTabs({ url: tab.url, active: false }),
+        ),
     )
       .then(() => {
         deleteBlock();
@@ -92,9 +96,13 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
             return (
               // タブ1件の破損でブロックごと落ちると、同じブロックの正常なタブまで
               // 表示されなくなるため、境界はタブ単位に置く。
-              // keyの組み立てでも落ちないようtab自体のnullを許容する
+              // keyの組み立てでも落ちないようtab自体のnullを許容する。
+              // ErrorBoundaryはhasErrorをリセットできないため、tab自体がnullの
+              // ケースとurlを持たないケースでkeyが衝突しないようにする
+              // （衝突するとタブ削除後のindexシフトで、正常なタブが
+              //   壊れたタブの境界を引き継いで壊れ扱いのまま居残る）
               <ErrorBoundary
-                key={`${tab?.url}-${index}`}
+                key={`${index}-${tab == null ? 'null' : tab.url}`}
                 fallback={<BrokenTab deleteClick={() => deleteClick(index)} />}
               >
                 <Tab

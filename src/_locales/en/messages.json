@@ -58,6 +58,9 @@
   "content_msg_unsupported_block": {
     "message": "This block was saved by a newer version and cannot be displayed. Please update the extension."
   },
+  "content_msg_unsupported_block_delete_confirm": {
+    "message": "This data may become readable after updating the extension. Deleting it removes the data from all synced devices. Delete it?"
+  },
   "content_msg_broken_tab": {
     "message": "Failed to load the data of this tab."
   },

@@ -2,7 +2,7 @@ import React from 'react';
 
 interface BrokenBlockProps {
   indexNum: number;
-  // この拡張機能が知らないスキーマ版数のデータか（削除導線を出さない）
+  // この拡張機能が知らないスキーマ版数のデータか（削除前に警告する）
   unsupported: boolean;
   // storageからの削除とブロック一覧stateの更新はApp側で行う
   deleteBlock: (indexNum: number) => void;
@@ -10,10 +10,23 @@ interface BrokenBlockProps {
 
 // 復元も描画もできなかったブロックのカード。
 // 一覧から黙って消すとユーザーが手出しできなくなるため、
-// 読み込めなかったことを示して削除導線だけを提供する。
-// ただし新しいバージョンで保存されただけのデータは実データが生きているので、
-// 削除（＝全同期端末からの消去）へ誘導しない
+// 読み込めなかったことを示して削除導線を提供する
 const BrokenBlock: React.FC<BrokenBlockProps> = (props) => {
+  const deleteBlock = () => {
+    // 新しいバージョンで保存されただけのデータは実データが生きている可能性があり、
+    // 削除するとすべての同期端末から消える。ただし削除させないと
+    // 「すべてのデータを削除」以外に消す手段がなくなるため、警告して委ねる
+    if (
+      props.unsupported &&
+      !window.confirm(
+        chrome.i18n.getMessage('content_msg_unsupported_block_delete_confirm'),
+      )
+    ) {
+      return;
+    }
+    props.deleteBlock(props.indexNum);
+  };
+
   return (
     <div className="tabs uk-card-default block-root-dom">
       <div className="uk-card-header">
@@ -22,19 +35,14 @@ const BrokenBlock: React.FC<BrokenBlockProps> = (props) => {
             ? chrome.i18n.getMessage('content_msg_unsupported_block')
             : chrome.i18n.getMessage('content_msg_broken_block')}
         </h3>
-        {props.unsupported ? null : (
-          <div className="uk-grid">
-            <div className="uk-width-auto">
-              <span
-                className="broken_block_delete uk-link"
-                onClick={() => props.deleteBlock(props.indexNum)}
-              >
-                {chrome.i18n.getMessage('content_msg_broken_block_delete')}
-              </span>
-            </div>
-            <div className="uk-width-expand" />
+        <div className="uk-grid">
+          <div className="uk-width-auto">
+            <span className="broken_block_delete uk-link" onClick={deleteBlock}>
+              {chrome.i18n.getMessage('content_msg_broken_block_delete')}
+            </span>
           </div>
-        )}
+          <div className="uk-width-expand" />
+        </div>
       </div>
     </div>
   );

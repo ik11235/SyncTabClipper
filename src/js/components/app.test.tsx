@@ -444,13 +444,95 @@ describe('App', (): void => {
     }
   });
 
-  // 新しいバージョンで保存されただけのデータは壊れているわけではないので、
-  // 削除（＝全同期端末からの消去）へ誘導しない
-  test('未対応バージョンのブロックには削除導線を出さない', async (): Promise<void> => {
+  // 新しいバージョンで保存されただけのデータは実データが生きている可能性があり、
+  // 削除するとすべての同期端末から消える。ただし削除自体を塞ぐと
+  // 「すべてのデータを削除」以外に消す手段がなくなるため、警告して委ねる
+  test('未対応バージョンのブロックは警告に同意しないと削除されない', async (): Promise<void> => {
     getAllBlockSpy.mockRestore();
     syncData['t_len'] = '1';
     syncData['td_0'] =
       '{"v":99,"created_at":1609556645678,"tabs":[{"url":"https://example.com/v3","title":"title-v3"}]}';
+    const removeBlockSpy = jest
+      .spyOn(chromeService.storage, 'removeBlock')
+      .mockResolvedValue(undefined);
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+      expect(container.textContent).toContain('content_msg_unsupported_block');
+
+      const deleteLink = container.querySelector(
+        '.broken_block_delete',
+      ) as HTMLElement;
+      await act(async () => {
+        deleteLink.click();
+      });
+
+      // 同意しなければ削除されない
+      expect(confirmSpy).toHaveBeenCalledWith(
+        'content_msg_unsupported_block_delete_confirm',
+      );
+      expect(removeBlockSpy).not.toHaveBeenCalled();
+      expect(container.textContent).toContain('content_msg_unsupported_block');
+
+      // 同意すれば削除できる（袋小路にしない）
+      confirmSpy.mockReturnValue(true);
+      await act(async () => {
+        deleteLink.click();
+      });
+      expect(removeBlockSpy).toHaveBeenCalledWith(0);
+      expect(container.textContent).toContain('content_msg_not_tab');
+    } finally {
+      removeBlockSpy.mockRestore();
+      confirmSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  // 壊れたブロックの削除には確認を挟まない（実データが読めないため）
+  test('壊れたブロックの削除には確認を求めない', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      { indexNum: 0, broken: true, unsupported: false },
+    ]);
+    const removeBlockSpy = jest
+      .spyOn(chromeService.storage, 'removeBlock')
+      .mockResolvedValue(undefined);
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+
+    try {
+      await mount();
+      const deleteLink = container.querySelector(
+        '.broken_block_delete',
+      ) as HTMLElement;
+      await act(async () => {
+        deleteLink.click();
+      });
+
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(removeBlockSpy).toHaveBeenCalledWith(0);
+    } finally {
+      removeBlockSpy.mockRestore();
+      confirmSpy.mockRestore();
+    }
+  });
+
+  // 境界を下げた結果、壊れたタブを含むブロックでも「すべてのリンクを開く」が
+  // 押せるようになった。mapの途中で例外になると残りのタブが開かれないまま
+  // イベントハンドラの外へ抜け、通知もされない
+  test('壊れたタブがあってもすべてのリンクを開くは正常なタブを全部開く', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '1';
+    syncData['td_0'] =
+      '{"v":2,"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a"},null,{"url":"https://example.com/b","title":"b"}]}';
+    const createTabsSpy = jest
+      .spyOn(chromeService.tab, 'createTabs')
+      .mockResolvedValue(undefined);
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
     const consoleErrorSpy = jest
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
@@ -458,11 +540,65 @@ describe('App', (): void => {
     try {
       await mount();
 
-      expect(container.textContent).toContain('content_msg_unsupported_block');
-      expect(container.querySelectorAll('.broken_block_delete')).toHaveLength(
-        0,
+      const openAllLink = container.querySelector(
+        '.all_tab_link',
+      ) as HTMLElement;
+      await act(async () => {
+        openAllLink.click();
+      });
+
+      expect(createTabsSpy).toHaveBeenCalledTimes(2);
+      expect(createTabsSpy).toHaveBeenCalledWith({
+        url: 'https://example.com/a',
+        active: false,
+      });
+      expect(createTabsSpy).toHaveBeenCalledWith({
+        url: 'https://example.com/b',
+        active: false,
+      });
+      // 全部開けたのでブロックは削除される
+      expect(setBlockSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ indexNum: 0, tabs: [] }),
       );
     } finally {
+      createTabsSpy.mockRestore();
+      setBlockSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  // ErrorBoundaryはhasErrorをリセットできないため、keyが衝突すると
+  // 正常なタブが壊れたタブの境界を引き継いで壊れ扱いのまま居残る
+  test('壊れたタブを削除してもurlを持たないタブが壊れ扱いにならない', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '1';
+    // tab自体がnullのタブと、urlを持たないタブが共存する
+    syncData['td_0'] =
+      '{"v":2,"created_at":1609556645678,"tabs":[null,{"title":"title-no-url"}]}';
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+      expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(1);
+      expect(container.textContent).toContain('title-no-url');
+
+      const closeLink = container.querySelector(
+        '.broken_tab_close',
+      ) as HTMLElement;
+      await act(async () => {
+        closeLink.click();
+      });
+
+      // indexがシフトしても、残った正常なタブは壊れ扱いにならない
+      expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(0);
+      expect(container.textContent).toContain('title-no-url');
+    } finally {
+      setBlockSpy.mockRestore();
       consoleErrorSpy.mockRestore();
     }
   });
