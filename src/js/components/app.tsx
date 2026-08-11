@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { model } from '../types/interface';
 import { chromeService } from '../chromeService';
 import Header from './header';
@@ -10,7 +10,7 @@ import SideBar from './sideBar';
 const App: React.FC = () => {
   // chrome.storageを単一の情報源とし、その読み込み結果をAppが所有する。
   // Main/Blockはpropsの表示に徹する（nullはロード中を表す）
-  const [blocks, setBlocks] = useState<model.Block[] | null>(null);
+  const [blocks, setBlocks] = useState<model.BlockEntry[] | null>(null);
 
   useEffect(() => {
     chromeService.storage
@@ -22,8 +22,9 @@ const App: React.FC = () => {
   }, []);
 
   // ブロックの変更をstorageへ永続化し、成功時のみstateへ反映する。
-  // タブが空になったブロックはstorage側で削除されるため一覧からも除く
-  const updateBlock = (newBlock: model.Block) => {
+  // タブが空になったブロックはstorage側で削除されるため一覧からも除く。
+  // React.memo化したBlockの再レンダリングを防ぐため参照を安定させる
+  const updateBlock = useCallback((newBlock: model.Block) => {
     chromeService.storage
       .setBlock(newBlock)
       .then(() => {
@@ -44,14 +45,35 @@ const App: React.FC = () => {
       .catch((error) => {
         chromeService.errorLog.set(error).catch(console.error);
       });
-  };
+  }, []);
+
+  // 復元・描画できなかったブロックはmodel.Blockを作れないため、
+  // indexNumだけを渡してstorageから削除する
+  const deleteBrokenBlock = useCallback((indexNum: number) => {
+    chromeService.storage
+      .removeBlock(indexNum)
+      .then(() => {
+        setBlocks((prevBlocks) => {
+          if (prevBlocks == null) {
+            return prevBlocks;
+          }
+          return prevBlocks.filter((block) => block.indexNum != indexNum);
+        });
+      })
+      .catch((error) => {
+        chromeService.errorLog.set(error).catch(console.error);
+      });
+  }, []);
 
   // 全データ削除をstorageへ反映し、成功時のみ一覧を空にする。
   // 完了通知（alert）はUIを持つSideBar側で行うためPromiseを返す
-  const deleteAllBlocks = (): Promise<void> =>
-    chromeService.storage.allClear().then(() => {
-      setBlocks([]);
-    });
+  const deleteAllBlocks = useCallback(
+    (): Promise<void> =>
+      chromeService.storage.allClear().then(() => {
+        setBlocks([]);
+      }),
+    [],
+  );
 
   return (
     <div className="uk-container">
@@ -76,9 +98,13 @@ const App: React.FC = () => {
           <ErrorBoundary>
             {/* ロード中に「保存済みタブなし」を誤表示しないよう
                 ロード完了までMainをマウントしない */}
-            {blocks != null && (
-              <Main blocks={blocks} updateBlock={updateBlock} />
-            )}
+            {blocks != null ? (
+              <Main
+                blocks={blocks}
+                updateBlock={updateBlock}
+                deleteBrokenBlock={deleteBrokenBlock}
+              />
+            ) : null}
           </ErrorBoundary>
         </div>
         <SideBar deleteAllBlocks={deleteAllBlocks} />

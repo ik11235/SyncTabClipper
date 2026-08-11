@@ -12,4 +12,24 @@ export namespace model {
     url: string;
     title: string;
   }
+
+  /**
+   * 保存データが復元できずBlockにできなかった要素
+   * indexNumだけは分かるため、一覧に出して削除だけはできるようにする
+   */
+  interface BrokenBlock {
+    indexNum: number;
+    broken: true;
+    /**
+     * この拡張機能が知らないスキーマ版数のデータだったか。
+     * 壊れたデータではなく新しいバージョンで保存された正常なデータでありうるため、
+     * trueのときは削除前に警告する（全同期端末から実データが消えるため）
+     */
+    unsupported: boolean;
+  }
+
+  /**
+   * storageから読み込んだ一覧の要素。復元できたBlockか、できなかったBrokenBlock
+   */
+  type BlockEntry = Block | BrokenBlock;
 }

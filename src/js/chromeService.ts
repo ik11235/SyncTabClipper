@@ -8,57 +8,22 @@ export namespace chromeService {
     const tabKey = (index: number): string => `td_${index}`;
 
     function deleteSyncStorage(key: string): Promise<void> {
-      return new Promise((resolve, reject) => {
-        chrome.storage.sync.remove(key, () => {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            reject(new Error(error.message));
-          } else {
-            resolve();
-          }
-        });
-      });
+      return chrome.storage.sync.remove(key);
     }
 
     function setSyncStorage(key: string, value: string): Promise<void> {
       const setObj: { [key: string]: string } = {};
       setObj[key] = value;
-      return new Promise((resolve, reject) => {
-        chrome.storage.sync.set(setObj, () => {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            reject(new Error(error.message));
-          } else {
-            resolve();
-          }
-        });
-      });
+      return chrome.storage.sync.set(setObj);
     }
 
-    function getSyncStorage(key: string): Promise<string> {
-      return new Promise((resolve, reject) => {
-        chrome.storage.sync.get([key], (item) => {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            reject(new Error(error.message));
-          } else {
-            resolve(item[key] as string);
-          }
-        });
-      });
+    async function getSyncStorage(key: string): Promise<string> {
+      const item = await chrome.storage.sync.get([key]);
+      return item[key] as string;
     }
 
     export async function allClear(): Promise<void> {
-      return new Promise((resolve, reject) => {
-        chrome.storage.sync.clear(function () {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            reject(new Error(error.message));
-          } else {
-            resolve();
-          }
-        });
-      });
+      return chrome.storage.sync.clear();
     }
 
     function getSyncStorageReturnIndex(
@@ -72,7 +37,7 @@ export namespace chromeService {
 
     export async function setBlock(block: model.Block): Promise<void> {
       if (block.tabs.length <= 0) {
-        return removeBlock(block);
+        return removeBlock(block.indexNum);
       } else {
         return chromeService.storage.setTabData(
           block.indexNum,
@@ -81,8 +46,15 @@ export namespace chromeService {
       }
     }
 
-    export async function removeBlock(block: model.Block): Promise<void> {
-      const key = tabKey(block.indexNum);
+    /**
+     * ブロックの保存データを削除する。
+     * 復元できなかったブロック（model.BrokenBlock）も削除できるよう、
+     * model.Blockではなくindexだけを受け取る
+     * @param {number} indexNum 削除するブロックのindex
+     * @return {Promise<void>}
+     */
+    export async function removeBlock(indexNum: number): Promise<void> {
+      const key = tabKey(indexNum);
       return deleteSyncStorage(key);
     }
 
@@ -108,7 +80,7 @@ export namespace chromeService {
       });
     }
 
-    export async function getAllBlock(): Promise<model.Block[]> {
+    export async function getAllBlock(): Promise<model.BlockEntry[]> {
       const tabLength = await getTabLength();
 
       const promiseArray: Promise<[number, string]>[] = [];
@@ -117,82 +89,76 @@ export namespace chromeService {
         promiseArray.push(getSyncStorageReturnIndex(i));
       }
 
-      return Promise.all(promiseArray).then((result) => {
-        const nonEmptyArr = result.filter((obj) => {
-          return obj[1] != null && obj[1].length > 0;
-        });
-        const newBlocks: model.Block[] = [];
-        for (const arr of nonEmptyArr) {
-          const block = blockService.inflateJson(arr[1], arr[0]);
-          newBlocks.push(block);
-        }
-
-        return newBlocks.sort(sortBlock);
-      });
+      return Promise.all(promiseArray).then((result) =>
+        result
+          // keyが存在しないindexは削除済みのブロックなので一覧に含めない。
+          // 空文字列は書き込みが壊れた形跡なのでBrokenBlockとして扱う
+          .filter((obj) => obj[1] != null)
+          .map((arr) => inflateEntry(arr[1], arr[0]))
+          .toSorted(sortBlock),
+      );
     }
 
-    const sortBlock = (a: model.Block, b: model.Block): number => {
+    /**
+     * 保存データ1件を復元する。復元に失敗した場合は例外を伝播させず
+     * BrokenBlockを返す（1件の壊れたデータで一覧全体が失われないようにする）
+     * @param {string} json 保存されていたデータ
+     * @param {number} indexNum ブロックのindex
+     * @return {model.BlockEntry} 復元したBlock or BrokenBlock
+     */
+    function inflateEntry(json: string, indexNum: number): model.BlockEntry {
+      try {
+        if (json.length <= 0) {
+          throw new Error(`Empty block data: index=${indexNum}`);
+        }
+        const block = blockService.inflateJson(json, indexNum);
+        if (!Array.isArray(block.tabs)) {
+          // タブの配列を持たないブロックは描画もエクスポートもできない。
+          // ここで弾かないと、エクスポートにtabsのないブロックが出力され
+          // インポートで失敗する不完全なバックアップになる
+          throw new Error(`Invalid block data: tabs is not an array`);
+        }
+        return block;
+      } catch (e) {
+        console.error(e);
+        return {
+          indexNum: indexNum,
+          broken: true,
+          unsupported: e instanceof blockService.UnsupportedVersionError,
+        };
+      }
+    }
+
+    const sortBlock = (a: model.BlockEntry, b: model.BlockEntry): number => {
+      const aBroken = blockService.isBrokenBlock(a);
+      const bBroken = blockService.isBrokenBlock(b);
+      if (aBroken || bBroken) {
+        // BrokenBlockはcreatedAtが分からないため末尾に寄せる
+        return Number(aBroken) - Number(bBroken);
+      }
       return b.createdAt.getTime() - a.createdAt.getTime();
     };
   }
 
   export namespace tab {
-    export function createTabs(
+    export async function createTabs(
       properties: chrome.tabs.CreateProperties,
     ): Promise<void> {
-      return new Promise((resolve, reject) => {
-        chrome.tabs.create(properties, () => {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            reject(new Error(error.message));
-          } else {
-            resolve();
-          }
-        });
-      });
+      await chrome.tabs.create(properties);
     }
 
     async function closeTab(tab: chrome.tabs.Tab): Promise<void> {
-      return new Promise((resolve, reject) => {
-        chrome.tabs.remove(tab.id!, () => {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            reject(new Error(error.message));
-          } else {
-            resolve();
-          }
-        });
-      });
+      return chrome.tabs.remove(tab.id!);
     }
 
     export async function closeTabs(tabs: chrome.tabs.Tab[]): Promise<void> {
-      const promiseArray: Promise<void>[] = [];
-
-      for (const tab of tabs) {
-        promiseArray.push(closeTab(tab));
-      }
-
-      try {
-        await Promise.all(promiseArray);
-        return Promise.resolve();
-      } catch (err) {
-        return Promise.reject(err);
-      }
+      await Promise.all(tabs.map((tab) => closeTab(tab)));
     }
 
     export function queryTabs(
       queryInfo: chrome.tabs.QueryInfo,
     ): Promise<chrome.tabs.Tab[]> {
-      return new Promise((resolve, reject) => {
-        chrome.tabs.query(queryInfo, (tabs) => {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            reject(new Error(error.message));
-          } else {
-            resolve(tabs);
-          }
-        });
-      });
+      return chrome.tabs.query(queryInfo);
     }
 
     export async function createTabsPageTab(): Promise<void> {
@@ -225,57 +191,31 @@ export namespace chromeService {
      * @param {unknown} error 発生したエラー（Error以外はStringで文字列化）
      * @return {Promise<void>}
      */
-    export function set(error: unknown): Promise<void> {
+    export async function set(error: unknown): Promise<void> {
       const message = error instanceof Error ? error.message : String(error);
       const setObj: { [key: string]: string } = {};
       setObj[errorKey] = message;
-      return new Promise((resolve, reject) => {
-        chrome.storage.local.set(setObj, () => {
-          const lastError = chrome.runtime.lastError;
-          if (lastError) {
-            reject(new Error(lastError.message));
-          } else {
-            chrome.action.setBadgeBackgroundColor({ color: '#DD2222' });
-            chrome.action.setBadgeText({ text: '!' });
-            resolve();
-          }
-        });
-      });
+      await chrome.storage.local.set(setObj);
+      chrome.action.setBadgeBackgroundColor({ color: '#DD2222' });
+      chrome.action.setBadgeText({ text: '!' });
     }
 
     /**
      * 保存されたエラーメッセージとバッジをクリアする
      * @return {Promise<void>}
      */
-    export function clear(): Promise<void> {
-      return new Promise((resolve, reject) => {
-        chrome.storage.local.remove(errorKey, () => {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            reject(new Error(error.message));
-          } else {
-            chrome.action.setBadgeText({ text: '' });
-            resolve();
-          }
-        });
-      });
+    export async function clear(): Promise<void> {
+      await chrome.storage.local.remove(errorKey);
+      chrome.action.setBadgeText({ text: '' });
     }
 
     /**
      * 保存されたエラーメッセージを取得する。保存とバッジはクリアしない
      * @return {Promise<string | null>} エラーメッセージ。未保存ならnull
      */
-    export function get(): Promise<string | null> {
-      return new Promise((resolve, reject) => {
-        chrome.storage.local.get([errorKey], (item) => {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            reject(new Error(error.message));
-            return;
-          }
-          resolve((item[errorKey] as string | undefined) ?? null);
-        });
-      });
+    export async function get(): Promise<string | null> {
+      const item = await chrome.storage.local.get([errorKey]);
+      return (item[errorKey] as string | undefined) ?? null;
     }
   }
 

@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { blockService } from '../blockService';
 import { chromeService } from '../chromeService';
+import StorageUsage from './storageUsage';
 
 interface SideBarProps {
   // storageの全削除とブロック一覧stateの更新はApp側で行う
@@ -17,7 +18,22 @@ const SideBar: React.FC<SideBarProps> = (props) => {
   };
 
   const exportJson = () => {
-    blockService.exportAllDataJson().then(setExportText).catch(notifyError);
+    blockService
+      .exportAllDataJson()
+      .then((result) => {
+        setExportText(result.json);
+        if (result.brokenCount > 0) {
+          // 欠けたバックアップを完全なものと誤解して全データ削除に進むのを防ぐ。
+          // エクスポート自体は成功しているためerrorLog（赤バッジ+アラート）には
+          // 流さず、ユーザー操作への応答としてその場で伝える
+          alert(
+            chrome.i18n.getMessage('content_msg_export_broken_block', [
+              String(result.brokenCount),
+            ]),
+          );
+        }
+      })
+      .catch(notifyError);
   };
 
   const importJson = () => {
@@ -137,6 +153,7 @@ const SideBar: React.FC<SideBarProps> = (props) => {
           </li>
         </ul>
       </div>
+      <StorageUsage />
     </aside>
   );
 };

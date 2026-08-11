@@ -1,7 +1,8 @@
 {
   "name": "SyncTabClipper",
-  "version": "0.4.1",
+  "version": "0.5.1",
   "manifest_version": 3,
+  "minimum_chrome_version": "120",
   "description": "__MSG_Description__",
   "default_locale": "en",
   "permissions": ["tabs", "storage", "contextMenus"],
@@ -16,7 +17,10 @@
   },
   "action": {
     "default_icon": {
-      "16": "images/icon16.png"
+      "16": "images/icon16.png",
+      "32": "images/icon32.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128.png"
     }
   }
 }

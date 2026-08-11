@@ -7,16 +7,10 @@ export namespace util {
    * @return {string} strのドメイン部分 or 空文字列
    */
   export function getDomain(str: string): string {
-    try {
-      const parser = new URL(str);
-      return parser.hostname;
-    } catch (e) {
-      if ((e as { code?: string }).code === 'ERR_INVALID_URL') {
-        return '';
-      } else {
-        throw e;
-      }
+    if (!URL.canParse(str)) {
+      return '';
     }
+    return new URL(str).hostname;
   }
 
   /**

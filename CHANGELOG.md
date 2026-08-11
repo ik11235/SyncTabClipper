@@ -1,3 +1,32 @@
+# Unreleased
+
+- [UPDATE] 対応ブラウザを Chrome 120 以降に変更 (minimum_chrome_version)、URL 判定を try/catch から `URL.canParse` に置き換え
+
+# v0.5.1 (2026-08-11)
+
+- [FIX] 読み込めない保存データが 1 件あるとタブ一覧全体が表示されなくなる問題を修正 (#192, #230)
+- [NEW] 読み込めなかったブロック・タブを一覧にカードとして表示し、そこから個別に削除できるように (#227, #230)
+- [FIX] URL として解釈できない文字列でファビコンの取得が例外を投げていた問題を修正 (#230)
+- [FIX] インポート時に不正なデータを検出した際、途中まで書き込まれて次回保存で失われる問題を修正 (#230)
+- [UPDATE] 復元できなかったブロックがあるとき、エクスポートで欠損があることを通知するように (#230)
+- [DEV] 開発依存 (typescript-eslint, globals) を更新 (#226, #228)
+
+# v0.5.0 (2026-08-05)
+
+- [UPDATE] 対応ブラウザを Chrome 110 以降に設定 (minimum_chrome_version) (#224)
+- [NEW] タブを開く操作が失敗した際に、バッジとアラートでエラーを通知するように (#220)
+- [FIX] タブ一覧の key を配列 index 単体から URL との複合 key に変更し、並び替え時の再利用ミスを防止 (#218)
+- [DEV] Block の再レンダリングを useCallback + React.memo で最適化 (#219)
+- [DEV] 条件レンダリングを && から三項演算子に統一 (#221)
+- [DEV] chromeService のコールバック手動 Promise 化を MV3 の Promise API に置き換え (#222)
+- [DEV] forEach+push の反復処理を map/filter().map() に統合、sort を非破壊の toSorted に変更 (#223, #224)
+
+# v0.4.2 (2026-08-04)
+
+- [FIX] 全データ削除後も一覧にブロックが表示されたままになる問題を修正 (#188)
+- [DEV] ブロック一覧の state を App に持ち上げ、Main/Block の props→useState コピーを廃止 (#188)
+- [DEV] TypeScript を 6.0.3 に更新し、TS6 の deprecation に対応 (#206)
+
 # v0.4.1 (2026-08-04)
 
 - [FIX] タブページの title の typo を修正 (syncTabCliper → SyncTabClipper) (#185)
