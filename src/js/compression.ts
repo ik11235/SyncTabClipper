@@ -56,6 +56,9 @@ export namespace compression {
     const writer = stream.writable.getWriter();
     // 書き込み完了は読み出しの進行に依存するため、awaitせず読み出しと並行させる
     const writeDone = writer.write(bytes).then(() => writer.close());
+    // 読み出し側が先にrejectするとawait writeDoneに到達せず、writeDoneのrejectが
+    // 未処理のまま残る。ここで先に握っておく（失敗理由はreadAll側が伝える）
+    writeDone.catch(() => {});
     const compressed = await readAll(stream.readable);
     await writeDone;
     return bytesToBase64(compressed);
@@ -71,6 +74,8 @@ export namespace compression {
     const stream = new DecompressionStream('deflate-raw');
     const writer = stream.writable.getWriter();
     const writeDone = writer.write(bytes).then(() => writer.close());
+    // 壊れた圧縮データではreadAllが先にrejectするため、compressと同じく先に握る
+    writeDone.catch(() => {});
     const decompressed = await readAll(stream.readable);
     await writeDone;
     return new TextDecoder().decode(decompressed);

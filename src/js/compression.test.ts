@@ -38,4 +38,17 @@ describe('compression', () => {
       compression.compress('').then(compression.decompress),
     ).resolves.toBe('');
   });
+
+  // 書き込み側のPromiseを握り忘れると、これらは未処理rejectionになり
+  // 呼び出し側のcatchをすり抜けてコンソールを汚す
+  test('不正なdeflateデータはrejectする（未処理rejectionを残さない）', async (): Promise<void> => {
+    await expect(
+      compression.decompress(btoa('not a deflate')),
+    ).rejects.toThrow();
+  });
+
+  test('途中で切れたデータはrejectする（未処理rejectionを残さない）', async (): Promise<void> => {
+    const truncated = v3CompressedBase64.slice(0, 20);
+    await expect(compression.decompress(truncated)).rejects.toThrow();
+  });
 });
