@@ -1,0 +1,51 @@
+/*
+ * SyncTabClipper 独自スタイル。UIkitで表現できない部分だけをここに置く。
+ * uikit.min.cssの後に読み込む前提。
+ */
+
+/*
+ * サイドバーのメニューはul側にuk-navを付けていないため、
+ * UIkitの`.uk-nav .uk-nav-divider`の余白が効かない。区切り線の上下余白を補う。
+ */
+.uk-nav-default > .uk-nav-divider {
+  margin: 8px 0;
+}
+
+/*
+ * 破壊的操作（全データ削除）の注意書きと実行ボタン (#207)
+ *
+ * UIkitのdanger色 #f0506e は白背景に対するコントラスト比が約3.3:1しかなく、
+ * 14px程度の注意書きでは読み取りづらい。同じ赤系で比7:1を超える濃さを
+ * 専用に定義し、注意書き・ボタンの双方で使う。
+ */
+.destructive-note {
+  display: flex;
+  gap: 6px;
+  /* サイドバーはuk-width-autoで内容幅に追随するため、長文の注意書きが
+     横幅を押し広げないよう折り返し幅を明示する */
+  max-width: 15rem;
+  margin: 4px 0 10px;
+  padding: 8px 10px;
+  background: #fdf0f3;
+  border-left: 3px solid #a32741;
+  color: #a32741;
+  line-height: 1.5;
+}
+
+/* アイコンを縮ませず、折り返した2行目以降を本文の左端に揃える */
+.destructive-note > .destructive-note-icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+.destructive-action {
+  color: #a32741;
+  border-color: #a32741;
+}
+
+.destructive-action:hover,
+.destructive-action:focus {
+  color: #fff;
+  background-color: #a32741;
+  border-color: #a32741;
+}

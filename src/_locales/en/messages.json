@@ -50,7 +50,7 @@
     "message": "Advanced"
   },
   "content_msg_destructive_warning": {
-    "message": "Destructive action. Deleted data cannot be recovered."
+    "message": "Deletes all saved tabs. This cannot be undone."
   },
   "content_msg_not_tab": {
     "message": "There are no saved tabs."

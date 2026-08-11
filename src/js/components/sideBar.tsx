@@ -118,21 +118,32 @@ const SideBar: React.FC<SideBarProps> = (props) => {
               </li>
             </ul>
           </li>
+          {/* 通常操作と破壊的操作の境目を視覚的に区切る */}
+          <li className="uk-nav-divider" />
           {/* 破壊的操作は誤クリックを防ぐためデフォルトで閉じたメニューに隠す (#207) */}
-          <li className="uk-parent">
+          <li className="uk-parent uk-active">
             <a href="#">
               <span
                 className="uk-margin-small-right"
-                data-uk-icon="icon: settings"
+                data-uk-icon="icon: cog"
               />
               {chrome.i18n.getMessage('content_msg_advanced_menu')}
             </a>
             <ul className="uk-nav-sub">
+              {/* 実行前に読ませるため注意書きをボタンより先に置く */}
               <li>
-                <a
-                  href="#"
+                <div className="destructive-note">
+                  <span
+                    className="destructive-note-icon"
+                    data-uk-icon="icon: warning; ratio: 0.8"
+                  />
+                  <span>
+                    {chrome.i18n.getMessage('content_msg_destructive_warning')}
+                  </span>
+                </div>
+                <button
                   id="all_clear"
-                  className="uk-text-danger"
+                  className="uk-button uk-button-default uk-button-small destructive-action"
                   onClick={deleteAllData}
                 >
                   <span
@@ -140,14 +151,7 @@ const SideBar: React.FC<SideBarProps> = (props) => {
                     data-uk-icon="icon: trash"
                   />
                   {chrome.i18n.getMessage('content_msg_all_data_delete')}
-                </a>
-                <div className="uk-text-danger uk-text-small">
-                  <span
-                    className="uk-margin-small-right"
-                    data-uk-icon="icon: warning; ratio: 0.8"
-                  />
-                  {chrome.i18n.getMessage('content_msg_destructive_warning')}
-                </div>
+                </button>
               </li>
             </ul>
           </li>

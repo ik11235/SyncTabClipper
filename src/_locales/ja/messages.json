@@ -50,7 +50,7 @@
     "message": "上級者向け"
   },
   "content_msg_destructive_warning": {
-    "message": "破壊的な操作です。削除したデータは元に戻せません。"
+    "message": "保存したすべてのタブを削除します。元に戻せません。"
   },
   "content_msg_not_tab": {
     "message": "保存済みのタブはありません。"
