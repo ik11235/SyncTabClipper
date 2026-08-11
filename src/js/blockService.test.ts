@@ -485,6 +485,14 @@ describe('blockService import/export', (): void => {
     setTabLengthSpy.mockRestore();
   });
 
+  // エクスポート版数を上げたときにインポート側の受け入れ追加を忘れると、
+  // 自分が出力したJSONを読めなくなる
+  test('エクスポートした版数はインポートで受け付けられる', (): void => {
+    expect(blockService.SUPPORTED_EXPORT_VERSIONS).toContain(
+      blockService.CURRENT_EXPORT_VERSION,
+    );
+  });
+
   // 保存側がv3になってもエクスポート形式はv2から変わらない。ここでv3を出すと
   // 旧バージョンの拡張機能でインポートできなくなるだけなので据え置く
   test('exportAllDataJson バージョン情報付きで出力する', async (): Promise<void> => {

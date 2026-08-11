@@ -15,6 +15,11 @@ export namespace blockService {
   // 拡張機能でインポートできなくなるだけなので、形式が変わるまでv2に据え置く
   export const CURRENT_EXPORT_VERSION = 2;
 
+  // インポートで受け付けるエクスポートJSONの版数。過去に出力したJSONを読めなく
+  // しないため、CURRENT_EXPORT_VERSIONを上げるときは古い版数を残したまま追加する
+  // （v1のエクスポートはブロックの素の配列で版数を持たないため、ここには含めない）
+  export const SUPPORTED_EXPORT_VERSIONS: readonly number[] = [2];
+
   export function createBlock(
     tabs: chrome.tabs.Tab[],
     createdAt: Date,
@@ -217,13 +222,10 @@ export namespace blockService {
       // v1のエクスポートはブロックの素の配列
       blockObjs = json;
     } else {
-      switch (json.v) {
-        case 2:
-          blockObjs = json.blocks;
-          break;
-        default:
-          throw new Error(`Unsupported data version: v=${json.v}`);
+      if (!SUPPORTED_EXPORT_VERSIONS.includes(json.v)) {
+        throw new Error(`Unsupported data version: v=${json.v}`);
       }
+      blockObjs = json.blocks;
     }
     // 1件でも書き込めないブロックが混ざっていると、一部だけ書き込まれた状態で
     // setTabLengthに到達せず、書き込んだブロックが一覧に出ないまま
