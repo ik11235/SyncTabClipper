@@ -161,6 +161,11 @@ describe('chromeService.storage.getAllBlock', (): void => {
       '{"v":2,"created_at":1609556645678,"tabs":"oops"}',
       false,
     ],
+    // v3の圧縮ペイロードが壊れている場合。DecompressionStreamのrejectが
+    // BrokenBlockに落ちること（=呼び出し側をすり抜けないこと）を担保する
+    ['v3のdがbase64として壊れている', '{"v":3,"d":"!!!not base64!!!"}', false],
+    ['v3のdがdeflateデータでない', '{"v":3,"d":"bm90IGEgZGVmbGF0ZQ=="}', false],
+    ['v3のdが途中で切れている', '{"v":3,"d":"q1ZKLkpNLElNiU8s"}', false],
   ])(
     '1件が復元できない(%s)場合もBrokenBlockとして返り他のブロックは残る',
     async (
