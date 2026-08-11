@@ -36,18 +36,27 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     });
   };
 
+  // 開けるタブか。urlが空文字列のタブ（chrome.tabs.Tab.urlは
+  // コミット前のタブで空文字列になりうる）もchrome.tabs.createに渡せない
+  const openable = (tab: model.Tab): boolean => Boolean(tab?.url);
+
   const openAllTab = () => {
+    // 壊れたタブを踏むとmapの途中で例外になり、残りのタブが開かれないまま
+    // イベントハンドラの外へ抜けて通知もされないため、開ける分だけに絞る
+    const openTabs = block.tabs.filter(openable);
     Promise.all(
-      // 壊れたタブを踏むとmapの途中で例外になり、残りのタブが開かれないまま
-      // イベントハンドラの外へ抜けて通知もされないため、開ける分だけに絞る
-      block.tabs
-        .filter((tab) => tab?.url != null)
-        .map((tab) =>
-          chromeService.tab.createTabs({ url: tab.url, active: false }),
-        ),
+      openTabs.map((tab) =>
+        chromeService.tab.createTabs({ url: tab.url, active: false }),
+      ),
     )
       .then(() => {
-        deleteBlock();
+        // 開いたタブだけを消す。開けなかったタブまでブロックごと消すと、
+        // 一覧に見えていたタブが開かれもせず失われる
+        props.updateBlock({
+          tabs: block.tabs.filter((tab) => !openable(tab)),
+          indexNum: block.indexNum,
+          createdAt: block.createdAt,
+        });
       })
       .catch((error) => {
         chromeService.errorLog.set(error).catch(console.error);
@@ -92,17 +101,21 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       </div>
       <div className="uk-card-body">
         <ul>
-          {block.tabs.map((tab, index) => {
-            return (
+          {block.tabs.map((tab, index) =>
+            // urlを持たないタブはリンクとして機能せず、クリックすると
+            // 空の新規タブが開いて元のデータが消えるため壊れたタブとして扱う。
+            // urlが空文字列のタブ(#192で特定したchrome.tabs.Tab.urlの挙動)は
+            // titleが読めるので通常のタブとして表示する
+            tab?.url == null ? (
+              <BrokenTab
+                key={`${index}-broken`}
+                deleteClick={() => deleteClick(index)}
+              />
+            ) : (
               // タブ1件の破損でブロックごと落ちると、同じブロックの正常なタブまで
-              // 表示されなくなるため、境界はタブ単位に置く。
-              // keyの組み立てでも落ちないようtab自体のnullを許容する。
-              // ErrorBoundaryはhasErrorをリセットできないため、tab自体がnullの
-              // ケースとurlを持たないケースでkeyが衝突しないようにする
-              // （衝突するとタブ削除後のindexシフトで、正常なタブが
-              //   壊れたタブの境界を引き継いで壊れ扱いのまま居残る）
+              // 表示されなくなるため、境界はタブ単位に置く
               <ErrorBoundary
-                key={`${index}-${tab == null ? 'null' : tab.url}`}
+                key={`${index}-${tab.url}`}
                 fallback={<BrokenTab deleteClick={() => deleteClick(index)} />}
               >
                 <Tab
@@ -111,8 +124,8 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
                   openLinkClick={() => openLink(index)}
                 />
               </ErrorBoundary>
-            );
-          })}
+            ),
+          )}
         </ul>
       </div>
     </div>

@@ -556,9 +556,10 @@ describe('App', (): void => {
         url: 'https://example.com/b',
         active: false,
       });
-      // 全部開けたのでブロックは削除される
+      // 開いたタブだけが消え、開けなかったタブは残る
+      // （ブロックごと消すと、一覧に見えていたタブが開かれもせず失われる）
       expect(setBlockSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ indexNum: 0, tabs: [] }),
+        expect.objectContaining({ indexNum: 0, tabs: [null] }),
       );
     } finally {
       createTabsSpy.mockRestore();
@@ -567,14 +568,14 @@ describe('App', (): void => {
     }
   });
 
-  // ErrorBoundaryはhasErrorをリセットできないため、keyが衝突すると
-  // 正常なタブが壊れたタブの境界を引き継いで壊れ扱いのまま居残る
-  test('壊れたタブを削除してもurlを持たないタブが壊れ扱いにならない', async (): Promise<void> => {
+  // urlを持たないタブはリンクとして機能せず、クリックすると空の新規タブが
+  // 開いて元のデータが消えるため、壊れたタブとして扱う
+  test('urlを持たないタブは壊れたタブとして表示し個別に削除できる', async (): Promise<void> => {
     getAllBlockSpy.mockRestore();
     syncData['t_len'] = '1';
     // tab自体がnullのタブと、urlを持たないタブが共存する
     syncData['td_0'] =
-      '{"v":2,"created_at":1609556645678,"tabs":[null,{"title":"title-no-url"}]}';
+      '{"v":2,"created_at":1609556645678,"tabs":[null,{"title":"title-no-url"},{"url":"https://example.com/ok","title":"title-ok"}]}';
     const setBlockSpy = jest
       .spyOn(chromeService.storage, 'setBlock')
       .mockResolvedValue(undefined);
@@ -584,8 +585,10 @@ describe('App', (): void => {
 
     try {
       await mount();
-      expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(1);
-      expect(container.textContent).toContain('title-no-url');
+      // urlのないタブはリンクとして描画されない
+      expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(2);
+      expect(container.textContent).not.toContain('title-no-url');
+      expect(container.textContent).toContain('title-ok');
 
       const closeLink = container.querySelector(
         '.broken_tab_close',
@@ -594,12 +597,65 @@ describe('App', (): void => {
         closeLink.click();
       });
 
-      // indexがシフトしても、残った正常なタブは壊れ扱いにならない
-      expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(0);
-      expect(container.textContent).toContain('title-no-url');
+      // 先頭の壊れたタブだけが消え、残りは巻き添えにならない
+      expect(setBlockSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          indexNum: 0,
+          tabs: [
+            { title: 'title-no-url' },
+            { url: 'https://example.com/ok', title: 'title-ok' },
+          ],
+        }),
+      );
+      expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(1);
+      expect(container.textContent).toContain('title-ok');
     } finally {
       setBlockSpy.mockRestore();
       consoleErrorSpy.mockRestore();
+    }
+  });
+
+  // urlが空文字列のタブ(#192で特定したchrome.tabs.Tab.urlの挙動)は
+  // titleが読めるので通常のタブとして表示し、開けないので開くときだけ除く
+  test('urlが空文字列のタブは表示されるが、すべてのリンクを開くでは開かず残る', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '1';
+    syncData['td_0'] =
+      '{"v":2,"created_at":1609556645678,"tabs":[{"url":"","title":"title-empty"},{"url":"https://example.com/ok","title":"title-ok"}]}';
+    const createTabsSpy = jest
+      .spyOn(chromeService.tab, 'createTabs')
+      .mockResolvedValue(undefined);
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+
+    try {
+      await mount();
+      expect(container.textContent).toContain('title-empty');
+      expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(0);
+
+      const openAllLink = container.querySelector(
+        '.all_tab_link',
+      ) as HTMLElement;
+      await act(async () => {
+        openAllLink.click();
+      });
+
+      // 空urlはchrome.tabs.createに渡さず、開けなかったタブとして残す
+      expect(createTabsSpy).toHaveBeenCalledTimes(1);
+      expect(createTabsSpy).toHaveBeenCalledWith({
+        url: 'https://example.com/ok',
+        active: false,
+      });
+      expect(setBlockSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          indexNum: 0,
+          tabs: [{ url: '', title: 'title-empty' }],
+        }),
+      );
+    } finally {
+      createTabsSpy.mockRestore();
+      setBlockSpy.mockRestore();
     }
   });
 
