@@ -55,6 +55,12 @@
   "content_msg_broken_block_delete": {
     "message": "このブロックを削除する"
   },
+  "content_msg_unsupported_block": {
+    "message": "このブロックは新しいバージョンで保存されたデータのため表示できません。拡張機能を更新してください。"
+  },
+  "content_msg_broken_tab": {
+    "message": "このタブのデータを読み込めませんでした。"
+  },
   "content_msg_export_broken_block": {
     "message": "$count$個のブロックはデータを読み込めなかったため、エクスポートしたデータに含まれていません。このバックアップは不完全です。すべてのデータを削除する前に内容を確認してください。",
     "placeholders": {

@@ -2,6 +2,8 @@ import React from 'react';
 import { model } from '../types/interface';
 import { chromeService } from '../chromeService';
 import { Tab } from './tab';
+import BrokenTab from './brokenTab';
+import { ErrorBoundary } from './errorBoundary';
 
 interface BlockProps {
   block: model.Block;
@@ -88,12 +90,19 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
         <ul>
           {block.tabs.map((tab, index) => {
             return (
-              <Tab
-                tab={tab}
-                deleteClick={() => deleteClick(index)}
-                openLinkClick={() => openLink(index)}
-                key={`${tab.url}-${index}`}
-              />
+              // タブ1件の破損でブロックごと落ちると、同じブロックの正常なタブまで
+              // 表示されなくなるため、境界はタブ単位に置く。
+              // keyの組み立てでも落ちないようtab自体のnullを許容する
+              <ErrorBoundary
+                key={`${tab?.url}-${index}`}
+                fallback={<BrokenTab deleteClick={() => deleteClick(index)} />}
+              >
+                <Tab
+                  tab={tab}
+                  deleteClick={() => deleteClick(index)}
+                  openLinkClick={() => openLink(index)}
+                />
+              </ErrorBoundary>
             );
           })}
         </ul>

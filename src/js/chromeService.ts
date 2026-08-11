@@ -121,7 +121,11 @@ export namespace chromeService {
         return block;
       } catch (e) {
         console.error(e);
-        return { indexNum: indexNum, broken: true };
+        return {
+          indexNum: indexNum,
+          broken: true,
+          unsupported: e instanceof blockService.UnsupportedVersionError,
+        };
       }
     }
 

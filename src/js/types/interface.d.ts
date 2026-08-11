@@ -20,6 +20,12 @@ export namespace model {
   interface BrokenBlock {
     indexNum: number;
     broken: true;
+    /**
+     * この拡張機能が知らないスキーマ版数のデータだったか。
+     * 壊れたデータではなく新しいバージョンで保存された正常なデータでありうるため、
+     * trueのときは削除導線を出さない（全同期端末から実データが消えるため）
+     */
+    unsupported: boolean;
   }
 
   /**

@@ -357,14 +357,15 @@ describe('blockService import/export', (): void => {
         ],
       },
     ]);
-    await expect(blockService.exportAllDataJson()).resolves.toBe(
-      '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
-    );
+    await expect(blockService.exportAllDataJson()).resolves.toStrictEqual({
+      json: '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
+      brokenCount: 0,
+    });
   });
 
   // 復元できなかったブロックはブロックJSONに戻せないため出力できない。
   // 正常なブロックがそれに巻き込まれて欠けないことを担保する
-  test('exportAllDataJson 復元できなかったブロックは除いて出力し欠損を通知する', async (): Promise<void> => {
+  test('exportAllDataJson 復元できなかったブロックは除いて出力し件数を返す', async (): Promise<void> => {
     getAllBlockSpy.mockResolvedValue([
       {
         indexNum: 0,
@@ -376,33 +377,21 @@ describe('blockService import/export', (): void => {
           },
         ],
       },
-      { indexNum: 1, broken: true },
-      { indexNum: 2, broken: true },
+      { indexNum: 1, broken: true, unsupported: false },
+      { indexNum: 2, broken: true, unsupported: true },
     ]);
-    const errorLogSetSpy = jest
-      .spyOn(chromeService.errorLog, 'set')
-      .mockResolvedValue(undefined);
 
-    try {
-      await expect(blockService.exportAllDataJson()).resolves.toBe(
-        '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
-      );
-      // 欠けたバックアップを完全なものと誤解させないため件数を通知する
-      expect(errorLogSetSpy).toHaveBeenCalledWith(
-        'content_msg_export_broken_block:[2]',
-      );
-    } finally {
-      errorLogSetSpy.mockRestore();
-    }
+    await expect(blockService.exportAllDataJson()).resolves.toStrictEqual({
+      json: '{"v":2,"ev":"9.9.9","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}]}',
+      brokenCount: 2,
+    });
   });
 
-  test('exportAllDataJson 全ブロックが正常なら通知しない', async (): Promise<void> => {
+  // エクスポートは成功しているため、赤バッジ+アラートのerrorLogには流さない
+  // （欠損の通知はユーザー操作への応答としてSideBar側でalertする）
+  test('exportAllDataJson 欠損があってもerrorLogには流さない', async (): Promise<void> => {
     getAllBlockSpy.mockResolvedValue([
-      {
-        indexNum: 0,
-        createdAt: new Date(`2021-01-02T03:04:05.678Z`),
-        tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
-      },
+      { indexNum: 0, broken: true, unsupported: false },
     ]);
     const errorLogSetSpy = jest
       .spyOn(chromeService.errorLog, 'set')
@@ -413,25 +402,6 @@ describe('blockService import/export', (): void => {
       expect(errorLogSetSpy).not.toHaveBeenCalled();
     } finally {
       errorLogSetSpy.mockRestore();
-    }
-  });
-
-  test('exportAllDataJson 欠損の通知に失敗してもエクスポートは成功する', async (): Promise<void> => {
-    getAllBlockSpy.mockResolvedValue([{ indexNum: 0, broken: true }]);
-    const errorLogSetSpy = jest
-      .spyOn(chromeService.errorLog, 'set')
-      .mockRejectedValue(new Error('storage error'));
-    const consoleErrorSpy = jest
-      .spyOn(console, 'error')
-      .mockImplementation(() => undefined);
-
-    try {
-      await expect(blockService.exportAllDataJson()).resolves.toBe(
-        '{"v":2,"ev":"9.9.9","blocks":[]}',
-      );
-    } finally {
-      errorLogSetSpy.mockRestore();
-      consoleErrorSpy.mockRestore();
     }
   });
 

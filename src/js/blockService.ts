@@ -25,6 +25,13 @@ export namespace blockService {
   }
 
   /**
+   * この拡張機能が知らないスキーマ版数のデータを読もうとしたときの例外。
+   * 壊れたデータと違い、新しいバージョンで保存された正常なデータでありうる
+   * （sync経由で新しい端末から降りてくる）ため、呼び出し側で区別できるようにする
+   */
+  export class UnsupportedVersionError extends Error {}
+
+  /**
    * 一覧の要素が復元できなかったブロックかを判定する
    * @param {model.BlockEntry} entry 判定する要素
    * @return {boolean} 復元できなかったブロックならtrue
@@ -117,7 +124,9 @@ export namespace blockService {
           ? jsonObjToBlock(js, indexNum)
           : jsonToBlock(zlibWrapper.inflate(js.d), indexNum);
       default:
-        throw new Error(`Unsupported data version: v=${version}`);
+        throw new UnsupportedVersionError(
+          `Unsupported data version: v=${version}`,
+        );
     }
   }
 
@@ -139,29 +148,32 @@ export namespace blockService {
     }
   }
 
-  export function exportAllDataJson(): Promise<string> {
+  /**
+   * エクスポート結果。欠けたバックアップを完全なものと誤解させないよう、
+   * 出力できなかったブロックの件数を呼び出し側へ返す
+   */
+  export type ExportResult = {
+    json: string;
+    // 出力できなかったブロックの件数。復元に失敗したブロックのみを数える。
+    // 描画に失敗するブロックは復元自体は成功していて出力にも含まれるため、
+    // 一覧に出る破損カードの枚数とは一致しない
+    brokenCount: number;
+  };
+
+  export function exportAllDataJson(): Promise<ExportResult> {
     return chromeService.storage.getAllBlock().then((entries) => {
       // 復元できなかったブロックはブロックJSONに戻せないため出力できない
       const blocks = entries.flatMap((entry) =>
         isBrokenBlock(entry) ? [] : [blockToJsonObj(entry)],
       );
-      const brokenCount = entries.length - blocks.length;
-      if (brokenCount > 0) {
-        // 欠けたバックアップを完全なものと誤解して全データ削除に進むのを防ぐ。
-        // 通知の失敗でエクスポート自体を失敗させない
-        chromeService.errorLog
-          .set(
-            chrome.i18n.getMessage('content_msg_export_broken_block', [
-              brokenCount,
-            ]),
-          )
-          .catch(console.error);
-      }
-      return JSON.stringify({
-        v: CURRENT_SCHEMA_VERSION,
-        ev: chromeService.runtime.getExtensionVersion(),
-        blocks: blocks,
-      });
+      return {
+        json: JSON.stringify({
+          v: CURRENT_SCHEMA_VERSION,
+          ev: chromeService.runtime.getExtensionVersion(),
+          blocks: blocks,
+        }),
+        brokenCount: entries.length - blocks.length,
+      };
     });
   }
 

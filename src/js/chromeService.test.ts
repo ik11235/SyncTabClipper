@@ -152,14 +152,22 @@ describe('chromeService.storage.getAllBlock', (): void => {
 
   // 1件の壊れたデータで一覧全体が失われないことの回帰テスト(#192)
   test.each([
-    ['JSONとして壊れている', '{"v":2,"created_at":1'],
-    ['未対応バージョン', '{"v":99,"created_at":1609556645678,"tabs":[]}'],
-    ['空文字列(書き込みが壊れた形跡)', ''],
-    ['tabsがない', '{"v":2,"created_at":1609556645678}'],
-    ['tabsが配列でない', '{"v":2,"created_at":1609556645678,"tabs":"oops"}'],
+    ['JSONとして壊れている', '{"v":2,"created_at":1', false],
+    ['未対応バージョン', '{"v":99,"created_at":1609556645678,"tabs":[]}', true],
+    ['空文字列(書き込みが壊れた形跡)', '', false],
+    ['tabsがない', '{"v":2,"created_at":1609556645678}', false],
+    [
+      'tabsが配列でない',
+      '{"v":2,"created_at":1609556645678,"tabs":"oops"}',
+      false,
+    ],
   ])(
     '1件が復元できない(%s)場合もBrokenBlockとして返り他のブロックは残る',
-    async (_name: string, brokenValue: string): Promise<void> => {
+    async (
+      _name: string,
+      brokenValue: string,
+      unsupported: boolean,
+    ): Promise<void> => {
       syncData['t_len'] = '2';
       syncData['td_0'] = brokenValue;
       syncData['td_1'] = validJson(1640000000000, 'valid');
@@ -173,7 +181,13 @@ describe('chromeService.storage.getAllBlock', (): void => {
         createdAt: new Date(1640000000000),
         tabs: [{ url: 'https://example.com/valid', title: 'valid' }],
       });
-      expect(res[1]).toStrictEqual({ indexNum: 0, broken: true });
+      // 新しいバージョンで保存されただけのデータは、壊れたデータと区別する
+      // （削除導線を出すと全同期端末から実データが消えるため）
+      expect(res[1]).toStrictEqual({
+        indexNum: 0,
+        broken: true,
+        unsupported: unsupported,
+      });
     },
   );
 
@@ -187,8 +201,8 @@ describe('chromeService.storage.getAllBlock', (): void => {
 
     expect(res).toHaveLength(3);
     expect(res.filter((entry) => blockService.isBrokenBlock(entry))).toEqual([
-      { indexNum: 0, broken: true },
-      { indexNum: 2, broken: true },
+      { indexNum: 0, broken: true, unsupported: false },
+      { indexNum: 2, broken: true, unsupported: false },
     ]);
   });
 

@@ -21,6 +21,7 @@ const Main: React.FC<MainProps> = (props) => {
             <BrokenBlock
               key={entry.indexNum}
               indexNum={entry.indexNum}
+              unsupported={entry.unsupported}
               deleteBlock={props.deleteBrokenBlock}
             />
           ) : (
@@ -32,6 +33,7 @@ const Main: React.FC<MainProps> = (props) => {
               fallback={
                 <BrokenBlock
                   indexNum={entry.indexNum}
+                  unsupported={false}
                   deleteBlock={props.deleteBrokenBlock}
                 />
               }

@@ -55,6 +55,12 @@
   "content_msg_broken_block_delete": {
     "message": "Delete this block"
   },
+  "content_msg_unsupported_block": {
+    "message": "This block was saved by a newer version and cannot be displayed. Please update the extension."
+  },
+  "content_msg_broken_tab": {
+    "message": "Failed to load the data of this tab."
+  },
   "content_msg_export_broken_block": {
     "message": "$count$ block(s) could not be loaded and are not included in the exported data. This backup is incomplete. Please check its contents before deleting all data.",
     "placeholders": {

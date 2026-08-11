@@ -309,7 +309,7 @@ describe('App', (): void => {
         createdAt: new Date('2021-01-02T03:04:05.678Z'),
         tabs: [{ url: 'https://example.com/valid', title: 'title-valid' }],
       },
-      { indexNum: 1, broken: true },
+      { indexNum: 1, broken: true, unsupported: false },
     ]);
     const removeBlockSpy = jest
       .spyOn(chromeService.storage, 'removeBlock')
@@ -339,7 +339,7 @@ describe('App', (): void => {
   // getAllBlockをモックせず実際のstorage経由で検証する。
   // モックした一覧を渡すテストだけでは、実データから到達しうる壊れ方を
   // 取りこぼす（#192がnode環境のテストで2年隠れたのと同型のリスク）
-  test('実データが壊れていても壊れたブロックだけがカードになる', async (): Promise<void> => {
+  test('実データが壊れていても壊れた要素だけがカードになる', async (): Promise<void> => {
     getAllBlockSpy.mockRestore();
     syncData['t_len'] = '3';
     // タブ要素がnullだとtab.tsxがレンダリング時に例外を投げる
@@ -357,13 +357,111 @@ describe('App', (): void => {
     try {
       await mount();
 
-      // 正常なブロックは表示され、壊れた2件はカードに差し替わる
+      // 壊れたタブ1件はブロック全体を巻き込まず、同じブロックの正常なタブは残る
+      expect(container.textContent).toContain('title-x');
+      expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(1);
+      // 復元できなかったブロックだけがカードになる
       expect(container.textContent).toContain('title-ok');
-      expect(container.textContent).not.toContain('title-x');
       expect(container.querySelectorAll('.broken_block_delete')).toHaveLength(
-        2,
+        1,
       );
       expect(container.textContent).not.toContain('content_msg_not_tab');
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  test('壊れたタブを削除しても同じブロックの正常なタブは残る', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '1';
+    syncData['td_0'] =
+      '{"v":2,"created_at":1609556645678,"tabs":[null,{"url":"https://example.com/x","title":"title-x"}]}';
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      const closeLink = container.querySelector(
+        '.broken_tab_close',
+      ) as HTMLElement;
+      await act(async () => {
+        closeLink.click();
+      });
+
+      expect(setBlockSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          indexNum: 0,
+          tabs: [{ url: 'https://example.com/x', title: 'title-x' }],
+        }),
+      );
+      expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(0);
+      expect(container.textContent).toContain('title-x');
+    } finally {
+      setBlockSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  // 欠けたバックアップを完全なものと誤解して全データ削除に進むのを防ぐ。
+  // エクスポート自体は成功しているため、errorLog（赤バッジ+アラート）ではなく
+  // ユーザー操作への応答としてその場で伝える
+  test('復元できなかったブロックがあるとエクスポート時に欠損を伝える', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '2';
+    syncData['td_0'] = '{"v":2,"created_at":1';
+    syncData['td_1'] =
+      '{"v":2,"created_at":1640000000000,"tabs":[{"url":"https://example.com/ok","title":"title-ok"}]}';
+    const alertSpy = jest
+      .spyOn(window, 'alert')
+      .mockImplementation(() => undefined);
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      const exportLink = container.querySelector('#export_link') as HTMLElement;
+      await act(async () => {
+        exportLink.click();
+      });
+
+      expect(alertSpy).toHaveBeenCalledWith('content_msg_export_broken_block');
+      // 読めたブロックはエクスポートされ、赤バッジのエラー通知は立てない
+      const exportBody = container.querySelector(
+        '#export_body',
+      ) as HTMLTextAreaElement;
+      expect(exportBody.value).toContain('title-ok');
+      expect(localData[chromeService.errorLog.errorKey]).toBeUndefined();
+    } finally {
+      alertSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  // 新しいバージョンで保存されただけのデータは壊れているわけではないので、
+  // 削除（＝全同期端末からの消去）へ誘導しない
+  test('未対応バージョンのブロックには削除導線を出さない', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '1';
+    syncData['td_0'] =
+      '{"v":99,"created_at":1609556645678,"tabs":[{"url":"https://example.com/v3","title":"title-v3"}]}';
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      expect(container.textContent).toContain('content_msg_unsupported_block');
+      expect(container.querySelectorAll('.broken_block_delete')).toHaveLength(
+        0,
+      );
     } finally {
       consoleErrorSpy.mockRestore();
     }
