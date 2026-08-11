@@ -49,8 +49,32 @@ describe('Tab', (): void => {
   test('urlが空文字列でも例外にならず描画する', async (): Promise<void> => {
     await mount({ url: '', title: 'empty url title' });
 
-    const link = container.querySelector<HTMLAnchorElement>('a.tab_link')!;
-    expect(link.textContent).toBe('empty url title');
+    // 開けないタブはリンクにしない（クリックで空の新規タブが開いたうえで
+    // タブが一覧から消えるため）。titleは読めるのでテキストとして表示する
+    expect(container.querySelector('a.tab_link')).toBeNull();
+    const title = container.querySelector<HTMLSpanElement>('span.tab_title')!;
+    expect(title.textContent).toBe('empty url title');
+  });
+
+  test('urlが空文字列のタブはクリックしても開かない', async (): Promise<void> => {
+    const openLinkClick = jest.fn();
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <Tab
+          tab={{ url: '', title: 'empty url title' }}
+          deleteClick={jest.fn()}
+          openLinkClick={openLinkClick}
+        />,
+      );
+    });
+
+    const title = container.querySelector<HTMLSpanElement>('span.tab_title')!;
+    await act(async () => {
+      title.click();
+    });
+
+    expect(openLinkClick).not.toHaveBeenCalled();
   });
 
   test('&を含むタイトルとURLを二重エスケープせず表示する', async (): Promise<void> => {

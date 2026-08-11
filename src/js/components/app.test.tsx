@@ -615,6 +615,43 @@ describe('App', (): void => {
     }
   });
 
+  // 開くものがないのに書き戻すと、storage.syncの書き込みクォータを
+  // 無駄に消費するだけで一覧も変わらない
+  test('開けるタブが1件もないブロックではすべてのリンクを開くが何もしない', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '1';
+    syncData['td_0'] =
+      '{"v":2,"created_at":1609556645678,"tabs":[null,{"url":"","title":"title-empty"}]}';
+    const createTabsSpy = jest
+      .spyOn(chromeService.tab, 'createTabs')
+      .mockResolvedValue(undefined);
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      const openAllLink = container.querySelector(
+        '.all_tab_link',
+      ) as HTMLElement;
+      await act(async () => {
+        openAllLink.click();
+      });
+
+      expect(createTabsSpy).not.toHaveBeenCalled();
+      expect(setBlockSpy).not.toHaveBeenCalled();
+      expect(container.textContent).toContain('title-empty');
+    } finally {
+      createTabsSpy.mockRestore();
+      setBlockSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
   // urlが空文字列のタブ(#192で特定したchrome.tabs.Tab.urlの挙動)は
   // titleが読めるので通常のタブとして表示し、開けないので開くときだけ除く
   test('urlが空文字列のタブは表示されるが、すべてのリンクを開くでは開かず残る', async (): Promise<void> => {

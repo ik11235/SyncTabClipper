@@ -1,7 +1,7 @@
 import React from 'react';
 import { model } from '../types/interface';
 import { chromeService } from '../chromeService';
-import { Tab } from './tab';
+import { openableTab, Tab } from './tab';
 import BrokenTab from './brokenTab';
 import { ErrorBoundary } from './errorBoundary';
 
@@ -36,14 +36,15 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     });
   };
 
-  // 開けるタブか。urlが空文字列のタブ（chrome.tabs.Tab.urlは
-  // コミット前のタブで空文字列になりうる）もchrome.tabs.createに渡せない
-  const openable = (tab: model.Tab): boolean => Boolean(tab?.url);
-
   const openAllTab = () => {
     // 壊れたタブを踏むとmapの途中で例外になり、残りのタブが開かれないまま
     // イベントハンドラの外へ抜けて通知もされないため、開ける分だけに絞る
-    const openTabs = block.tabs.filter(openable);
+    const openTabs = block.tabs.filter(openableTab);
+    if (openTabs.length <= 0) {
+      // 開くものがないのに書き戻すと、storage.syncの書き込みクォータを
+      // 無駄に消費するだけで一覧も変わらない
+      return;
+    }
     Promise.all(
       openTabs.map((tab) =>
         chromeService.tab.createTabs({ url: tab.url, active: false }),
@@ -53,7 +54,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
         // 開いたタブだけを消す。開けなかったタブまでブロックごと消すと、
         // 一覧に見えていたタブが開かれもせず失われる
         props.updateBlock({
-          tabs: block.tabs.filter((tab) => !openable(tab)),
+          tabs: block.tabs.filter((tab) => !openableTab(tab)),
           indexNum: block.indexNum,
           createdAt: block.createdAt,
         });
@@ -113,7 +114,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
               />
             ) : (
               // タブ1件の破損でブロックごと落ちると、同じブロックの正常なタブまで
-              // 表示されなくなるため、境界はタブ単位に置く
+              // 表示されなくなるため、境界はタブ単位に置く。
+              // 一次防御は上のurlの明示チェックで、この境界は
+              // 想定していない壊れ方（titleが文字列でない等）への保険
               <ErrorBoundary
                 key={`${index}-${tab.url}`}
                 fallback={<BrokenTab deleteClick={() => deleteClick(index)} />}
