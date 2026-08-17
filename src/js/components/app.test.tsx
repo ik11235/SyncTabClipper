@@ -186,16 +186,27 @@ describe('App', (): void => {
       {
         indexNum: 1,
         createdAt: new Date('2021-01-03T03:04:05.678Z'),
-        tabs: [{ url: 'https://example.com/b1', title: 'title-b1' }],
+        // ブロックAの更新後のタブ数(1)と重ならない数にして、
+        // どちらのブロックのレンダリングかを引数で見分けられるようにする
+        tabs: [
+          { url: 'https://example.com/b1', title: 'title-b1' },
+          { url: 'https://example.com/b2', title: 'title-b2' },
+          { url: 'https://example.com/b3', title: 'title-b3' },
+        ],
       },
     ]);
     const setBlockSpy = jest
       .spyOn(chromeService.storage, 'setBlock')
       .mockResolvedValue(undefined);
-    // Blockはレンダリングのたびにcontent_msg_tab_countを必ず1回取得するため、
-    // その呼び出し回数を再レンダリング回数の代理指標として使う
+    // Blockはレンダリングのたびにcontent_msg_tab_countをタブ数付きで
+    // 必ず1回取得するため、その呼び出しを再レンダリングの代理指標として使う。
+    // 更新したブロック自体は書き込みの状態遷移で複数回レンダリングされるので、
+    // 回数の合計ではなく「ブロックBのタブ数で呼ばれたか」で判定する
     // （content_msg_tab_lengthは名前のないブロックの見出しにしか出ないので使えない）
-    const getMessageSpy = jest.fn((key: string): string => key);
+    // どちらのブロックのレンダリングか見分けるためsubstitutionsも記録する
+    const getMessageSpy = jest.fn(
+      (...args: [key: string, substitutions?: unknown]): string => args[0],
+    );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (global as any).chrome.i18n.getMessage = getMessageSpy;
 
@@ -212,12 +223,18 @@ describe('App', (): void => {
       expect(container.textContent).not.toContain('title-a1');
       expect(container.textContent).toContain('title-a2');
       expect(container.textContent).toContain('title-b1');
-      // 再レンダリングされたのは更新したブロックAのみ
-      // （ブロックBも再レンダリングされると2になる）
-      const blockRenderCount = getMessageSpy.mock.calls.filter(
+      const tabCountCalls = getMessageSpy.mock.calls.filter(
         ([key]) => key === 'content_msg_tab_count',
-      ).length;
-      expect(blockRenderCount).toBe(1);
+      );
+      // 更新したブロックAは再レンダリングされている
+      expect(tabCountCalls).not.toHaveLength(0);
+      // ブロックBは一度も再レンダリングされていない（タブ数3で呼ばれない）
+      expect(
+        tabCountCalls.filter(
+          ([, substitutions]) =>
+            Array.isArray(substitutions) && substitutions[0] === 3,
+        ),
+      ).toHaveLength(0);
     } finally {
       setBlockSpy.mockRestore();
     }

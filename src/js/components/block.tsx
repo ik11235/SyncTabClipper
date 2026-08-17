@@ -34,21 +34,51 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const titleFieldId = useId();
   const titleHintId = useId();
 
-  // タブを開く導線はchrome.tabs.createの解決を待ってからタブを書き戻すため、
-  // 待っている間に名前を保存されると、クリック時のpropsに閉じ込めた古い名前で
-  // 上書きしてしまう。書き込み自体は成功するので通知もされずに名前だけが消える。
-  // 書き戻す瞬間の最新のブロックを読めるようにして塞ぐ
-  const blockRef = useRef(block);
-  blockRef.current = block;
+  // 飛行中のタブ書き換えの本数。propsを見ても決着していない書き込みは
+  // 分からないため、名前の編集を始めさせないための判断材料として自前で数える
+  const tabWritesInFlight = useRef(0);
+  const [tabsWriting, setTabsWriting] = useState(false);
+
+  /**
+   * タブを書き換える一連の処理が飛行中であることを記録する。
+   * 名前もタブもブロックごと書き戻すため、両者が並行すると後から着地した側が
+   * 相手の変更を打ち消す（名前が消える・開いたタブが一覧に戻る）。
+   * 名前を編集している間はタブ側の導線をinertで止めているので、
+   * その裏返しとしてタブ側が飛行している間は名前の編集を始めさせない
+   * @param {Promise} work 追跡する処理
+   * @return {Promise} workと同じ結果を返すPromise
+   */
+  const trackTabWrite = <T,>(work: Promise<T>): Promise<T> => {
+    tabWritesInFlight.current += 1;
+    setTabsWriting(true);
+    const settled = (): void => {
+      tabWritesInFlight.current -= 1;
+      if (tabWritesInFlight.current <= 0) {
+        setTabsWriting(false);
+      }
+    };
+    return work.then(
+      (value) => {
+        settled();
+        return value;
+      },
+      (error) => {
+        settled();
+        throw error;
+      },
+    );
+  };
 
   // タブ配列の差し替えをApp経由でstorageへ反映する。
   // updateBlockはブロックごと書き戻すため、タブだけを変える導線でも
   // タブ以外のフィールドを引き継がないと保存のたびに消える
   const updateTabs = (tabs: model.Tab[]): Promise<void> =>
-    props.updateBlock({
-      ...blockRef.current,
-      tabs: tabs,
-    });
+    trackTabWrite(
+      props.updateBlock({
+        ...block,
+        tabs: tabs,
+      }),
+    );
 
   // 結果を待たない導線用。失敗はApp側でerrorLogに記録済みなので、
   // ここで受けないとunhandled rejectionになるだけ
@@ -58,12 +88,15 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
 
   const openLink = (index: number) => {
     const url = block.tabs[index]!.url;
-    chromeService.tab
-      .createTabs({ url: url, active: false })
-      .then(() => deleteClick(index))
-      .catch((error) => {
-        chromeService.errorLog.set(error).catch(console.error);
-      });
+    // タブを開き終わってから書き戻すまでが1つの操作なので、
+    // chrome.tabs.createを待つ間も飛行中として数える
+    trackTabWrite(
+      chromeService.tab
+        .createTabs({ url: url, active: false })
+        .then(() => deleteClick(index)),
+    ).catch((error) => {
+      chromeService.errorLog.set(error).catch(console.error);
+    });
   };
 
   const deleteClick = (index: number) => {
@@ -88,21 +121,23 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       // 無駄に消費するだけで一覧も変わらない
       return;
     }
-    Promise.all(
-      openTabs.map((tab) =>
-        chromeService.tab.createTabs({ url: tab.url, active: false }),
-      ),
-    )
-      .then(() => {
+    // 開き終わってから書き戻すまでを1つの操作としてまとめて数える。
+    // 途中で飛行中でなくなると、その隙に名前の編集を始められてしまう
+    trackTabWrite(
+      Promise.all(
+        openTabs.map((tab) =>
+          chromeService.tab.createTabs({ url: tab.url, active: false }),
+        ),
+      ).then(() => {
         // 開いたタブだけを消す。開けなかったタブまでブロックごと消すと、
         // 一覧に見えていたタブが開かれもせず失われる
         updateTabsIgnoringFailure(
           block.tabs.filter((tab) => !openableTab(tab)),
         );
-      })
-      .catch((error) => {
-        chromeService.errorLog.set(error).catch(console.error);
-      });
+      }),
+    ).catch((error) => {
+      chromeService.errorLog.set(error).catch(console.error);
+    });
   };
 
   const deleteBlock = () => {
@@ -128,9 +163,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     setTitleSaving(true);
     props
       .updateBlock({
-        // 編集中もタブの増減は起こりうるので、書き込む瞬間の最新のブロックに
-        // 名前だけを載せる
-        ...blockRef.current,
+        // 編集している間はタブ側の導線を止めてあるので、propsのタブ配列は
+        // 編集を始めたときから変わっていない
+        ...block,
         title: newTitle.length <= 0 ? undefined : newTitle,
       })
       .then(() => {
@@ -158,11 +193,22 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
 
   // 編集をやめると見出しごとフォームが消えるため、フォーカスがbodyまで落ちて
   // キーボード操作の現在位置が失われる。開いたときのボタンへ戻す
+  const cardRoot = useRef<HTMLDivElement>(null);
   const titleEditButton = useRef<HTMLButtonElement>(null);
   const titleWasEditing = useRef(false);
   useEffect(() => {
     if (titleWasEditing.current && titleDraft == null) {
-      titleEditButton.current?.focus();
+      // 保存は非同期なので、待っている間にユーザーが別の要素へフォーカスを
+      // 移していることがある。そこから奪い返すと入力先が飛ぶため、
+      // フォーカスがこのカードの中にあるか失われている場合だけ戻す
+      const active = document.activeElement;
+      if (
+        active == null ||
+        active === document.body ||
+        cardRoot.current?.contains(active) === true
+      ) {
+        titleEditButton.current?.focus();
+      }
     }
     titleWasEditing.current = titleDraft != null;
   }, [titleDraft]);
@@ -175,16 +221,17 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // （aria-modalを名乗る以上、支援技術に対しても背後は無効であるべき）
   const editing = editingTab != null && editIndex != null;
   const titleEditing = titleDraft != null;
-  // 名前は編集中もタブの増減で書き戻されうるが、名前をindexなどで参照して
-  // いないため、保存時にpropsから読めば取り違えは起きない。一方で保存の
-  // 書き込みが競合すると、後から着地した側が相手の変更を打ち消すため、
-  // 名前を編集している間はブロックを書き換える導線だけ止める
-  // （見出しの入力欄自体は編集中も操作できる必要があるので、
-  //   inertはヘッダ全体ではなく操作リンクの行に付ける）
+  // 名前もタブもブロックごと書き戻すため、両者が並行すると後から着地した側が
+  // 相手の変更を打ち消す（名前が消える・開いたタブが一覧に戻る）。
+  // 飛行中の書き込みはpropsから分からないので、そもそも同時に始められない
+  // ようにして塞ぐ。片方向だけでは「タブ操作の最中に名前を保存する」順序が
+  // 残るため、名前→タブ（tabsLocked）とタブ→名前（tabsWriting）の両方を止める。
+  // 見出しの入力欄自体は編集中も操作できる必要があるので、
+  // inertはヘッダ全体ではなく操作リンクの行に付ける
   const tabsLocked = editing || titleEditing;
 
   return (
-    <div className="tabs uk-card-default block-root-dom">
+    <div className="tabs uk-card-default block-root-dom" ref={cardRoot}>
       <div className="uk-card-header" inert={editing}>
         {titleEditing ? (
           <form
@@ -259,6 +306,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
               aria-label={chrome.i18n.getMessage(
                 'content_msg_edit_block_title',
               )}
+              // タブの書き換えが決着するまでは名前を編集させない。
+              // 並行させると後から着地した書き込みが名前を消す
+              disabled={tabsWriting}
               onClick={startTitleEdit}
             />
           </h3>

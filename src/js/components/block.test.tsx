@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import React, { act, useState } from 'react';
+import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import Block from './block';
 import { chromeService } from '../chromeService';
@@ -441,6 +441,39 @@ describe('Block', (): void => {
     );
   });
 
+  // 保存は非同期なので、待っている間にユーザーが別の要素へフォーカスを
+  // 移していることがある。そこから奪い返すと入力先が飛ぶ
+  test('保存を待っている間にフォーカスを移していたら奪い返さない', async (): Promise<void> => {
+    let resolveSave: () => void = () => {};
+    const updateBlock = jest.fn().mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+    );
+
+    await openTitleEditor();
+    await typeTitle('調査中のタブ');
+    await saveTitle();
+
+    // カードの外にある要素へフォーカスを移す
+    const outside = document.createElement('input');
+    document.body.appendChild(outside);
+    outside.focus();
+    try {
+      await act(async () => {
+        resolveSave();
+      });
+
+      expect(document.activeElement).toBe(outside);
+    } finally {
+      outside.remove();
+    }
+  });
+
   test('Escapeキーで名前の編集をやめる', async (): Promise<void> => {
     const updateBlock = jest.fn().mockResolvedValue(undefined);
     await mount(
@@ -487,31 +520,34 @@ describe('Block', (): void => {
   });
 });
 
-// タブを開く導線はchrome.tabs.createの解決を待ってからタブを書き戻すため、
-// 待っている間に名前を保存されると、クリック時のpropsに閉じ込めた古い名前で
-// 上書きしうる。書き込み自体は成功するので通知もされずに名前だけが消える。
-// この競合はAppがstateを差し替えてBlockに新しいpropsを渡すことで初めて
-// 成立するため、App相当の器を用意して検証する
-describe('Block タブ操作と名前の保存が競合するとき', (): void => {
+// 名前もタブもブロックごと書き戻すため、両者が並行すると後から着地した側が
+// 相手の変更を打ち消す（名前が消える・開いたタブが一覧に戻る）。飛行中の
+// 書き込みはpropsから分からないので、同時に始められないようにして塞いでいる。
+// タブを開く導線はchrome.tabs.createの解決も待つため窓が長い
+describe('Block タブ操作と名前の編集の排他', (): void => {
   let container: HTMLDivElement;
   let root: Root;
   let createTabsSpy: jest.SpyInstance;
+  // タブが開き終わるタイミングを操作するため、解決を手元に持つ
+  let resolveCreateTabs: () => void;
 
-  const StatefulBlock: React.FC<{
-    initialBlock: model.Block;
-    onUpdate: jest.Mock;
-  }> = (props) => {
-    const [block, setBlock] = useState(props.initialBlock);
-    return (
-      <Block
-        block={block}
-        updateBlock={(newBlock) => {
-          props.onUpdate(newBlock);
-          // Appは書き込みが成功したときだけstateへ反映する
-          return Promise.resolve().then(() => setBlock(newBlock));
-        }}
-      />
-    );
+  const mount = async (
+    tabs: model.Tab[],
+    updateBlock: (newBlock: model.Block) => Promise<void>,
+  ): Promise<void> => {
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <Block
+          block={{
+            indexNum: 0,
+            createdAt: new Date('2021-01-02T03:04:05.678Z'),
+            tabs: tabs,
+          }}
+          updateBlock={updateBlock}
+        />,
+      );
+    });
   };
 
   beforeEach((): void => {
@@ -523,7 +559,12 @@ describe('Block タブ操作と名前の保存が競合するとき', (): void =
         getMessage: (key: string): string => key,
       },
     };
-    createTabsSpy = jest.spyOn(chromeService.tab, 'createTabs');
+    resolveCreateTabs = () => {};
+    createTabsSpy = jest.spyOn(chromeService.tab, 'createTabs').mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveCreateTabs = resolve;
+      }),
+    );
   });
 
   afterEach((): void => {
@@ -532,73 +573,110 @@ describe('Block タブ操作と名前の保存が競合するとき', (): void =
     createTabsSpy.mockRestore();
   });
 
-  test('タブを開いている間に保存した名前を、後から着地した書き戻しが消さない', async (): Promise<void> => {
-    const onUpdate = jest.fn();
-    // タブが開き終わるタイミングを操作するため、解決を手元に持つ
-    let resolveCreateTabs: () => void = () => {};
-    createTabsSpy.mockReturnValue(
-      new Promise<void>((resolve) => {
-        resolveCreateTabs = resolve;
-      }),
+  test('タブを開いている間は名前の編集を始められない', async (): Promise<void> => {
+    await mount(
+      [
+        { url: 'https://example.com/a', title: 'title-a' },
+        { url: 'https://example.com/b', title: 'title-b' },
+      ],
+      jest.fn().mockResolvedValue(undefined),
     );
 
-    await act(async () => {
-      root = createRoot(container);
-      root.render(
-        <StatefulBlock
-          initialBlock={{
-            indexNum: 0,
-            createdAt: new Date('2021-01-02T03:04:05.678Z'),
-            tabs: [
-              { url: 'https://example.com/a', title: 'title-a' },
-              { url: 'https://example.com/b', title: 'title-b' },
-            ],
-          }}
-          onUpdate={onUpdate}
-        />,
-      );
-    });
+    const editButton =
+      container.querySelector<HTMLButtonElement>('.block-title-edit')!;
+    expect(editButton.disabled).toBe(false);
 
     // 1件目のリンクを開く。chrome.tabs.createは保留のままにする
     await act(async () => {
       container.querySelector<HTMLElement>('.tab_link')!.click();
     });
-    expect(onUpdate).not.toHaveBeenCalled();
 
-    // 開き終わるのを待っている間に名前を付ける
+    expect(
+      container.querySelector<HTMLButtonElement>('.block-title-edit')!.disabled,
+    ).toBe(true);
+  });
+
+  // 開き終わってから書き戻すまでを1つの操作として数えないと、その隙に
+  // 名前の編集を始められてしまう
+  test('タブを開き終わって書き戻しが決着するまで名前の編集を始められない', async (): Promise<void> => {
+    let resolveUpdate: () => void = () => {};
+    const updateBlock = jest.fn().mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveUpdate = resolve;
+      }),
+    );
+    await mount(
+      [
+        { url: 'https://example.com/a', title: 'title-a' },
+        { url: 'https://example.com/b', title: 'title-b' },
+      ],
+      updateBlock,
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('.tab_link')!.click();
+    });
+    // タブは開き終わったが、storageへの書き戻しはまだ決着していない
+    await act(async () => {
+      resolveCreateTabs();
+    });
+    expect(updateBlock).toHaveBeenCalledTimes(1);
+
+    expect(
+      container.querySelector<HTMLButtonElement>('.block-title-edit')!.disabled,
+    ).toBe(true);
+
+    await act(async () => {
+      resolveUpdate();
+    });
+
+    expect(
+      container.querySelector<HTMLButtonElement>('.block-title-edit')!.disabled,
+    ).toBe(false);
+  });
+
+  test('「すべてのリンクを開く」の最中も名前の編集を始められない', async (): Promise<void> => {
+    await mount(
+      [
+        { url: 'https://example.com/a', title: 'title-a' },
+        { url: 'https://example.com/b', title: 'title-b' },
+      ],
+      jest.fn().mockResolvedValue(undefined),
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('.all_tab_link')!.click();
+    });
+
+    expect(
+      container.querySelector<HTMLButtonElement>('.block-title-edit')!.disabled,
+    ).toBe(true);
+  });
+
+  // 逆向き。名前の保存が決着するまでタブを書き換える導線を止める
+  test('名前を保存している間はタブを書き換える導線が止まる', async (): Promise<void> => {
+    // 決着させないPromiseを返して保存中の状態に留める
+    const updateBlock = jest.fn().mockReturnValue(new Promise<void>(() => {}));
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+    );
+
     await act(async () => {
       container.querySelector<HTMLElement>('.block-title-edit')!.click();
-    });
-    const input =
-      container.querySelector<HTMLInputElement>('.block-title-input')!;
-    const setter = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      'value',
-    )!.set!;
-    await act(async () => {
-      setter.call(input, '調査中のタブ');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await act(async () => {
       container.querySelector<HTMLButtonElement>('.block-title-save')!.click();
     });
-    expect(onUpdate).toHaveBeenLastCalledWith(
-      expect.objectContaining({ title: '調査中のタブ' }),
-    );
 
-    // ここでタブが開き終わり、開いたタブを消す書き戻しが走る
-    await act(async () => {
-      resolveCreateTabs();
-    });
-
-    expect(onUpdate).toHaveBeenLastCalledWith({
-      indexNum: 0,
-      createdAt: new Date('2021-01-02T03:04:05.678Z'),
-      tabs: [{ url: 'https://example.com/b', title: 'title-b' }],
-      title: '調査中のタブ',
-    });
-    expect(container.querySelector('.block-title')!.textContent).toBe(
-      '調査中のタブ',
-    );
+    expect(
+      container
+        .querySelector('.uk-card-header .uk-grid')!
+        .hasAttribute('inert'),
+    ).toBe(true);
+    expect(
+      container.querySelector('.uk-card-body')!.hasAttribute('inert'),
+    ).toBe(true);
+    expect(createTabsSpy).not.toHaveBeenCalled();
   });
 });
