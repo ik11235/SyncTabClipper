@@ -72,3 +72,26 @@
 .tab_close {
   margin-left: 8px;
 }
+
+/*
+ * ブロックの名前 (#195)
+ *
+ * 名前には空白を含まない長い文字列（URLをそのまま貼る等）が入りうる。
+ * UIkitの`.uk-card-title`は折り返しを指定していないため、そのままだと
+ * カード幅を突き抜けてページに横スクロールが出る。
+ */
+.block-title {
+  overflow-wrap: anywhere;
+}
+
+/*
+ * 名前の編集はこの機能の主導線なのでキーボードから到達できる必要があり、
+ * タブ行のアイコン（span）と違ってbutton要素で置いている。
+ * 見た目をアイコンだけに揃えるためブラウザ既定のボタン装飾を落とす。
+ */
+.block-title-edit {
+  padding: 0;
+  border: none;
+  background: none;
+  vertical-align: middle;
+}

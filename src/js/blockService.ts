@@ -68,7 +68,9 @@ export namespace blockService {
   // エクスポート/ストレージJSONのブロック表現（v2エンベロープのフィールドを含む）
   // titleはv3の途中で追加した省略可能なフィールドで、スキーマ版数は上げていない。
   // 版数を上げると旧バージョンの拡張機能がsync経由で降りてきたブロックを
-  // UnsupportedVersionErrorで一切表示できなくなるため
+  // UnsupportedVersionErrorで一切表示できなくなるため。
+  // 代わりに、titleを知らない旧バージョンが同じブロックを書き戻すと
+  // （タブを削除する等）名前は失われる。表示できなくなるよりは軽い副作用として許容する
   type BlockJson = {
     created_at: number;
     tabs: model.Tab[];
@@ -106,8 +108,12 @@ export namespace blockService {
    */
   function toBlockTitle(title: unknown): string | undefined {
     if (typeof title === 'string') {
-      // 空文字列は名前なしと同じ扱いにして、デフォルトのタブ数表示に戻す
-      return title.length > 0 ? title : undefined;
+      // 空文字列と空白だけの文字列は名前なしと同じ扱いにして、デフォルトの
+      // タブ数表示に戻す。空白だけの名前を通すと見出しが空のカードになり、
+      // 編集アイコンを見つける以外に直す手がかりがなくなる
+      // （UI側もtrimしてから保存するので、読み込み側の正規化もそれに揃える）
+      const trimmed = title.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
     }
     // 数値になった名前など直せる情報は捨てずに文字列として見せる。
     // オブジェクトは[object Object]になって直す手がかりにならないうえ、

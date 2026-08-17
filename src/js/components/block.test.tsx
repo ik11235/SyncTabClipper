@@ -1,9 +1,10 @@
 /**
  * @jest-environment jsdom
  */
-import { act } from 'react';
+import React, { act, useState } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import Block from './block';
+import { chromeService } from '../chromeService';
 import { model } from '../types/interface';
 
 // テスティングライブラリを介さず素のactを使うため必要
@@ -44,7 +45,7 @@ describe('Block', (): void => {
 
   const openTitleEditor = async (): Promise<void> => {
     await act(async () => {
-      container.querySelector<HTMLElement>('.block_title_edit')!.click();
+      container.querySelector<HTMLElement>('.block-title-edit')!.click();
     });
   };
 
@@ -220,7 +221,7 @@ describe('Block', (): void => {
       jest.fn().mockResolvedValue(undefined),
     );
 
-    expect(container.querySelector('.block_title')!.textContent).toBe(
+    expect(container.querySelector('.block-title')!.textContent).toBe(
       'content_msg_tab_length',
     );
   });
@@ -234,10 +235,10 @@ describe('Block', (): void => {
       '調査中のタブ',
     );
 
-    expect(container.querySelector('.block_title')!.textContent).toBe(
+    expect(container.querySelector('.block-title')!.textContent).toBe(
       '調査中のタブ',
     );
-    expect(container.querySelector('.block_tab_count')!.textContent).toBe(
+    expect(container.querySelector('.block-tab-count')!.textContent).toBe(
       'content_msg_tab_count',
     );
   });
@@ -322,7 +323,7 @@ describe('Block', (): void => {
     });
 
     expect(updateBlock).not.toHaveBeenCalled();
-    expect(container.querySelector('.block_title')!.textContent).toBe(
+    expect(container.querySelector('.block-title')!.textContent).toBe(
       '調査中のタブ',
     );
 
@@ -409,6 +410,195 @@ describe('Block', (): void => {
         tabs: [{ url: 'https://example.com/b', title: 'title-b' }],
         title: '調査中のタブ',
       }),
+    );
+  });
+
+  // 名前を付けるのはこの機能の主導線なので、キーボードだけの利用者から
+  // 到達できないと機能そのものが使えない
+  test('名前の編集はキーボードから開けて、やめるとフォーカスが戻る', async (): Promise<void> => {
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      jest.fn().mockResolvedValue(undefined),
+    );
+
+    const editButton =
+      container.querySelector<HTMLButtonElement>('.block-title-edit')!;
+    // spanと違いbutton要素はTabキーで到達でき、Enter/Spaceでclickが起きる
+    expect(editButton.tagName).toBe('BUTTON');
+
+    editButton.focus();
+    await act(async () => {
+      editButton.click();
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.block-title-cancel')!
+        .click();
+    });
+
+    expect(document.activeElement).toBe(
+      container.querySelector('.block-title-edit'),
+    );
+  });
+
+  test('Escapeキーで名前の編集をやめる', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+      '調査中のタブ',
+    );
+
+    await openTitleEditor();
+    await typeTitle('捨てる名前');
+    await act(async () => {
+      container
+        .querySelector<HTMLInputElement>('.block-title-input')!
+        .dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+        );
+    });
+
+    expect(updateBlock).not.toHaveBeenCalled();
+    expect(container.querySelector('.block-title-input')).toBeNull();
+  });
+
+  // 保存中にEscapeで閉じられると、書き込みの結果を受け取る相手がいなくなる
+  test('名前の保存中はEscapeキーで閉じない', async (): Promise<void> => {
+    // 決着させないPromiseを返して保存中の状態に留める
+    const updateBlock = jest.fn().mockReturnValue(new Promise<void>(() => {}));
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+    );
+
+    await openTitleEditor();
+    await typeTitle('調査中のタブ');
+    await saveTitle();
+    await act(async () => {
+      container
+        .querySelector<HTMLInputElement>('.block-title-input')!
+        .dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+        );
+    });
+
+    expect(container.querySelector('.block-title-input')).not.toBeNull();
+  });
+});
+
+// タブを開く導線はchrome.tabs.createの解決を待ってからタブを書き戻すため、
+// 待っている間に名前を保存されると、クリック時のpropsに閉じ込めた古い名前で
+// 上書きしうる。書き込み自体は成功するので通知もされずに名前だけが消える。
+// この競合はAppがstateを差し替えてBlockに新しいpropsを渡すことで初めて
+// 成立するため、App相当の器を用意して検証する
+describe('Block タブ操作と名前の保存が競合するとき', (): void => {
+  let container: HTMLDivElement;
+  let root: Root;
+  let createTabsSpy: jest.SpyInstance;
+
+  const StatefulBlock: React.FC<{
+    initialBlock: model.Block;
+    onUpdate: jest.Mock;
+  }> = (props) => {
+    const [block, setBlock] = useState(props.initialBlock);
+    return (
+      <Block
+        block={block}
+        updateBlock={(newBlock) => {
+          props.onUpdate(newBlock);
+          // Appは書き込みが成功したときだけstateへ反映する
+          return Promise.resolve().then(() => setBlock(newBlock));
+        }}
+      />
+    );
+  };
+
+  beforeEach((): void => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      i18n: {
+        getMessage: (key: string): string => key,
+      },
+    };
+    createTabsSpy = jest.spyOn(chromeService.tab, 'createTabs');
+  });
+
+  afterEach((): void => {
+    act(() => root.unmount());
+    container.remove();
+    createTabsSpy.mockRestore();
+  });
+
+  test('タブを開いている間に保存した名前を、後から着地した書き戻しが消さない', async (): Promise<void> => {
+    const onUpdate = jest.fn();
+    // タブが開き終わるタイミングを操作するため、解決を手元に持つ
+    let resolveCreateTabs: () => void = () => {};
+    createTabsSpy.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveCreateTabs = resolve;
+      }),
+    );
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <StatefulBlock
+          initialBlock={{
+            indexNum: 0,
+            createdAt: new Date('2021-01-02T03:04:05.678Z'),
+            tabs: [
+              { url: 'https://example.com/a', title: 'title-a' },
+              { url: 'https://example.com/b', title: 'title-b' },
+            ],
+          }}
+          onUpdate={onUpdate}
+        />,
+      );
+    });
+
+    // 1件目のリンクを開く。chrome.tabs.createは保留のままにする
+    await act(async () => {
+      container.querySelector<HTMLElement>('.tab_link')!.click();
+    });
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    // 開き終わるのを待っている間に名前を付ける
+    await act(async () => {
+      container.querySelector<HTMLElement>('.block-title-edit')!.click();
+    });
+    const input =
+      container.querySelector<HTMLInputElement>('.block-title-input')!;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!;
+    await act(async () => {
+      setter.call(input, '調査中のタブ');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.block-title-save')!.click();
+    });
+    expect(onUpdate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: '調査中のタブ' }),
+    );
+
+    // ここでタブが開き終わり、開いたタブを消す書き戻しが走る
+    await act(async () => {
+      resolveCreateTabs();
+    });
+
+    expect(onUpdate).toHaveBeenLastCalledWith({
+      indexNum: 0,
+      createdAt: new Date('2021-01-02T03:04:05.678Z'),
+      tabs: [{ url: 'https://example.com/b', title: 'title-b' }],
+      title: '調査中のタブ',
+    });
+    expect(container.querySelector('.block-title')!.textContent).toBe(
+      '調査中のタブ',
     );
   });
 });

@@ -167,6 +167,9 @@ describe('blockService', (): void => {
     ['配列', '["名前"]'],
     ['null', 'null'],
     ['空文字列', '""'],
+    // 空白だけの名前を通すと見出しが空のカードになり、タブ数のフォールバックにも
+    // 戻らないため直す手がかりが編集アイコンしか残らない
+    ['空白だけの文字列', '"   "'],
   ])(
     'jsonToBlock 名前として扱えないtitle(%s)は名前なしとして読む',
     (_name: string, titleJson: string): void => {
@@ -179,6 +182,19 @@ describe('blockService', (): void => {
       });
     },
   );
+
+  // UI側はtrimしてから保存するため、読み込み側の正規化もそれに揃える
+  test('jsonToBlock titleの前後の空白は落として読む', (): void => {
+    const json =
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}],"title":"  調査中のタブ  "}';
+
+    expect(blockService.jsonToBlock(json, 1)).toStrictEqual({
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      title: '調査中のタブ',
+    });
+  });
 
   // 数値になった名前は直せる情報なので、捨てずに文字列として見せる
   test('jsonToBlock 数値のtitleは文字列として読む', (): void => {

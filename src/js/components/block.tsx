@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { model } from '../types/interface';
 import { chromeService } from '../chromeService';
 import { openableTab, Tab } from './tab';
@@ -34,15 +34,20 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const titleFieldId = useId();
   const titleHintId = useId();
 
+  // タブを開く導線はchrome.tabs.createの解決を待ってからタブを書き戻すため、
+  // 待っている間に名前を保存されると、クリック時のpropsに閉じ込めた古い名前で
+  // 上書きしてしまう。書き込み自体は成功するので通知もされずに名前だけが消える。
+  // 書き戻す瞬間の最新のブロックを読めるようにして塞ぐ
+  const blockRef = useRef(block);
+  blockRef.current = block;
+
   // タブ配列の差し替えをApp経由でstorageへ反映する。
   // updateBlockはブロックごと書き戻すため、タブだけを変える導線でも
-  // 名前を引き継がないと保存のたびに名前が消える
+  // タブ以外のフィールドを引き継がないと保存のたびに消える
   const updateTabs = (tabs: model.Tab[]): Promise<void> =>
     props.updateBlock({
+      ...blockRef.current,
       tabs: tabs,
-      indexNum: block.indexNum,
-      createdAt: block.createdAt,
-      title: block.title,
     });
 
   // 結果を待たない導線用。失敗はApp側でerrorLogに記録済みなので、
@@ -123,10 +128,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     setTitleSaving(true);
     props
       .updateBlock({
-        // 編集中もタブの増減は起こりうるので、保存する瞬間のpropsから組み立てる
-        tabs: block.tabs,
-        indexNum: block.indexNum,
-        createdAt: block.createdAt,
+        // 編集中もタブの増減は起こりうるので、書き込む瞬間の最新のブロックに
+        // 名前だけを載せる
+        ...blockRef.current,
         title: newTitle.length <= 0 ? undefined : newTitle,
       })
       .then(() => {
@@ -151,6 +155,17 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       cancelTitleEdit();
     }
   };
+
+  // 編集をやめると見出しごとフォームが消えるため、フォーカスがbodyまで落ちて
+  // キーボード操作の現在位置が失われる。開いたときのボタンへ戻す
+  const titleEditButton = useRef<HTMLButtonElement>(null);
+  const titleWasEditing = useRef(false);
+  useEffect(() => {
+    if (titleWasEditing.current && titleDraft == null) {
+      titleEditButton.current?.focus();
+    }
+    titleWasEditing.current = titleDraft != null;
+  }, [titleDraft]);
 
   const editingTab = editIndex == null ? null : block.tabs[editIndex];
   // モーダルのオーバーレイはクリックしか遮らず、背後のリンクにはTabキーで
@@ -224,18 +239,26 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
                 blockServiceの読み込み時にundefinedへ寄せているが、
                 見出しが空のカードになると編集アイコンしか残らないため
                 長さも見て判断する */}
-            <span className="block_title">
+            <span className="block-title">
               {block.title != null && block.title.length > 0
                 ? block.title
                 : chrome.i18n.getMessage('content_msg_tab_length', [
                     block.tabs.length,
                   ])}
             </span>
-            {/* アイコンだけでは何のボタンか分からないためtitleで補う */}
-            <span
-              className="uk-link uk-margin-small-left block_title_edit"
+            {/* 名前を付けるのはこの機能の主導線なので、タブ行のアイコン
+                （span）と違ってキーボードから到達できるbutton要素で置く。
+                アイコンだけでは何のボタンか分からないため、ホバー用のtitleに
+                加えて支援技術向けにaria-labelでも名前を与える */}
+            <button
+              type="button"
+              ref={titleEditButton}
+              className="uk-link uk-margin-small-left block-title-edit"
               data-uk-icon="icon: pencil; ratio: 0.9"
               title={chrome.i18n.getMessage('content_msg_edit_block_title')}
+              aria-label={chrome.i18n.getMessage(
+                'content_msg_edit_block_title',
+              )}
               onClick={startTitleEdit}
             />
           </h3>
@@ -247,7 +270,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           </time>
           {/* 名前を付けると見出しからタブ数が消えるため、作成日と並ぶ
               メタ情報として現在のタブ数を出す */}
-          <span className="uk-margin-small-left block_tab_count">
+          <span className="uk-margin-small-left block-tab-count">
             {chrome.i18n.getMessage('content_msg_tab_count', [
               block.tabs.length,
             ])}
