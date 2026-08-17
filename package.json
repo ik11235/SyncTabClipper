@@ -2,7 +2,7 @@
   "name": "SyncTabClipper",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/chrome": "^0.2.5",
+    "@types/chrome": "^0.2.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
