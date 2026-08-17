@@ -70,7 +70,10 @@ export namespace blockService {
   // 版数を上げると旧バージョンの拡張機能がsync経由で降りてきたブロックを
   // UnsupportedVersionErrorで一切表示できなくなるため。
   // 代わりに、titleを知らない旧バージョンが同じブロックを書き戻すと
-  // （タブを削除する等）名前は失われる。表示できなくなるよりは軽い副作用として許容する
+  // （タブを削除する等）名前は失われる。表示できなくなるよりは軽い副作用として許容する。
+  // なお一覧はstorage.onChangedを購読していないため、tabs.htmlを複数枚開くと
+  // 同じバージョンでも古い一覧からの書き戻しで名前が消える。これは同じ状況で
+  // タブの増減が打ち消し合うのと同根の既存の課題で、titleに固有のものではない
   type BlockJson = {
     created_at: number;
     tabs: model.Tab[];
@@ -115,10 +118,10 @@ export namespace blockService {
       const trimmed = title.trim();
       return trimmed.length > 0 ? trimmed : undefined;
     }
-    // 数値になった名前など直せる情報は捨てずに文字列として見せる。
-    // オブジェクトは[object Object]になって直す手がかりにならないうえ、
-    // Stringが例外を投げうる値もあるため名前なしとして扱う
-    if (typeof title === 'number' || typeof title === 'boolean') {
+    // 数値になった名前は元の名前を復元できる情報なので、捨てずに文字列として
+    // 見せる。真偽値やオブジェクトからは名前を復元できず、本物の名前と
+    // 区別できないまま永続化されて往復するだけなので名前なしとして扱う
+    if (typeof title === 'number') {
       return String(title);
     }
     return undefined;

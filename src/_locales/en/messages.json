@@ -112,7 +112,7 @@
     "message": "Block name"
   },
   "content_msg_edit_block_title_hint": {
-    "message": "Leave it empty to remove the name and show the tab count instead."
+    "message": "Leave it empty to remove the name and show the tab count instead. The tabs in this block cannot be used while editing."
   },
   "content_msg_edit_block_title_save": {
     "message": "Save"

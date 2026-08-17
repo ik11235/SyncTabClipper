@@ -112,7 +112,7 @@
     "message": "ブロックの名前"
   },
   "content_msg_edit_block_title_hint": {
-    "message": "空欄にすると名前を消してタブ数の表示に戻します。"
+    "message": "空欄にすると名前を消してタブ数の表示に戻します。編集中はこのブロックのタブを操作できません。"
   },
   "content_msg_edit_block_title_save": {
     "message": "保存"

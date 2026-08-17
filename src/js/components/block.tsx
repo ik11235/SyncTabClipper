@@ -145,6 +145,11 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   };
 
   const startTitleEdit = () => {
+    // ボタンのdisabledとヘッダのinertで塞いでいるが、不変条件をDOMの属性だけに
+    // 預けると、ボタンの置き場所を変えたときに保護が黙って外れる
+    if (tabsWriting || editing) {
+      return;
+    }
     setTitleDraft(block.title ?? '');
     setTitleError(null);
   };
@@ -158,6 +163,12 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // 空欄での保存は「名前を消す」操作とみなし、デフォルトのタブ数表示に戻す
   const submitTitle = (event: React.FormEvent): void => {
     event.preventDefault();
+    // 保存ボタンのdisabledでEnterによる暗黙のsubmitも止まるが、submitの起点が
+    // 増えたときに二重書き込み（storage.syncの書き込みクォータも二重消費）に
+    // ならないようにここでも弾く
+    if (titleSaving) {
+      return;
+    }
     const newTitle = (titleDraft ?? '').trim();
     setTitleError(null);
     setTitleSaving(true);

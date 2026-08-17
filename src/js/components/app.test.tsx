@@ -223,18 +223,17 @@ describe('App', (): void => {
       expect(container.textContent).not.toContain('title-a1');
       expect(container.textContent).toContain('title-a2');
       expect(container.textContent).toContain('title-b1');
-      const tabCountCalls = getMessageSpy.mock.calls.filter(
-        ([key]) => key === 'content_msg_tab_count',
-      );
-      // 更新したブロックAは再レンダリングされている
-      expect(tabCountCalls).not.toHaveLength(0);
-      // ブロックBは一度も再レンダリングされていない（タブ数3で呼ばれない）
-      expect(
-        tabCountCalls.filter(
-          ([, substitutions]) =>
-            Array.isArray(substitutions) && substitutions[0] === 3,
-        ),
-      ).toHaveLength(0);
+      // 再レンダリングされたブロックのタブ数の並び。
+      // ブロックAは書き込みの状態遷移で複数回レンダリングされるので回数は
+      // 固定できないが、ブロックBのタブ数(3)が現れないことは固定できる
+      const renderedTabCounts = getMessageSpy.mock.calls
+        .filter(([key]) => key === 'content_msg_tab_count')
+        .map(([, substitutions]) =>
+          Array.isArray(substitutions) ? substitutions[0] : null,
+        );
+      // 更新したブロックA（削除後は1タブ）だけが再レンダリングされている
+      expect(renderedTabCounts).not.toHaveLength(0);
+      expect(new Set(renderedTabCounts)).toEqual(new Set([1]));
     } finally {
       setBlockSpy.mockRestore();
     }

@@ -141,6 +141,26 @@ describe('Block', (): void => {
     expect(container.querySelector('.edit-tab-modal')).toBeNull();
   });
 
+  // モーダル経由の保存もブロックごと書き戻すため、ブロックの名前を
+  // 引き継がないとタブを1件直すだけで名前が消える
+  test('タブの編集で保存してもブロックの名前を引き継ぐ', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+      '調査中のタブ',
+    );
+
+    await openEditModal(0);
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.edit-tab-save')!.click();
+    });
+
+    expect(updateBlock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: '調査中のタブ' }),
+    );
+  });
+
   // 編集対象はindexで持っているため、モーダルを開いている間にこのブロックの
   // タブが増減すると、別のタブを上書きしたり、後から着地した保存が消した
   // はずのタブを書き戻したりする。オーバーレイはクリックしか遮らないので、
@@ -411,6 +431,17 @@ describe('Block', (): void => {
         title: '調査中のタブ',
       }),
     );
+  });
+
+  // 編集をやめたときのフォーカス復帰がマウント時にも走ると、ブロックがN枚
+  // 並んだページで初回描画のたびに最後のカードへフォーカスが飛んでスクロールする
+  test('マウントしただけではフォーカスを奪わない', async (): Promise<void> => {
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      jest.fn().mockResolvedValue(undefined),
+    );
+
+    expect(document.activeElement).toBe(document.body);
   });
 
   // 名前を付けるのはこの機能の主導線なので、キーボードだけの利用者から

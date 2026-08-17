@@ -90,8 +90,26 @@
  * 見た目をアイコンだけに揃えるためブラウザ既定のボタン装飾を落とす。
  */
 .block-title-edit {
+  /* アイコン(ratio 0.9で約18px)だけではクリックの的が小さいので、
+     この機能の唯一の入口として押しやすい大きさを確保する */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
   padding: 0;
   border: none;
   background: none;
   vertical-align: middle;
+}
+
+/*
+ * 名前を編集している間は、カードのタブ一覧と操作リンクをinertで止めている。
+ * タブの編集モーダルはオーバーレイが背後を覆うので無効だと分かるが、
+ * 名前のインライン編集にはオーバーレイがない。ブラウザはinertを淡色化しない
+ * ため、見た目は普通なのにクリックが黙って死んでいるように見えてしまう。
+ */
+.uk-card-header [inert],
+.uk-card-body[inert] {
+  opacity: 0.5;
 }
