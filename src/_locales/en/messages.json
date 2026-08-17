@@ -10,6 +10,14 @@
       }
     }
   },
+  "content_msg_tab_count": {
+    "message": "tabs: $count$",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
   "content_msg_created_at": {
     "message": "created at: "
   },
@@ -95,6 +103,24 @@
     "message": "The URL format is invalid."
   },
   "content_msg_edit_tab_save_failed": {
+    "message": "Failed to save. Please try again."
+  },
+  "content_msg_edit_block_title": {
+    "message": "Edit name"
+  },
+  "content_msg_edit_block_title_label": {
+    "message": "Block name"
+  },
+  "content_msg_edit_block_title_hint": {
+    "message": "Leave it empty to remove the name and show the tab count instead. The tabs in this block cannot be used while editing."
+  },
+  "content_msg_edit_block_title_save": {
+    "message": "Save"
+  },
+  "content_msg_edit_block_title_cancel": {
+    "message": "Cancel"
+  },
+  "content_msg_edit_block_title_save_failed": {
     "message": "Failed to save. Please try again."
   },
   "content_msg_export_broken_block": {

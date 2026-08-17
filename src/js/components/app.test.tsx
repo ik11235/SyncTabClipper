@@ -186,15 +186,27 @@ describe('App', (): void => {
       {
         indexNum: 1,
         createdAt: new Date('2021-01-03T03:04:05.678Z'),
-        tabs: [{ url: 'https://example.com/b1', title: 'title-b1' }],
+        // ブロックAの更新後のタブ数(1)と重ならない数にして、
+        // どちらのブロックのレンダリングかを引数で見分けられるようにする
+        tabs: [
+          { url: 'https://example.com/b1', title: 'title-b1' },
+          { url: 'https://example.com/b2', title: 'title-b2' },
+          { url: 'https://example.com/b3', title: 'title-b3' },
+        ],
       },
     ]);
     const setBlockSpy = jest
       .spyOn(chromeService.storage, 'setBlock')
       .mockResolvedValue(undefined);
-    // Blockはレンダリングのたびにcontent_msg_tab_lengthを必ず1回取得するため、
-    // その呼び出し回数を再レンダリング回数の代理指標として使う
-    const getMessageSpy = jest.fn((key: string): string => key);
+    // Blockはレンダリングのたびにcontent_msg_tab_countをタブ数付きで
+    // 必ず1回取得するため、その呼び出しを再レンダリングの代理指標として使う。
+    // 更新したブロック自体は書き込みの状態遷移で複数回レンダリングされるので、
+    // 回数の合計ではなく「ブロックBのタブ数で呼ばれたか」で判定する
+    // （content_msg_tab_lengthは名前のないブロックの見出しにしか出ないので使えない）
+    // どちらのブロックのレンダリングか見分けるためsubstitutionsも記録する
+    const getMessageSpy = jest.fn(
+      (...args: [key: string, substitutions?: unknown]): string => args[0],
+    );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (global as any).chrome.i18n.getMessage = getMessageSpy;
 
@@ -211,12 +223,17 @@ describe('App', (): void => {
       expect(container.textContent).not.toContain('title-a1');
       expect(container.textContent).toContain('title-a2');
       expect(container.textContent).toContain('title-b1');
-      // 再レンダリングされたのは更新したブロックAのみ
-      // （ブロックBも再レンダリングされると2になる）
-      const blockRenderCount = getMessageSpy.mock.calls.filter(
-        ([key]) => key === 'content_msg_tab_length',
-      ).length;
-      expect(blockRenderCount).toBe(1);
+      // 再レンダリングされたブロックのタブ数の並び。
+      // ブロックAは書き込みの状態遷移で複数回レンダリングされるので回数は
+      // 固定できないが、ブロックBのタブ数(3)が現れないことは固定できる
+      const renderedTabCounts = getMessageSpy.mock.calls
+        .filter(([key]) => key === 'content_msg_tab_count')
+        .map(([, substitutions]) =>
+          Array.isArray(substitutions) ? substitutions[0] : null,
+        );
+      // 更新したブロックA（削除後は1タブ）だけが再レンダリングされている
+      expect(renderedTabCounts).not.toHaveLength(0);
+      expect(new Set(renderedTabCounts)).toEqual(new Set([1]));
     } finally {
       setBlockSpy.mockRestore();
     }

@@ -6,6 +6,12 @@ export namespace model {
     indexNum: number; // chrome.storageに保存する際に使用するためのindex
     createdAt: Date;
     tabs: Tab[];
+    /**
+     * ユーザーが付けたブロックの名前。
+     * 名前を付けていないブロック（旧スキーマで保存されたデータを含む）と
+     * 名前を消したブロックはundefinedになり、一覧ではタブ数を表示する
+     */
+    title?: string;
   }
 
   interface Tab {

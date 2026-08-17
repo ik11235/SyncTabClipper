@@ -59,13 +59,25 @@ export namespace blockService {
     return {
       created_at: block.createdAt.getTime(),
       tabs: block.tabs,
+      // 名前のないブロックにキーを増やさない。storage.syncの8KB/item制限を
+      // titleで圧迫しないためと、名前を持たない従来のデータと同じ形を保つため
+      ...(block.title == null ? {} : { title: block.title }),
     };
   }
 
   // エクスポート/ストレージJSONのブロック表現（v2エンベロープのフィールドを含む）
+  // titleはv3の途中で追加した省略可能なフィールドで、スキーマ版数は上げていない。
+  // 版数を上げると旧バージョンの拡張機能がsync経由で降りてきたブロックを
+  // UnsupportedVersionErrorで一切表示できなくなるため。
+  // 代わりに、titleを知らない旧バージョンが同じブロックを書き戻すと
+  // （タブを削除する等）名前は失われる。表示できなくなるよりは軽い副作用として許容する。
+  // なお一覧はstorage.onChangedを購読していないため、tabs.htmlを複数枚開くと
+  // 同じバージョンでも古い一覧からの書き戻しで名前が消える。これは同じ状況で
+  // タブの増減が打ち消し合うのと同根の既存の課題で、titleに固有のものではない
   type BlockJson = {
     created_at: number;
     tabs: model.Tab[];
+    title?: string;
     v?: number;
     d?: string;
   };
@@ -86,11 +98,52 @@ export namespace blockService {
     return Number.isNaN(date.getTime()) ? new Date(0) : date;
   }
 
+  /**
+   * 保存データのtitleをブロックの名前に変換する。
+   * 型では文字列だが、インポートしたJSONには型の検証がないため実際には
+   * 何でも入りうる。文字列以外をそのままblock.titleに持たせると
+   * レンダリングで例外になりブロックごと破損カードに落ちるため、
+   * createdAtをtoCreatedAtで正規化しているのと同じようにここで吸収する。
+   * 引数をunknownで受けるのは、BlockJsonの型を信じると
+   * この判定が「不可能な条件」として消されてしまうため
+   * @param {unknown} title 保存データが持っていたtitle
+   * @return {string | undefined} ブロックの名前。名前として扱えない値ならundefined
+   */
+  function toBlockTitle(title: unknown): string | undefined {
+    if (typeof title === 'string') {
+      // 空文字列と空白だけの文字列は名前なしと同じ扱いにして、デフォルトの
+      // タブ数表示に戻す。空白だけの名前を通すと見出しが空のカードになり、
+      // 編集アイコンを見つける以外に直す手がかりがなくなる
+      // （UI側もtrimしてから保存するので、読み込み側の正規化もそれに揃える）
+      const trimmed = title.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    }
+    // 数値になった名前は元の名前を復元できる情報なので、捨てずに文字列として
+    // 見せる。真偽値やオブジェクトからは名前を復元できず、本物の名前と
+    // 区別できないまま永続化されて往復するだけなので名前なしとして扱う
+    if (typeof title === 'number') {
+      return String(title);
+    }
+    return undefined;
+  }
+
+  /**
+   * ブロックへ名前を載せる。名前がないときはtitleのキー自体を作らず、
+   * 名前を持たないブロックの形を従来どおりに保つ
+   * @param {unknown} title 保存データが持っていたtitle
+   * @return {object} titleを持つオブジェクト。名前がなければ空オブジェクト
+   */
+  function blockTitleField(title: unknown): { title?: string } {
+    const blockTitle = toBlockTitle(title);
+    return blockTitle == null ? {} : { title: blockTitle };
+  }
+
   function jsonObjToBlock(object: BlockJson, index: number): model.Block {
     return {
       indexNum: index,
       createdAt: toCreatedAt(object.created_at),
       tabs: object.tabs,
+      ...blockTitleField(object.title),
     };
   }
 
@@ -110,6 +163,7 @@ export namespace blockService {
       indexNum: indexNum,
       createdAt: toCreatedAt(js.created_at),
       tabs: tabs,
+      ...blockTitleField(js.title),
     };
   }
 
