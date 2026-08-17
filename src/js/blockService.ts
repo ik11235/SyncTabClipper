@@ -59,13 +59,20 @@ export namespace blockService {
     return {
       created_at: block.createdAt.getTime(),
       tabs: block.tabs,
+      // 名前のないブロックにキーを増やさない。storage.syncの8KB/item制限を
+      // titleで圧迫しないためと、名前を持たない従来のデータと同じ形を保つため
+      ...(block.title == null ? {} : { title: block.title }),
     };
   }
 
   // エクスポート/ストレージJSONのブロック表現（v2エンベロープのフィールドを含む）
+  // titleはv3の途中で追加した省略可能なフィールドで、スキーマ版数は上げていない。
+  // 版数を上げると旧バージョンの拡張機能がsync経由で降りてきたブロックを
+  // UnsupportedVersionErrorで一切表示できなくなるため
   type BlockJson = {
     created_at: number;
     tabs: model.Tab[];
+    title?: string;
     v?: number;
     d?: string;
   };
@@ -86,11 +93,48 @@ export namespace blockService {
     return Number.isNaN(date.getTime()) ? new Date(0) : date;
   }
 
+  /**
+   * 保存データのtitleをブロックの名前に変換する。
+   * 型では文字列だが、インポートしたJSONには型の検証がないため実際には
+   * 何でも入りうる。文字列以外をそのままblock.titleに持たせると
+   * レンダリングで例外になりブロックごと破損カードに落ちるため、
+   * createdAtをtoCreatedAtで正規化しているのと同じようにここで吸収する。
+   * 引数をunknownで受けるのは、BlockJsonの型を信じると
+   * この判定が「不可能な条件」として消されてしまうため
+   * @param {unknown} title 保存データが持っていたtitle
+   * @return {string | undefined} ブロックの名前。名前として扱えない値ならundefined
+   */
+  function toBlockTitle(title: unknown): string | undefined {
+    if (typeof title === 'string') {
+      // 空文字列は名前なしと同じ扱いにして、デフォルトのタブ数表示に戻す
+      return title.length > 0 ? title : undefined;
+    }
+    // 数値になった名前など直せる情報は捨てずに文字列として見せる。
+    // オブジェクトは[object Object]になって直す手がかりにならないうえ、
+    // Stringが例外を投げうる値もあるため名前なしとして扱う
+    if (typeof title === 'number' || typeof title === 'boolean') {
+      return String(title);
+    }
+    return undefined;
+  }
+
+  /**
+   * ブロックへ名前を載せる。名前がないときはtitleのキー自体を作らず、
+   * 名前を持たないブロックの形を従来どおりに保つ
+   * @param {unknown} title 保存データが持っていたtitle
+   * @return {object} titleを持つオブジェクト。名前がなければ空オブジェクト
+   */
+  function blockTitleField(title: unknown): { title?: string } {
+    const blockTitle = toBlockTitle(title);
+    return blockTitle == null ? {} : { title: blockTitle };
+  }
+
   function jsonObjToBlock(object: BlockJson, index: number): model.Block {
     return {
       indexNum: index,
       createdAt: toCreatedAt(object.created_at),
       tabs: object.tabs,
+      ...blockTitleField(object.title),
     };
   }
 
@@ -110,6 +154,7 @@ export namespace blockService {
       indexNum: indexNum,
       createdAt: toCreatedAt(js.created_at),
       tabs: tabs,
+      ...blockTitleField(js.title),
     };
   }
 

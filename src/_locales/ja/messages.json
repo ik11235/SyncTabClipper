@@ -10,6 +10,14 @@
       }
     }
   },
+  "content_msg_tab_count": {
+    "message": "タブ数: $count$",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
   "content_msg_created_at": {
     "message": "作成日: "
   },
@@ -95,6 +103,24 @@
     "message": "URLの形式が正しくありません。"
   },
   "content_msg_edit_tab_save_failed": {
+    "message": "保存に失敗しました。もう一度お試しください。"
+  },
+  "content_msg_edit_block_title": {
+    "message": "名前を編集"
+  },
+  "content_msg_edit_block_title_label": {
+    "message": "ブロックの名前"
+  },
+  "content_msg_edit_block_title_hint": {
+    "message": "空欄にすると名前を消してタブ数の表示に戻します。"
+  },
+  "content_msg_edit_block_title_save": {
+    "message": "保存"
+  },
+  "content_msg_edit_block_title_cancel": {
+    "message": "キャンセル"
+  },
+  "content_msg_edit_block_title_save_failed": {
     "message": "保存に失敗しました。もう一度お試しください。"
   },
   "content_msg_export_broken_block": {

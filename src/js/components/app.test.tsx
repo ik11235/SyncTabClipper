@@ -192,8 +192,9 @@ describe('App', (): void => {
     const setBlockSpy = jest
       .spyOn(chromeService.storage, 'setBlock')
       .mockResolvedValue(undefined);
-    // Blockはレンダリングのたびにcontent_msg_tab_lengthを必ず1回取得するため、
+    // Blockはレンダリングのたびにcontent_msg_tab_countを必ず1回取得するため、
     // その呼び出し回数を再レンダリング回数の代理指標として使う
+    // （content_msg_tab_lengthは名前のないブロックの見出しにしか出ないので使えない）
     const getMessageSpy = jest.fn((key: string): string => key);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (global as any).chrome.i18n.getMessage = getMessageSpy;
@@ -214,7 +215,7 @@ describe('App', (): void => {
       // 再レンダリングされたのは更新したブロックAのみ
       // （ブロックBも再レンダリングされると2になる）
       const blockRenderCount = getMessageSpy.mock.calls.filter(
-        ([key]) => key === 'content_msg_tab_length',
+        ([key]) => key === 'content_msg_tab_count',
       ).length;
       expect(blockRenderCount).toBe(1);
     } finally {

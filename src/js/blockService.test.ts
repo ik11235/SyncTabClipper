@@ -134,6 +134,65 @@ describe('blockService', (): void => {
     expect(res).toStrictEqual(expected);
   });
 
+  test('blockToJson ブロック名を含める', (): void => {
+    const block = {
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      title: '調査中のタブ',
+    };
+
+    expect(blockService.blockToJson(block)).toBe(
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}],"title":"調査中のタブ"}',
+    );
+  });
+
+  test('jsonToBlock ブロック名を読む', (): void => {
+    const json =
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}],"title":"調査中のタブ"}';
+
+    expect(blockService.jsonToBlock(json, 1)).toStrictEqual({
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      title: '調査中のタブ',
+    });
+  });
+
+  // インポートしたJSONには型の検証がないため、titleには何でも入りうる。
+  // 文字列以外をそのままblock.titleに持たせるとレンダリングで例外になり、
+  // ブロックごと破損カードに落ちる
+  test.each([
+    ['オブジェクト', '{"ja":"名前"}'],
+    ['配列', '["名前"]'],
+    ['null', 'null'],
+    ['空文字列', '""'],
+  ])(
+    'jsonToBlock 名前として扱えないtitle(%s)は名前なしとして読む',
+    (_name: string, titleJson: string): void => {
+      const json = `{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}],"title":${titleJson}}`;
+
+      expect(blockService.jsonToBlock(json, 1)).toStrictEqual({
+        indexNum: 1,
+        createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+        tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      });
+    },
+  );
+
+  // 数値になった名前は直せる情報なので、捨てずに文字列として見せる
+  test('jsonToBlock 数値のtitleは文字列として読む', (): void => {
+    const json =
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}],"title":2021}';
+
+    expect(blockService.jsonToBlock(json, 1)).toStrictEqual({
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      title: '2021',
+    });
+  });
+
   test('deflateBlock 非圧縮時', async (): Promise<void> => {
     compressSpy.mockResolvedValueOnce(
       'eNpSNXdSNTJKLkpNLElNiU8sAXJUjR0NzQwsTU3NzExMzcwtVI2cgaIliUnFEElVUydVsK7SohyoiJFRRklJQTGY6QZEqRWJuQU5qXrJ+blAXklqMdhciDmZJTmpcG1gni5MgbmLqqkLkAQAAAD//w==',
@@ -459,6 +518,15 @@ describe('blockService 旧形式ゴールデンフィクスチャ(実データ�
         tabs: [{ url: 'https://example.com/a', title: 'a' }],
       },
     ],
+    [
+      'ブロック名を持つブロック',
+      {
+        indexNum: 1,
+        createdAt: new Date(1609556645678),
+        tabs: [{ url: 'https://example.com/a', title: 'a' }],
+        title: '調査中のタブ',
+      },
+    ],
   ])(
     'deflateBlock→inflateJson(%s)がモックなしで元に戻る',
     async (_name: string, block: model.Block): Promise<void> => {
@@ -601,6 +669,26 @@ describe('blockService import/export', (): void => {
     });
     expect(setTabLengthSpy).toHaveBeenCalledWith(4);
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  // エクスポートJSONのブロックはjsonToBlockではなくjsonObjToBlock経由で
+  // 読むため、名前の往復を別に担保する
+  test('importAllDataJson ブロック名を引き継ぐ', async (): Promise<void> => {
+    const json =
+      '{"v":2,"ev":"0.7.0","blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}],"title":"調査中のタブ"}]}';
+
+    await blockService.importAllDataJson(json);
+    expect(setBlockSpy.mock.calls[0][0]).toStrictEqual({
+      indexNum: 3,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [
+        {
+          url: 'https://example.com/test',
+          title: 'title-test',
+        },
+      ],
+      title: '調査中のタブ',
+    });
   });
 
   test('importAllDataJson v1形式(バージョン表記なしの素の配列)', async (): Promise<void> => {
