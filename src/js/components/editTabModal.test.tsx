@@ -185,7 +185,7 @@ describe('EditTabModal', (): void => {
   // 保存データのtitle/urlは型では文字列だが、実際には文字列とは限らない
   // （createBlockの`tab.title!`、インポートJSONの型検証なし）。
   // 型を信じて入力欄に入れると非制御になり、保存時にtrimで例外になる
-  test('titleが文字列でないタブでも空欄として編集し保存できる', async (): Promise<void> => {
+  test('titleを持たないタブでも空欄として編集し保存できる', async (): Promise<void> => {
     const onSave = jest.fn().mockResolvedValue(undefined);
     await mount(
       { url: 'https://example.com/' } as unknown as model.Tab,
@@ -203,10 +203,22 @@ describe('EditTabModal', (): void => {
     });
   });
 
-  test('urlが文字列でないタブでも空欄として編集できる', async (): Promise<void> => {
-    await mount({ title: 'title only' } as unknown as model.Tab, jest.fn());
+  // urlが文字列でないタブはblock.tsxのurl == null判定を通り抜けて
+  // 通常のタブとして描画されるため、編集モーダルにも到達しうる
+  test('urlが文字列でないタブは文字列に直して編集し保存できる', async (): Promise<void> => {
+    const onSave = jest.fn().mockResolvedValue(undefined);
+    await mount({ url: 123, title: 'title-a' } as unknown as model.Tab, onSave);
 
-    expect(urlInput().value).toBe('');
+    // 直せる情報を捨てないよう、空欄にはせず文字列として見せる
+    expect(urlInput().value).toBe('123');
+
+    await typeInto(urlInput(), 'https://example.com/fixed');
+    await submit();
+
+    expect(onSave).toHaveBeenCalledWith({
+      title: 'title-a',
+      url: 'https://example.com/fixed',
+    });
   });
 
   // 保存の可否が分からないまま閉じてしまうのを防ぐ
@@ -230,8 +242,9 @@ describe('EditTabModal', (): void => {
     expect(saveButton().disabled).toBe(true);
   });
 
-  // 保存が終わらないときにモーダルから出られなくなるのを防ぐ
-  test('保存中でもキャンセルボタンは押せる', async (): Promise<void> => {
+  // 保存中に閉じられると、後から着地した保存が次に開いたモーダルを閉じたり、
+  // キャンセルしたはずの編集が永続化されたりする
+  test('保存中はキャンセルボタンを押せない', async (): Promise<void> => {
     const onCancel = jest.fn();
     // 解決しないPromiseを返し、保存中の状態で留める
     const onSave = jest.fn().mockReturnValue(new Promise<void>(() => {}));
@@ -242,11 +255,15 @@ describe('EditTabModal', (): void => {
     );
 
     await submit();
+    const cancelButton =
+      container.querySelector<HTMLButtonElement>('.edit-tab-cancel')!;
+    expect(cancelButton.disabled).toBe(true);
+
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('.edit-tab-cancel')!.click();
+      cancelButton.click();
     });
 
-    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
   });
 
   // 保存に失敗したときに入力が消えると、書き直しをやり直す羽目になる

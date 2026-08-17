@@ -155,8 +155,8 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       </div>
       {editingTab != null && editIndex != null ? (
         <EditTabModal
-          // 編集対象が変わったら入力欄を作り直す（同じインスタンスが
-          // 再利用されると前のタブの入力が残る）
+          // 現状はモーダルを閉じずに編集対象が変わる導線がないが、
+          // 増えたときに前のタブの入力が残らないようにしておく
           key={editIndex}
           tab={editingTab}
           onSave={(newTab) => saveEditedTab(editIndex, newTab)}

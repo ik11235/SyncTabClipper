@@ -22,11 +22,18 @@ interface EditTabModalProps {
  * （createBlockが`tab.title!`で入れるためundefinedがJSON.stringifyで
  * キーごと落ちる、インポートしたJSONに型の検証がない）。
  * そのままstateに入れると入力欄が非制御になり、保存時にtrimで例外になる
- * @param {string} value 保存データが持っていた値
+ * 引数をunknownで受けるのは、model.Tabの型を信じると
+ * この判定が「不可能な条件」として消されてしまうため
+ * @param {unknown} value 保存データが持っていた値
  * @return {string} 入力欄に入れる文字列
  */
-const toInputValue = (value: string): string =>
-  typeof value === 'string' ? value : '';
+const toInputValue = (value: unknown): string => {
+  if (typeof value === 'string') {
+    return value;
+  }
+  // 数値になったタイトルなど、直せる情報は捨てずに文字列として見せる
+  return value == null ? '' : String(value);
+};
 
 export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
   const [title, setTitle] = useState(toInputValue(props.tab.title));
@@ -38,9 +45,10 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
   const urlFieldId = useId();
   const onCancel = props.onCancel;
 
-  // 保存中の誤操作（Esc）で閉じると、保存が成功したのかどうかを確認できないまま
-  // 一覧に戻る。意図的な中断であるキャンセルボタンは保存中も押せるようにして、
-  // 保存が終わらないときにモーダルから出られなくなるのを防ぐ
+  // 保存中に閉じられると、書き込みの結果を受け取る相手がいなくなる。
+  // 「キャンセルしたのに保存されていた」「後から着地した保存が次に開いた
+  // モーダルを閉じる」といった状態を作らないため、保存中はEscもキャンセルも
+  // 効かせない（storage.syncの書き込みは必ず成功か失敗で決着する）
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape' && !saving) {
@@ -125,6 +133,7 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
             <button
               type="button"
               className="uk-button uk-button-default edit-tab-cancel"
+              disabled={saving}
               onClick={onCancel}
             >
               {chrome.i18n.getMessage('content_msg_edit_tab_cancel')}
