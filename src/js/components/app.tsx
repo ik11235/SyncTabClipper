@@ -23,29 +23,34 @@ const App: React.FC = () => {
 
   // ブロックの変更をstorageへ永続化し、成功時のみstateへ反映する。
   // タブが空になったブロックはstorage側で削除されるため一覧からも除く。
-  // React.memo化したBlockの再レンダリングを防ぐため参照を安定させる
-  const updateBlock = useCallback((newBlock: model.Block) => {
-    chromeService.storage
-      .setBlock(newBlock)
-      .then(() => {
-        setBlocks((prevBlocks) => {
-          if (prevBlocks == null) {
-            return prevBlocks;
-          }
-          if (newBlock.tabs.length <= 0) {
-            return prevBlocks.filter(
-              (block) => block.indexNum != newBlock.indexNum,
+  // React.memo化したBlockの再レンダリングを防ぐため参照を安定させる。
+  // 失敗はerrorLogに記録したうえで、呼び出し側が結果に応じてUIを制御できる
+  // （編集モーダルを閉じない等）よう再throwする
+  const updateBlock = useCallback(
+    (newBlock: model.Block): Promise<void> =>
+      chromeService.storage
+        .setBlock(newBlock)
+        .then(() => {
+          setBlocks((prevBlocks) => {
+            if (prevBlocks == null) {
+              return prevBlocks;
+            }
+            if (newBlock.tabs.length <= 0) {
+              return prevBlocks.filter(
+                (block) => block.indexNum != newBlock.indexNum,
+              );
+            }
+            return prevBlocks.map((block) =>
+              block.indexNum == newBlock.indexNum ? newBlock : block,
             );
-          }
-          return prevBlocks.map((block) =>
-            block.indexNum == newBlock.indexNum ? newBlock : block,
-          );
-        });
-      })
-      .catch((error) => {
-        chromeService.errorLog.set(error).catch(console.error);
-      });
-  }, []);
+          });
+        })
+        .catch((error) => {
+          chromeService.errorLog.set(error).catch(console.error);
+          throw error;
+        }),
+    [],
+  );
 
   // 復元・描画できなかったブロックはmodel.Blockを作れないため、
   // indexNumだけを渡してstorageから削除する

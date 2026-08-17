@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { model } from '../types/interface';
 import { chromeService } from '../chromeService';
 import { openableTab, Tab } from './tab';
 import BrokenTab from './brokenTab';
+import EditTabModal from './editTabModal';
 import { ErrorBoundary } from './errorBoundary';
 
 interface BlockProps {
   block: model.Block;
-  // storageへの永続化とブロック一覧stateの更新はApp側で行う
-  updateBlock: (newBlock: model.Block) => void;
+  // storageへの永続化とブロック一覧stateの更新はApp側で行う。
+  // 永続化に失敗するとrejectされる（失敗の記録はApp側で済んでいる）
+  updateBlock: (newBlock: model.Block) => Promise<void>;
 }
 
 // ブロックのstateはAppが所有し、Blockはpropsの表示と操作イベントの発火に徹する。
@@ -17,6 +19,22 @@ interface BlockProps {
 const Block: React.FC<BlockProps> = React.memo((props) => {
   const block = props.block;
   const createdAt = block.createdAt;
+  // 編集中のタブのindex。nullなら編集モーダルを出さない
+  const [editIndex, setEditIndex] = useState<number | null>(null);
+
+  // タブ配列の差し替えをApp経由でstorageへ反映する
+  const updateTabs = (tabs: model.Tab[]): Promise<void> =>
+    props.updateBlock({
+      tabs: tabs,
+      indexNum: block.indexNum,
+      createdAt: block.createdAt,
+    });
+
+  // 結果を待たない導線用。失敗はApp側でerrorLogに記録済みなので、
+  // ここで受けないとunhandled rejectionになるだけ
+  const updateTabsIgnoringFailure = (tabs: model.Tab[]): void => {
+    updateTabs(tabs).catch(() => {});
+  };
 
   const openLink = (index: number) => {
     const url = block.tabs[index]!.url;
@@ -29,12 +47,17 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   };
 
   const deleteClick = (index: number) => {
-    props.updateBlock({
-      tabs: block.tabs.filter((_, i) => i != index),
-      indexNum: block.indexNum,
-      createdAt: block.createdAt,
-    });
+    updateTabsIgnoringFailure(block.tabs.filter((_, i) => i != index));
   };
+
+  // 保存できたときだけモーダルを閉じる。失敗時はrejectをモーダル側へ返し、
+  // 入力を残したまま再試行できるようにする
+  const saveEditedTab = (index: number, newTab: model.Tab): Promise<void> =>
+    updateTabs(block.tabs.map((tab, i) => (i == index ? newTab : tab))).then(
+      () => {
+        setEditIndex(null);
+      },
+    );
 
   const openAllTab = () => {
     // 壊れたタブを踏むとmapの途中で例外になり、残りのタブが開かれないまま
@@ -53,11 +76,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       .then(() => {
         // 開いたタブだけを消す。開けなかったタブまでブロックごと消すと、
         // 一覧に見えていたタブが開かれもせず失われる
-        props.updateBlock({
-          tabs: block.tabs.filter((tab) => !openableTab(tab)),
-          indexNum: block.indexNum,
-          createdAt: block.createdAt,
-        });
+        updateTabsIgnoringFailure(
+          block.tabs.filter((tab) => !openableTab(tab)),
+        );
       })
       .catch((error) => {
         chromeService.errorLog.set(error).catch(console.error);
@@ -65,16 +86,20 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   };
 
   const deleteBlock = () => {
-    props.updateBlock({
-      tabs: [],
-      indexNum: block.indexNum,
-      createdAt: block.createdAt,
-    });
+    updateTabsIgnoringFailure([]);
   };
+
+  const editingTab = editIndex == null ? null : block.tabs[editIndex];
+  // モーダルのオーバーレイはクリックしか遮らず、背後のリンクにはTabキーで
+  // 到達できてしまう。編集対象をindexで持っているため、開いている間に
+  // このブロックのタブが増減すると別のタブを上書きしたり、後から着地した
+  // 保存が消したはずのタブを書き戻したりする。背後を操作不能にして塞ぐ
+  // （aria-modalを名乗る以上、支援技術に対しても背後は無効であるべき）
+  const editing = editingTab != null && editIndex != null;
 
   return (
     <div className="tabs uk-card-default block-root-dom">
-      <div className="uk-card-header">
+      <div className="uk-card-header" inert={editing}>
         <h3 className="uk-card-title uk-margin-remove-bottom">
           {chrome.i18n.getMessage('content_msg_tab_length', [
             block.tabs.length,
@@ -100,7 +125,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           <div className="uk-width-expand" />
         </div>
       </div>
-      <div className="uk-card-body">
+      <div className="uk-card-body" inert={editing}>
         <ul>
           {block.tabs.map((tab, index) =>
             // urlを持たないタブはリンクとして機能せず、クリックすると
@@ -124,6 +149,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
                 <Tab
                   tab={tab}
                   deleteClick={() => deleteClick(index)}
+                  editClick={() => setEditIndex(index)}
                   openLinkClick={() => openLink(index)}
                 />
               </ErrorBoundary>
@@ -131,6 +157,15 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           )}
         </ul>
       </div>
+      {editingTab != null && editIndex != null ? (
+        <EditTabModal
+          // 編集対象が変わったときに前のタブの入力が残らないようにする
+          key={editIndex}
+          tab={editingTab}
+          onSave={(newTab) => saveEditedTab(editIndex, newTab)}
+          onCancel={() => setEditIndex(null)}
+        />
+      ) : null}
     </div>
   );
 });

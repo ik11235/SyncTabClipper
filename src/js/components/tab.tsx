@@ -5,6 +5,7 @@ import { util } from '../util';
 interface TabProps {
   tab: model.Tab;
   deleteClick: VoidFunction;
+  editClick: VoidFunction;
   openLinkClick: VoidFunction;
 }
 
@@ -47,6 +48,14 @@ export const Tab: React.FC<TabProps> = (props) => {
           {props.tab.title}
         </span>
       )}
+      {/* アイコンだけでは何のボタンか分からないためtitleで補う。
+          urlが空のタブもここから修復できるよう、開けるかに関わらず出す */}
+      <span
+        className="uk-link tab_edit"
+        data-uk-icon="icon: pencil; ratio: 0.9"
+        title={chrome.i18n.getMessage('content_msg_edit_tab')}
+        onClick={props.editClick}
+      />
       <span
         className="uk-link tab_close"
         data-uk-icon="icon: close; ratio: 0.9"

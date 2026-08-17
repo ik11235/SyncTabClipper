@@ -70,6 +70,33 @@
   "content_msg_broken_tab": {
     "message": "このタブのデータを読み込めませんでした。"
   },
+  "content_msg_edit_tab": {
+    "message": "編集"
+  },
+  "content_msg_edit_tab_heading": {
+    "message": "リンクを編集"
+  },
+  "content_msg_edit_tab_title_label": {
+    "message": "リンク名"
+  },
+  "content_msg_edit_tab_url_label": {
+    "message": "URL"
+  },
+  "content_msg_edit_tab_save": {
+    "message": "保存"
+  },
+  "content_msg_edit_tab_cancel": {
+    "message": "キャンセル"
+  },
+  "content_msg_edit_tab_title_required": {
+    "message": "リンク名を入力してください。"
+  },
+  "content_msg_edit_tab_url_invalid": {
+    "message": "URLの形式が正しくありません。"
+  },
+  "content_msg_edit_tab_save_failed": {
+    "message": "保存に失敗しました。もう一度お試しください。"
+  },
   "content_msg_export_broken_block": {
     "message": "$count$個のブロックはデータを読み込めなかったため、エクスポートしたデータに含まれていません。このバックアップは不完全です。すべてのデータを削除する前に内容を確認してください。",
     "placeholders": {

@@ -696,6 +696,116 @@ describe('App', (): void => {
     }
   });
 
+  test('タブの編集内容がstorageへ永続化され一覧の表示も更新される', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [
+          { url: 'https://example.com/a', title: 'title-a' },
+          { url: 'https://example.com/b', title: 'title-b' },
+        ],
+      },
+    ]);
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+
+    try {
+      await mount();
+
+      // 2件目のタブを編集する
+      const editIcon = container.querySelectorAll<HTMLElement>('.tab_edit')[1]!;
+      await act(async () => {
+        editIcon.click();
+      });
+
+      const titleInput =
+        container.querySelector<HTMLInputElement>('.edit-tab-title')!;
+      expect(titleInput.value).toBe('title-b');
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )!.set!;
+      await act(async () => {
+        setter.call(titleInput, 'renamed-b');
+        titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('.edit-tab-save')!.click();
+      });
+
+      // 編集したタブだけが差し替わって永続化される
+      expect(setBlockSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          indexNum: 0,
+          tabs: [
+            { url: 'https://example.com/a', title: 'title-a' },
+            { url: 'https://example.com/b', title: 'renamed-b' },
+          ],
+        }),
+      );
+      // 保存できたのでモーダルは閉じ、一覧の表示も新しい名前になる
+      expect(container.querySelector('.edit-tab-modal')).toBeNull();
+      expect(container.textContent).toContain('renamed-b');
+      expect(container.textContent).not.toContain('title-b');
+    } finally {
+      setBlockSpy.mockRestore();
+    }
+  });
+
+  // 保存に失敗した入力が消えると、書き直しをやり直す羽目になる
+  test('タブの編集が保存に失敗したらモーダルを閉じず一覧も変えない', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+      },
+    ]);
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockRejectedValue(new Error('QUOTA_BYTES_PER_ITEM quota exceeded'));
+
+    try {
+      await mount();
+
+      await act(async () => {
+        container.querySelector<HTMLElement>('.tab_edit')!.click();
+      });
+      const titleInput =
+        container.querySelector<HTMLInputElement>('.edit-tab-title')!;
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )!.set!;
+      await act(async () => {
+        setter.call(titleInput, 'renamed-a');
+        titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('.edit-tab-save')!.click();
+      });
+
+      // errorLogへの記録は保存の失敗を待たずに走るため、書き込みの完了を待つ
+      await act(async () => {});
+
+      // 入力を保持したまま開いたままにし、失敗はerrorLog経由で通知する
+      expect(container.querySelector('.edit-tab-modal')).not.toBeNull();
+      expect(
+        container.querySelector<HTMLInputElement>('.edit-tab-title')!.value,
+      ).toBe('renamed-a');
+      expect(container.textContent).toContain('title-a');
+      // errorLogに流れたエラーはErrorDisplayがアラートとして表示する
+      // （表示時に確認済みとしてstorageからは消える）
+      expect(
+        container.querySelector('.uk-alert-danger')!.textContent,
+      ).toContain('QUOTA_BYTES_PER_ITEM');
+    } finally {
+      setBlockSpy.mockRestore();
+    }
+  });
+
   test('ブロックのレンダリング時例外でもページ全体は生き残る', async (): Promise<void> => {
     // createdAtが不正なDateだとblock.tsxのtoISOString()がRangeErrorを投げる
     getAllBlockSpy.mockResolvedValue([

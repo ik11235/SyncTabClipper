@@ -7,7 +7,7 @@ import { ErrorBoundary } from './errorBoundary';
 
 interface MainProps {
   blocks: model.BlockEntry[];
-  updateBlock: (newBlock: model.Block) => void;
+  updateBlock: (newBlock: model.Block) => Promise<void>;
   deleteBrokenBlock: (indexNum: number) => void;
 }
 
