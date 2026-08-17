@@ -31,8 +31,13 @@ const toInputValue = (value: unknown): string => {
   if (typeof value === 'string') {
     return value;
   }
-  // 数値になったタイトルなど、直せる情報は捨てずに文字列として見せる
-  return value == null ? '' : String(value);
+  // 数値になったタイトルなど、直せる情報は捨てずに文字列として見せる。
+  // オブジェクトは[object Object]になって直す手がかりにならないうえ、
+  // Stringが例外を投げうる値もあるため空欄にする
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  return '';
 };
 
 export const EditTabModal: React.FC<EditTabModalProps> = (props) => {

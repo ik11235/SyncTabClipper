@@ -89,13 +89,17 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     updateTabsIgnoringFailure([]);
   };
 
-  // 編集中にブロックが更新されて対象が消えることがあるため、
-  // タブを取り直してから描画する
   const editingTab = editIndex == null ? null : block.tabs[editIndex];
+  // モーダルのオーバーレイはクリックしか遮らず、背後のリンクにはTabキーで
+  // 到達できてしまう。編集対象をindexで持っているため、開いている間に
+  // このブロックのタブが増減すると別のタブを上書きしたり、後から着地した
+  // 保存が消したはずのタブを書き戻したりする。背後を操作不能にして塞ぐ
+  // （aria-modalを名乗る以上、支援技術に対しても背後は無効であるべき）
+  const editing = editingTab != null && editIndex != null;
 
   return (
     <div className="tabs uk-card-default block-root-dom">
-      <div className="uk-card-header">
+      <div className="uk-card-header" inert={editing}>
         <h3 className="uk-card-title uk-margin-remove-bottom">
           {chrome.i18n.getMessage('content_msg_tab_length', [
             block.tabs.length,
@@ -121,7 +125,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           <div className="uk-width-expand" />
         </div>
       </div>
-      <div className="uk-card-body">
+      <div className="uk-card-body" inert={editing}>
         <ul>
           {block.tabs.map((tab, index) =>
             // urlを持たないタブはリンクとして機能せず、クリックすると
@@ -155,8 +159,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       </div>
       {editingTab != null && editIndex != null ? (
         <EditTabModal
-          // 現状はモーダルを閉じずに編集対象が変わる導線がないが、
-          // 増えたときに前のタブの入力が残らないようにしておく
+          // 編集対象が変わったときに前のタブの入力が残らないようにする
           key={editIndex}
           tab={editingTab}
           onSave={(newTab) => saveEditedTab(editIndex, newTab)}
