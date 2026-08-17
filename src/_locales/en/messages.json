@@ -81,6 +81,9 @@
   "content_msg_edit_tab": {
     "message": "Edit"
   },
+  "content_msg_delete_tab": {
+    "message": "Delete"
+  },
   "content_msg_edit_tab_heading": {
     "message": "Edit link"
   },
@@ -116,6 +119,12 @@
   },
   "content_msg_lock_block_save_failed": {
     "message": "Failed to change the lock. Please try again."
+  },
+  "content_msg_locked_action_disabled": {
+    "message": "Not available while this block is locked"
+  },
+  "content_msg_locked_block_delete_confirm": {
+    "message": "This block was locked, but the lock cannot be released because its data cannot be displayed. Deleting it removes it from all synced devices. Delete it?"
   },
   "content_msg_edit_block_title_label": {
     "message": "Block name"

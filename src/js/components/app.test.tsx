@@ -319,6 +319,56 @@ describe('App', (): void => {
     }
   });
 
+  // 描画に失敗したロック済みブロックはロックを解除する導線ごと失われるため、
+  // 差し替わったカードの削除ボタンが保護を素通りしないようにする(#194)
+  test('ロックしたブロックがレンダリングで落ちたら削除前に警告する', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        // createdAtが不正なDateだとblock.tsxのtoISOString()がRangeErrorを投げる
+        createdAt: new Date('invalid'),
+        tabs: [{ url: 'https://example.com/locked', title: 'title-locked' }],
+        locked: true,
+      },
+    ]);
+    const removeBlockSpy = jest
+      .spyOn(chromeService.storage, 'removeBlock')
+      .mockResolvedValue(undefined);
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+    // Reactが境界で捕捉した例外をconsole.errorへ出力するため抑止する
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      const deleteLink = container.querySelector(
+        '.broken_block_delete',
+      ) as HTMLElement;
+      await act(async () => {
+        deleteLink.click();
+      });
+
+      expect(confirmSpy).toHaveBeenCalledWith(
+        'content_msg_locked_block_delete_confirm',
+      );
+      expect(removeBlockSpy).not.toHaveBeenCalled();
+
+      // 警告を承諾したときだけ削除する
+      confirmSpy.mockReturnValue(true);
+      await act(async () => {
+        deleteLink.click();
+      });
+
+      expect(removeBlockSpy).toHaveBeenCalledWith(0);
+    } finally {
+      consoleErrorSpy.mockRestore();
+      confirmSpy.mockRestore();
+      removeBlockSpy.mockRestore();
+    }
+  });
+
   test('復元できなかったブロックはカードとして表示され削除できる', async (): Promise<void> => {
     getAllBlockSpy.mockResolvedValue([
       {

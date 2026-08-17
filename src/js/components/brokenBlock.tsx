@@ -4,6 +4,9 @@ interface BrokenBlockProps {
   indexNum: number;
   // この拡張機能が知らないスキーマ版数のデータか（削除前に警告する）
   unsupported: boolean;
+  // 編集をロックしていたブロックか。描画に失敗するとロックを解除する導線ごと
+  // 失われるため、削除させないのではなく警告して委ねる
+  locked: boolean;
   // storageからの削除とブロック一覧stateの更新はApp側で行う
   deleteBlock: (indexNum: number) => void;
 }
@@ -12,15 +15,21 @@ interface BrokenBlockProps {
 // 一覧から黙って消すとユーザーが手出しできなくなるため、
 // 読み込めなかったことを示して削除導線を提供する
 const BrokenBlock: React.FC<BrokenBlockProps> = (props) => {
+  // 削除前に警告する条件。ロックはユーザーが明示的に付けた保護なので、
+  // 版数が読めないことより優先して伝える
+  const confirmMessageKey = props.locked
+    ? 'content_msg_locked_block_delete_confirm'
+    : props.unsupported
+      ? 'content_msg_unsupported_block_delete_confirm'
+      : null;
+
   const deleteBlock = () => {
     // 新しいバージョンで保存されただけのデータは実データが生きている可能性があり、
     // 削除するとすべての同期端末から消える。ただし削除させないと
     // 「すべてのデータを削除」以外に消す手段がなくなるため、警告して委ねる
     if (
-      props.unsupported &&
-      !window.confirm(
-        chrome.i18n.getMessage('content_msg_unsupported_block_delete_confirm'),
-      )
+      confirmMessageKey != null &&
+      !window.confirm(chrome.i18n.getMessage(confirmMessageKey))
     ) {
       return;
     }

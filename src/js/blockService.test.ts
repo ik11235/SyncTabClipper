@@ -245,6 +245,20 @@ describe('blockService', (): void => {
     });
   });
 
+  // インポートやv1の非圧縮データはjsonObjToBlock経由で読むため、
+  // jsonToBlockとは別の入口になる
+  test('inflateJson 非圧縮のデータからもロックを読む', async (): Promise<void> => {
+    const json =
+      '{"v":3,"ev":"9.9.9","created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}],"locked":true}';
+
+    await expect(blockService.inflateJson(json, 1)).resolves.toStrictEqual({
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      locked: true,
+    });
+  });
+
   // インポートしたJSONには型の検証がないため、lockedにも何でも入りうる。
   // truthyな値を拾うと"false"の文字列でロックされ、UIからは解除できるものの
   // 保存のたびに同じ値が往復するわけではない点も含めて紛らわしい。

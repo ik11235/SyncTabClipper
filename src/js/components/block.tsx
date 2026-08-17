@@ -34,6 +34,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const titleFieldId = useId();
   const titleHintId = useId();
   const [lockError, setLockError] = useState<string | null>(null);
+  // ロックの書き込みが飛行中かどうか。着地するまでpropsのlockedは古いままなので、
+  // その間に始まったタブ操作は自分がロック中であることを知らずに書き戻す
+  const [lockSaving, setLockSaving] = useState(false);
 
   // 誤操作からブロックを守るための状態。ロック中は削除・編集の導線を止め、
   // リンクを開いてもタブを一覧から消さない
@@ -77,13 +80,19 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // タブ配列の差し替えをApp経由でstorageへ反映する。
   // updateBlockはブロックごと書き戻すため、タブだけを変える導線でも
   // タブ以外のフィールドを引き継がないと保存のたびに消える
-  const updateTabs = (tabs: model.Tab[]): Promise<void> =>
-    trackTabWrite(
+  const updateTabs = (tabs: model.Tab[]): Promise<void> => {
+    // storageへ書く唯一の入口でロックを見る。各導線側のガードだけに預けると、
+    // 導線が増えたときに保護が黙って漏れる
+    if (locked) {
+      return Promise.reject(new Error('This block is locked'));
+    }
+    return trackTabWrite(
       props.updateBlock({
         ...block,
         tabs: tabs,
       }),
     );
+  };
 
   // 結果を待たない導線用。失敗はApp側でerrorLogに記録済みなので、
   // ここで受けないとunhandled rejectionになるだけ
@@ -181,28 +190,37 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   /**
    * ロックを切り替えてstorageへ反映する。
    * ロックもブロックごと書き戻すため、名前・タブの書き込みと並行すると
-   * 後から着地した側が相手の変更を打ち消す。飛行中として数え、
-   * 名前を編集している間はボタン側で塞ぐ
+   * 後から着地した側が相手の変更を打ち消す。名前の保存が名前の編集中として
+   * タブ側を止めているのと同じように、着地するまではタブ側の導線も止める
+   * （propsのlockedは着地するまで古いままなので、その隙に始まったタブ操作は
+   * ロックを知らないまま書き戻し、ロックごとブロックを消してしまう）
    */
   const toggleLock = () => {
     // ボタンのdisabledで塞いでいるが、保護をDOMの属性だけに預けない
-    if (tabsWriting || titleEditing || editing) {
+    if (tabsWriting || titleEditing || editing || lockSaving) {
       return;
     }
     setLockError(null);
+    setLockSaving(true);
     trackTabWrite(
       props.updateBlock({
         ...block,
         // ロックしていない状態はキーを持たない形で表す（保存側もそう書く）
         locked: locked ? undefined : true,
       }),
-    ).catch(() => {
-      // App側のアラートはページ最上部に出るためスクロール中は気付けない。
-      // 押しても状態が変わらない理由をカード内でも伝える
-      setLockError(
-        chrome.i18n.getMessage('content_msg_lock_block_save_failed'),
-      );
-    });
+    ).then(
+      () => {
+        setLockSaving(false);
+      },
+      () => {
+        setLockSaving(false);
+        // App側のアラートはページ最上部に出るためスクロール中は気付けない。
+        // 押しても状態が変わらない理由をカード内でも伝える
+        setLockError(
+          chrome.i18n.getMessage('content_msg_lock_block_save_failed'),
+        );
+      },
+    );
   };
 
   // Tab側でもロック中は編集アイコンを無効化しているが、モーダルを開く判断は
@@ -294,6 +312,28 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     titleWasEditing.current = titleDraft != null;
   }, [titleDraft]);
 
+  // ロックボタンは押した瞬間に自分がdisabledになるため、ブラウザがフォーカスを
+  // bodyへ落とす。書き込みが決着したらキーボード操作の現在位置を戻す。
+  // 名前の編集と違い、押した後もボタン自体は同じ場所に残るので、
+  // フォーカスが失われている場合だけ戻せば足りる
+  const lockButton = useRef<HTMLButtonElement>(null);
+  const lockWasSaving = useRef(false);
+  useEffect(() => {
+    if (lockWasSaving.current && !lockSaving) {
+      const active = document.activeElement;
+      if (active == null || active === document.body) {
+        lockButton.current?.focus();
+      }
+    }
+    lockWasSaving.current = lockSaving;
+  }, [lockSaving]);
+
+  // 別の操作が成功してブロックが書き換わったら、前のロック失敗の赤字は
+  // 現在の状態を説明していない。直近の操作が失敗したかのように見えるため消す
+  useEffect(() => {
+    setLockError(null);
+  }, [block]);
+
   const editingTab = editIndex == null ? null : block.tabs[editIndex];
   // モーダルのオーバーレイはクリックしか遮らず、背後のリンクにはTabキーで
   // 到達できてしまう。編集対象をindexで持っているため、開いている間に
@@ -308,37 +348,35 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // ようにして塞ぐ。片方向だけでは「タブ操作の最中に名前を保存する」順序が
   // 残るため、名前→タブ（tabsLocked）とタブ→名前（tabsWriting）の両方を止める。
   // 見出しの入力欄自体は編集中も操作できる必要があるので、
-  // inertはヘッダ全体ではなく操作リンクの行に付ける
-  const tabsLocked = editing || titleEditing;
+  // inertはヘッダ全体ではなく操作リンクの行に付ける。
+  // ロックの書き込み中も同じ理由でタブ側を止める。着地するまでpropsのlockedは
+  // 古いままで、その間に始まったタブ操作はロックを知らないまま書き戻す
+  const tabsLocked = editing || titleEditing || lockSaving;
 
   return (
     <div className="tabs uk-card-default block-root-dom" ref={cardRoot}>
       <div className="uk-card-header block-card-header" inert={editing}>
         {/* ロックの切り替えはカードの右上に置く。名前の編集や個々のタブの
             操作より上位の、カード全体に効く操作であるため。
-            アイコンだけでは何のボタンか分からないので、ホバー用のtitleに
-            加えて支援技術向けにaria-labelとaria-pressedでも状態を伝える */}
+            アイコンだけでは何のボタンか分からないのでホバー用のtitleで補う。
+            支援技術にはaria-pressedだけで状態を伝え、aria-labelは
+            状態で変えない（「解除する」と「押されている」が重なると、
+            解除済みなのかロック中なのか読み手に区別できなくなる） */}
         <button
           type="button"
+          ref={lockButton}
           className="uk-link block-lock-toggle"
           data-uk-icon={`icon: ${locked ? 'lock' : 'unlock'}; ratio: 0.9`}
           title={chrome.i18n.getMessage(
             locked ? 'content_msg_unlock_block' : 'content_msg_lock_block',
           )}
-          aria-label={chrome.i18n.getMessage(
-            locked ? 'content_msg_unlock_block' : 'content_msg_lock_block',
-          )}
+          aria-label={chrome.i18n.getMessage('content_msg_lock_block')}
           aria-pressed={locked}
           // 名前の編集中とタブの書き換え中は、ブロックごとの書き戻しが
           // 打ち消し合うため切り替えさせない
           disabled={tabsWriting || titleEditing}
           onClick={toggleLock}
         />
-        {lockError != null ? (
-          <p className="uk-text-danger block-lock-error" role="alert">
-            {lockError}
-          </p>
-        ) : null}
         {titleEditing ? (
           <form
             className="block-title-form"
@@ -433,7 +471,15 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
             ])}
           </span>
         </p>
-        <div className="uk-grid" inert={titleEditing}>
+        {/* エラーはロックボタンと同じヘッダ内の、見出しの後に出す。
+            見出しより前に差し込むとカードの中身が丸ごとずれて、
+            どのブロックの話か分かりにくくなる */}
+        {lockError != null ? (
+          <p className="uk-text-danger block-lock-error" role="alert">
+            {lockError}
+          </p>
+        ) : null}
+        <div className="uk-grid" inert={titleEditing || lockSaving}>
           <div className="uk-width-auto">
             <span className="all_tab_link uk-link" onClick={openAllTab}>
               {chrome.i18n.getMessage('content_msg_all_tab_open')}
@@ -446,6 +492,13 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
               className={`all_tab_delete ${
                 locked ? 'tab-action-disabled' : 'uk-link'
               }`}
+              role="button"
+              // 淡色になるだけでは押せない理由が伝わらないため補う
+              title={
+                locked
+                  ? chrome.i18n.getMessage('content_msg_locked_action_disabled')
+                  : undefined
+              }
               aria-disabled={locked}
               onClick={locked ? undefined : deleteBlock}
             >

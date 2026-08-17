@@ -18,6 +18,17 @@ const BrokenTab: React.FC<BrokenTabProps> = (props) => {
           props.locked ? 'tab-action-disabled' : 'uk-link'
         }`}
         data-uk-icon="icon: close; ratio: 0.9"
+        role="button"
+        title={chrome.i18n.getMessage(
+          props.locked
+            ? 'content_msg_locked_action_disabled'
+            : 'content_msg_delete_tab',
+        )}
+        aria-label={chrome.i18n.getMessage(
+          props.locked
+            ? 'content_msg_locked_action_disabled'
+            : 'content_msg_delete_tab',
+        )}
         aria-disabled={props.locked}
         onClick={props.locked ? undefined : props.deleteClick}
       />

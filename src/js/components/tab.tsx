@@ -58,13 +58,36 @@ export const Tab: React.FC<TabProps> = (props) => {
       <span
         className={`tab_edit ${props.locked ? 'tab-action-disabled' : 'uk-link'}`}
         data-uk-icon="icon: pencil; ratio: 0.9"
-        title={chrome.i18n.getMessage('content_msg_edit_tab')}
+        // 淡色になるだけでは押せない理由が伝わらないため、
+        // ロック中は名前自体を「操作できない」に差し替える
+        role="button"
+        title={chrome.i18n.getMessage(
+          props.locked
+            ? 'content_msg_locked_action_disabled'
+            : 'content_msg_edit_tab',
+        )}
+        aria-label={chrome.i18n.getMessage(
+          props.locked
+            ? 'content_msg_locked_action_disabled'
+            : 'content_msg_edit_tab',
+        )}
         aria-disabled={props.locked}
         onClick={props.locked ? undefined : props.editClick}
       />
       <span
         className={`tab_close ${props.locked ? 'tab-action-disabled' : 'uk-link'}`}
         data-uk-icon="icon: close; ratio: 0.9"
+        role="button"
+        title={chrome.i18n.getMessage(
+          props.locked
+            ? 'content_msg_locked_action_disabled'
+            : 'content_msg_delete_tab',
+        )}
+        aria-label={chrome.i18n.getMessage(
+          props.locked
+            ? 'content_msg_locked_action_disabled'
+            : 'content_msg_delete_tab',
+        )}
         aria-disabled={props.locked}
         onClick={props.locked ? undefined : props.deleteClick}
       />

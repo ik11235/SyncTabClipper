@@ -885,6 +885,90 @@ describe('Block 編集のロック', (): void => {
     expect(error.getAttribute('role')).toBe('alert');
   });
 
+  test('ロック中はタブの編集・削除アイコンを押しても何も起きない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [
+        { url: 'https://example.com/a', title: 'title-a' },
+        { url: 'https://example.com/b', title: 'title-b' },
+      ],
+      updateBlock,
+      true,
+    );
+
+    await act(async () => {
+      container.querySelectorAll<HTMLElement>('.tab_edit')[0]!.click();
+      container.querySelectorAll<HTMLElement>('.tab_close')[0]!.click();
+    });
+
+    expect(updateBlock).not.toHaveBeenCalled();
+    expect(container.querySelector('.edit-tab-modal')).toBeNull();
+    expect(container.querySelectorAll('a.tab_link')).toHaveLength(2);
+  });
+
+  // 壊れたタブの削除もタブ配列の書き換えなので、ロック中は止める
+  test('ロック中は壊れたタブも削除できない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [
+        // urlを持たないタブは壊れたタブとして表示される
+        { title: 'broken' } as unknown as model.Tab,
+        { url: 'https://example.com/b', title: 'title-b' },
+      ],
+      updateBlock,
+      true,
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('.broken_tab_close')!.click();
+    });
+
+    expect(updateBlock).not.toHaveBeenCalled();
+  });
+
+  test('ロックの状態をアイコンとaria-pressedで伝える', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+      true,
+    );
+
+    const button =
+      container.querySelector<HTMLButtonElement>('.block-lock-toggle')!;
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    expect(button.getAttribute('data-uk-icon')).toBe('icon: lock; ratio: 0.9');
+  });
+
+  // ロックの書き込みが着地するまでpropsのlockedは古いままで、その間に
+  // 始まったタブ操作はロックを知らないまま書き戻す。tabs:[]の書き戻しは
+  // storage側でブロックの削除になるため、ロックしたばかりのブロックが消える
+  test('ロックの保存中はタブを書き換える導線が止まる', async (): Promise<void> => {
+    // 決着させないPromiseを返して保存中の状態に留める
+    const updateBlock = jest.fn().mockReturnValue(new Promise<void>(() => {}));
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+    );
+
+    await clickLockToggle();
+
+    expect(updateBlock).toHaveBeenCalledTimes(1);
+    expect(
+      container
+        .querySelector('.uk-card-header .uk-grid')!
+        .hasAttribute('inert'),
+    ).toBe(true);
+    expect(
+      container.querySelector('.uk-card-body')!.hasAttribute('inert'),
+    ).toBe(true);
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('.block-title-edit')!
+        .hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
   // ロックもブロックごと書き戻すため、名前の編集と並行すると
   // 後から着地した側が相手の変更を打ち消す
   test('名前を編集している間はロックを切り替えられない', async (): Promise<void> => {
