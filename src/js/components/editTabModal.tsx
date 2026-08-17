@@ -17,9 +17,20 @@ interface EditTabModalProps {
  * Reactの管理下と共存できない。開閉はstateで制御し、UIkitからは
  * CSSクラスだけを借りる
  */
+/**
+ * 保存データのtitle/urlは型では文字列だが、実際には文字列とは限らない
+ * （createBlockが`tab.title!`で入れるためundefinedがJSON.stringifyで
+ * キーごと落ちる、インポートしたJSONに型の検証がない）。
+ * そのままstateに入れると入力欄が非制御になり、保存時にtrimで例外になる
+ * @param {string} value 保存データが持っていた値
+ * @return {string} 入力欄に入れる文字列
+ */
+const toInputValue = (value: string): string =>
+  typeof value === 'string' ? value : '';
+
 export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
-  const [title, setTitle] = useState(props.tab.title);
-  const [url, setUrl] = useState(props.tab.url);
+  const [title, setTitle] = useState(toInputValue(props.tab.title));
+  const [url, setUrl] = useState(toInputValue(props.tab.url));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const headingId = useId();
@@ -27,8 +38,9 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
   const urlFieldId = useId();
   const onCancel = props.onCancel;
 
-  // 保存中にEscで閉じると、保存が成功したのかどうかを確認できないまま
-  // 一覧に戻るため、保存中は閉じさせない
+  // 保存中の誤操作（Esc）で閉じると、保存が成功したのかどうかを確認できないまま
+  // 一覧に戻る。意図的な中断であるキャンセルボタンは保存中も押せるようにして、
+  // 保存が終わらないときにモーダルから出られなくなるのを防ぐ
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape' && !saving) {
@@ -48,7 +60,8 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
       setError(chrome.i18n.getMessage('content_msg_edit_tab_title_required'));
       return;
     }
-    // 開けないURLを保存すると壊れたタブが増えるため、保存前に弾く
+    // URLとして解釈できない文字列を弾く。スキームまでは見ないため、
+    // これを通っても開けるURLとは限らない
     if (!util.isValidUrl(newUrl)) {
       setError(chrome.i18n.getMessage('content_msg_edit_tab_url_invalid'));
       return;
@@ -56,8 +69,10 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
     setError(null);
     setSaving(true);
     props.onSave({ title: newTitle, url: newUrl }).catch(() => {
-      // 失敗の詳細はApp側がerrorLogへ記録し、ErrorDisplayが表示する。
-      // ここでは入力を残したまま再試行できる状態に戻す
+      // App側がerrorLogへ記録するアラートはページ最上部に出るが、
+      // モーダルのオーバーレイの裏になって読めない。失敗したことは
+      // モーダル内でも伝え、入力を残したまま再試行できる状態に戻す
+      setError(chrome.i18n.getMessage('content_msg_edit_tab_save_failed'));
       setSaving(false);
     });
   };
@@ -99,15 +114,17 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
               onChange={(e) => setUrl(e.target.value)}
             />
           </div>
-          {/* 入力の直後にエラーを置き、どこを直せばよいか分かるようにする */}
+          {/* 入力の直後にエラーを置き、どこを直せばよいか分かるようにする。
+              保存ボタンが無反応に見えないよう、role=alertで読み上げさせる */}
           {error != null ? (
-            <p className="uk-text-danger edit-tab-error">{error}</p>
+            <p className="uk-text-danger edit-tab-error" role="alert">
+              {error}
+            </p>
           ) : null}
           <div className="uk-text-right">
             <button
               type="button"
               className="uk-button uk-button-default edit-tab-cancel"
-              disabled={saving}
               onClick={onCancel}
             >
               {chrome.i18n.getMessage('content_msg_edit_tab_cancel')}

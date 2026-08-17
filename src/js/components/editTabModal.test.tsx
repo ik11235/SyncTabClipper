@@ -182,6 +182,33 @@ describe('EditTabModal', (): void => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
+  // 保存データのtitle/urlは型では文字列だが、実際には文字列とは限らない
+  // （createBlockの`tab.title!`、インポートJSONの型検証なし）。
+  // 型を信じて入力欄に入れると非制御になり、保存時にtrimで例外になる
+  test('titleが文字列でないタブでも空欄として編集し保存できる', async (): Promise<void> => {
+    const onSave = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      { url: 'https://example.com/' } as unknown as model.Tab,
+      onSave,
+    );
+
+    expect(titleInput().value).toBe('');
+
+    await typeInto(titleInput(), 'recovered');
+    await submit();
+
+    expect(onSave).toHaveBeenCalledWith({
+      title: 'recovered',
+      url: 'https://example.com/',
+    });
+  });
+
+  test('urlが文字列でないタブでも空欄として編集できる', async (): Promise<void> => {
+    await mount({ title: 'title only' } as unknown as model.Tab, jest.fn());
+
+    expect(urlInput().value).toBe('');
+  });
+
   // 保存の可否が分からないまま閉じてしまうのを防ぐ
   test('保存中はEscキーで閉じない', async (): Promise<void> => {
     const onCancel = jest.fn();
@@ -203,6 +230,25 @@ describe('EditTabModal', (): void => {
     expect(saveButton().disabled).toBe(true);
   });
 
+  // 保存が終わらないときにモーダルから出られなくなるのを防ぐ
+  test('保存中でもキャンセルボタンは押せる', async (): Promise<void> => {
+    const onCancel = jest.fn();
+    // 解決しないPromiseを返し、保存中の状態で留める
+    const onSave = jest.fn().mockReturnValue(new Promise<void>(() => {}));
+    await mount(
+      { url: 'https://example.com/', title: 'old title' },
+      onSave,
+      onCancel,
+    );
+
+    await submit();
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.edit-tab-cancel')!.click();
+    });
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
   // 保存に失敗したときに入力が消えると、書き直しをやり直す羽目になる
   test('保存に失敗したら入力を残したまま再試行できる', async (): Promise<void> => {
     const onSave = jest
@@ -216,6 +262,11 @@ describe('EditTabModal', (): void => {
 
     expect(titleInput().value).toBe('new title');
     expect(saveButton().disabled).toBe(false);
+    // errorLog経由のアラートはモーダルのオーバーレイの裏になって読めないため、
+    // 失敗はモーダル内にも出す
+    expect(container.querySelector('.edit-tab-error')!.textContent).toBe(
+      'content_msg_edit_tab_save_failed',
+    );
 
     await submit();
 

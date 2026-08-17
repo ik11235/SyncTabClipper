@@ -57,8 +57,10 @@
  * UIkitのJSがインラインスタイルで付ける。JSコンポーネント(data-uk-modal)は
  * DOMノードを動かすためReactと共存できず使えないので、表示は自前で行う。
  * 開いているときだけDOMに存在するため、常時表示でよい。
+ * `.uk-modal`と詳細度で並ぶとCSSの読み込み順が勝敗を決めてしまい、
+ * 順序が変わるとモーダルが不可視のまま操作を奪うため、詳細度で勝たせる。
  */
-.edit-tab-modal {
+.uk-modal.edit-tab-modal {
   display: block;
 }
 

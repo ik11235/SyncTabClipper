@@ -94,6 +94,9 @@
   "content_msg_edit_tab_url_invalid": {
     "message": "The URL format is invalid."
   },
+  "content_msg_edit_tab_save_failed": {
+    "message": "Failed to save. Please try again."
+  },
   "content_msg_export_broken_block": {
     "message": "$count$ block(s) could not be loaded and are not included in the exported data. This backup is incomplete. Please check its contents before deleting all data.",
     "placeholders": {

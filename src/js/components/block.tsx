@@ -155,6 +155,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       </div>
       {editingTab != null && editIndex != null ? (
         <EditTabModal
+          // 編集対象が変わったら入力欄を作り直す（同じインスタンスが
+          // 再利用されると前のタブの入力が残る）
+          key={editIndex}
           tab={editingTab}
           onSave={(newTab) => saveEditedTab(editIndex, newTab)}
           onCancel={() => setEditIndex(null)}
