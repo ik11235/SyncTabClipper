@@ -18,7 +18,12 @@ describe('Tab', (): void => {
     await act(async () => {
       root = createRoot(container);
       root.render(
-        <Tab tab={tab} deleteClick={jest.fn()} openLinkClick={jest.fn()} />,
+        <Tab
+          tab={tab}
+          deleteClick={jest.fn()}
+          editClick={jest.fn()}
+          openLinkClick={jest.fn()}
+        />,
       );
     });
   };
@@ -26,6 +31,12 @@ describe('Tab', (): void => {
   beforeEach((): void => {
     container = document.createElement('div');
     document.body.appendChild(container);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      i18n: {
+        getMessage: (key: string): string => key,
+      },
+    };
   });
 
   afterEach((): void => {
@@ -64,6 +75,7 @@ describe('Tab', (): void => {
         <Tab
           tab={{ url: '', title: 'empty url title' }}
           deleteClick={jest.fn()}
+          editClick={jest.fn()}
           openLinkClick={openLinkClick}
         />,
       );
@@ -75,6 +87,35 @@ describe('Tab', (): void => {
     });
 
     expect(openLinkClick).not.toHaveBeenCalled();
+  });
+
+  test('編集アイコンのクリックでeditClickを呼ぶ', async (): Promise<void> => {
+    const editClick = jest.fn();
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <Tab
+          tab={{ url: 'https://example.com/', title: 'example title' }}
+          deleteClick={jest.fn()}
+          editClick={editClick}
+          openLinkClick={jest.fn()}
+        />,
+      );
+    });
+
+    const editIcon = container.querySelector<HTMLElement>('.tab_edit')!;
+    await act(async () => {
+      editIcon.click();
+    });
+
+    expect(editClick).toHaveBeenCalledTimes(1);
+  });
+
+  // urlが空のタブは開けないが、編集で正しいURLに直せる導線は残す必要がある
+  test('urlが空文字列のタブにも編集アイコンを表示する', async (): Promise<void> => {
+    await mount({ url: '', title: 'empty url title' });
+
+    expect(container.querySelector('.tab_edit')).not.toBeNull();
   });
 
   test('&を含むタイトルとURLを二重エスケープせず表示する', async (): Promise<void> => {

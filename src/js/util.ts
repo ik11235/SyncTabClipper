@@ -7,10 +7,20 @@ export namespace util {
    * @return {string} strのドメイン部分 or 空文字列
    */
   export function getDomain(str: string): string {
-    if (!URL.canParse(str)) {
+    if (!isValidUrl(str)) {
       return '';
     }
     return new URL(str).hostname;
+  }
+
+  /**
+   * 渡された文字列がURLとして解釈できるかを判定する
+   *
+   * @param {string} str 判定したい文字列
+   * @return {boolean} URLとして解釈できるならtrue
+   */
+  export function isValidUrl(str: string): boolean {
+    return URL.canParse(str);
   }
 
   /**

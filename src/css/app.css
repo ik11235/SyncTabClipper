@@ -49,3 +49,24 @@
   background-color: #a32741;
   border-color: #a32741;
 }
+
+/*
+ * リンクの編集モーダル (#242)
+ *
+ * UIkitの`.uk-modal`は`display: none`で、開いたときの`display: block`は
+ * UIkitのJSがインラインスタイルで付ける。JSコンポーネント(data-uk-modal)は
+ * DOMノードを動かすためReactと共存できず使えないので、表示は自前で行う。
+ * 開いているときだけDOMに存在するため、常時表示でよい。
+ */
+.edit-tab-modal {
+  display: block;
+}
+
+/*
+ * タブ行の操作アイコン。編集と削除が隣り合うようになったため、
+ * 取り違えて押さないよう間隔を空ける
+ */
+.tab_edit,
+.tab_close {
+  margin-left: 8px;
+}

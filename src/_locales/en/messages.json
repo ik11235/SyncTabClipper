@@ -70,6 +70,30 @@
   "content_msg_broken_tab": {
     "message": "Failed to load the data of this tab."
   },
+  "content_msg_edit_tab": {
+    "message": "Edit"
+  },
+  "content_msg_edit_tab_heading": {
+    "message": "Edit link"
+  },
+  "content_msg_edit_tab_title_label": {
+    "message": "Link name"
+  },
+  "content_msg_edit_tab_url_label": {
+    "message": "URL"
+  },
+  "content_msg_edit_tab_save": {
+    "message": "Save"
+  },
+  "content_msg_edit_tab_cancel": {
+    "message": "Cancel"
+  },
+  "content_msg_edit_tab_title_required": {
+    "message": "Enter a link name."
+  },
+  "content_msg_edit_tab_url_invalid": {
+    "message": "The URL format is invalid."
+  },
   "content_msg_export_broken_block": {
     "message": "$count$ block(s) could not be loaded and are not included in the exported data. This backup is incomplete. Please check its contents before deleting all data.",
     "placeholders": {
