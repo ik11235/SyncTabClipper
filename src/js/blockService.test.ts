@@ -199,6 +199,75 @@ describe('blockService', (): void => {
     });
   });
 
+  test('blockToJson ロックしているブロックはlockedを含める', (): void => {
+    const block = {
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      locked: true,
+    };
+
+    expect(blockService.blockToJson(block)).toBe(
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}],"locked":true}',
+    );
+  });
+
+  // ロックしていないブロックにキーを増やさない。storage.syncの8KB/item制限を
+  // 圧迫しないためと、ロックを知らなかった頃のデータと同じ形を保つため
+  test.each([
+    ['ロックしていない', false],
+    ['ロックしたことがない', undefined],
+  ])(
+    'blockToJson %sブロックはlockedを含めない',
+    (_name: string, locked: boolean | undefined): void => {
+      const block = {
+        indexNum: 1,
+        createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+        tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+        locked: locked,
+      };
+
+      expect(blockService.blockToJson(block)).toBe(
+        '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}',
+      );
+    },
+  );
+
+  test('jsonToBlock ロックを読む', (): void => {
+    const json =
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}],"locked":true}';
+
+    expect(blockService.jsonToBlock(json, 1)).toStrictEqual({
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      locked: true,
+    });
+  });
+
+  // インポートしたJSONには型の検証がないため、lockedにも何でも入りうる。
+  // truthyな値を拾うと"false"の文字列でロックされ、UIからは解除できるものの
+  // 保存のたびに同じ値が往復するわけではない点も含めて紛らわしい。
+  // 真偽値のtrueだけをロックとみなす
+  test.each([
+    ['文字列のfalse', '"false"'],
+    ['文字列のtrue', '"true"'],
+    ['数値の1', '1'],
+    ['false', 'false'],
+    ['null', 'null'],
+  ])(
+    'jsonToBlock ロックとして扱えないlocked(%s)はロックなしとして読む',
+    (_name: string, lockedJson: string): void => {
+      const json = `{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}],"locked":${lockedJson}}`;
+
+      expect(blockService.jsonToBlock(json, 1)).toStrictEqual({
+        indexNum: 1,
+        createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+        tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      });
+    },
+  );
+
   // 数値になった名前は直せる情報なので、捨てずに文字列として見せる
   test('jsonToBlock 数値のtitleは文字列として読む', (): void => {
     const json =

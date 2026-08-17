@@ -2,6 +2,8 @@ import React from 'react';
 
 interface BrokenTabProps {
   deleteClick: VoidFunction;
+  // ロック中のブロックでは削除もできない。壊れたタブを消すにはロックを解除する
+  locked: boolean;
 }
 
 // 描画できなかったタブ1件の代わりに表示する行。
@@ -12,9 +14,12 @@ const BrokenTab: React.FC<BrokenTabProps> = (props) => {
     <li className="tab-root-dom broken-tab-root-dom">
       <span>{chrome.i18n.getMessage('content_msg_broken_tab')}</span>
       <span
-        className="uk-link tab_close broken_tab_close"
+        className={`tab_close broken_tab_close ${
+          props.locked ? 'tab-action-disabled' : 'uk-link'
+        }`}
         data-uk-icon="icon: close; ratio: 0.9"
-        onClick={props.deleteClick}
+        aria-disabled={props.locked}
+        onClick={props.locked ? undefined : props.deleteClick}
       />
     </li>
   );

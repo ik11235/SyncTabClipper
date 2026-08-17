@@ -23,6 +23,7 @@ describe('Tab', (): void => {
           deleteClick={jest.fn()}
           editClick={jest.fn()}
           openLinkClick={jest.fn()}
+          locked={false}
         />,
       );
     });
@@ -77,6 +78,7 @@ describe('Tab', (): void => {
           deleteClick={jest.fn()}
           editClick={jest.fn()}
           openLinkClick={openLinkClick}
+          locked={false}
         />,
       );
     });
@@ -99,6 +101,7 @@ describe('Tab', (): void => {
           deleteClick={jest.fn()}
           editClick={editClick}
           openLinkClick={jest.fn()}
+          locked={false}
         />,
       );
     });
@@ -109,6 +112,61 @@ describe('Tab', (): void => {
     });
 
     expect(editClick).toHaveBeenCalledTimes(1);
+  });
+
+  // ロック中のブロックのタブは編集・削除できない(#194)。
+  // アイコンは消さずに無効化するため、押しても何も起きないことを確かめる
+  test('ロック中は編集・削除アイコンを押しても何も起きない', async (): Promise<void> => {
+    const editClick = jest.fn();
+    const deleteClick = jest.fn();
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <Tab
+          tab={{ url: 'https://example.com/', title: 'example title' }}
+          deleteClick={deleteClick}
+          editClick={editClick}
+          openLinkClick={jest.fn()}
+          locked={true}
+        />,
+      );
+    });
+
+    const editIcon = container.querySelector<HTMLElement>('.tab_edit')!;
+    const closeIcon = container.querySelector<HTMLElement>('.tab_close')!;
+    await act(async () => {
+      editIcon.click();
+      closeIcon.click();
+    });
+
+    expect(editClick).not.toHaveBeenCalled();
+    expect(deleteClick).not.toHaveBeenCalled();
+    expect(editIcon.getAttribute('aria-disabled')).toBe('true');
+    expect(closeIcon.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  // ロックしても保存したページを見に行けなくなっては困る
+  test('ロック中でもリンクのクリックでopenLinkClickを呼ぶ', async (): Promise<void> => {
+    const openLinkClick = jest.fn();
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <Tab
+          tab={{ url: 'https://example.com/', title: 'example title' }}
+          deleteClick={jest.fn()}
+          editClick={jest.fn()}
+          openLinkClick={openLinkClick}
+          locked={true}
+        />,
+      );
+    });
+
+    const link = container.querySelector<HTMLAnchorElement>('a.tab_link')!;
+    await act(async () => {
+      link.click();
+    });
+
+    expect(openLinkClick).toHaveBeenCalledTimes(1);
   });
 
   // urlが空のタブは開けないが、編集で正しいURLに直せる導線は残す必要がある

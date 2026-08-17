@@ -104,6 +104,49 @@
 }
 
 /*
+ * ブロックの編集ロック (#194)
+ *
+ * ロックの切り替えはカード全体に効く操作なので、見出しや個々のタブの操作より
+ * 上位にあることが分かるよう、カードヘッダの右上に置く。
+ * 見出しの下へ回り込ませたくないため絶対配置にし、
+ * 長い名前がボタンの下へ潜り込まないようヘッダに右余白を確保する。
+ */
+.block-card-header {
+  position: relative;
+  padding-right: 44px;
+}
+
+.block-lock-toggle {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  /* アイコン(ratio 0.9で約18px)だけではクリックの的が小さいので、
+     ブロックを守る操作として押しやすい大きさを確保する */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.block-lock-error {
+  margin: 0 0 8px;
+}
+
+/*
+ * ロック中に止めた操作。inertと違いクリックハンドラを外しているだけなので、
+ * 押せなくなったことが見て分かるよう、inertの見せ方（淡色）に揃える。
+ * uk-linkを外しているためポインタも既定に戻す
+ */
+.tab-action-disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/*
  * 名前を編集している間は、カードのタブ一覧と操作リンクをinertで止めている。
  * タブの編集モーダルはオーバーレイが背後を覆うので無効だと分かるが、
  * 名前のインライン編集にはオーバーレイがない。ブラウザはinertを淡色化しない

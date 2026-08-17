@@ -12,6 +12,13 @@ export namespace model {
      * 名前を消したブロックはundefinedになり、一覧ではタブ数を表示する
      */
     title?: string;
+    /**
+     * ブロックの編集をロックしているか。
+     * ロック中は削除・編集の導線を止め、リンクを開いてもタブを消さない。
+     * ロックしていないブロック（旧スキーマで保存されたデータを含む）は
+     * undefinedになる
+     */
+    locked?: boolean;
   }
 
   interface Tab {

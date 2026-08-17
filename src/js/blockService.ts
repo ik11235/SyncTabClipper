@@ -62,6 +62,9 @@ export namespace blockService {
       // 名前のないブロックにキーを増やさない。storage.syncの8KB/item制限を
       // titleで圧迫しないためと、名前を持たない従来のデータと同じ形を保つため
       ...(block.title == null ? {} : { title: block.title }),
+      // ロックしていないブロックも同様にキーを作らない。
+      // falseを書いてもロックしていないことしか意味せず、既定値と同じ
+      ...(block.locked === true ? { locked: true } : {}),
     };
   }
 
@@ -74,10 +77,15 @@ export namespace blockService {
   // なお一覧はstorage.onChangedを購読していないため、tabs.htmlを複数枚開くと
   // 同じバージョンでも古い一覧からの書き戻しで名前が消える。これは同じ状況で
   // タブの増減が打ち消し合うのと同根の既存の課題で、titleに固有のものではない
+  // lockedもtitleと同じく、スキーマ版数を上げずに追加した省略可能なフィールド。
+  // lockedを知らない旧バージョンが同じブロックを書き戻すとロックは失われるが、
+  // 版数を上げて旧バージョンから一切表示できなくするより軽い副作用とみなす。
+  // ロックはこの拡張機能のUIの誤操作を防ぐもので、データの改変を保証する仕組みではない
   type BlockJson = {
     created_at: number;
     tabs: model.Tab[];
     title?: string;
+    locked?: boolean;
     v?: number;
     d?: string;
   };
@@ -138,12 +146,26 @@ export namespace blockService {
     return blockTitle == null ? {} : { title: blockTitle };
   }
 
+  /**
+   * ブロックへロック状態を載せる。ロックしていないときはlockedのキー自体を
+   * 作らず、ロックを知らなかった頃のブロックと同じ形を保つ。
+   * titleと同じくインポートしたJSONには型の検証がないため、
+   * 真偽値のtrue以外はロックとみなさない（"false"のような文字列を
+   * truthyとして拾うと、解除できないブロックができてしまう）
+   * @param {unknown} locked 保存データが持っていたlocked
+   * @return {object} lockedを持つオブジェクト。ロックしていなければ空オブジェクト
+   */
+  function blockLockedField(locked: unknown): { locked?: boolean } {
+    return locked === true ? { locked: true } : {};
+  }
+
   function jsonObjToBlock(object: BlockJson, index: number): model.Block {
     return {
       indexNum: index,
       createdAt: toCreatedAt(object.created_at),
       tabs: object.tabs,
       ...blockTitleField(object.title),
+      ...blockLockedField(object.locked),
     };
   }
 
@@ -164,6 +186,7 @@ export namespace blockService {
       createdAt: toCreatedAt(js.created_at),
       tabs: tabs,
       ...blockTitleField(js.title),
+      ...blockLockedField(js.locked),
     };
   }
 

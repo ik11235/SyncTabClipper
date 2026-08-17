@@ -7,6 +7,9 @@ interface TabProps {
   deleteClick: VoidFunction;
   editClick: VoidFunction;
   openLinkClick: VoidFunction;
+  // ロック中のブロックのタブは編集・削除できない。
+  // リンクを開く導線は残す（開いても一覧から消さないのはBlock側の判断）
+  locked: boolean;
 }
 
 /**
@@ -49,17 +52,21 @@ export const Tab: React.FC<TabProps> = (props) => {
         </span>
       )}
       {/* アイコンだけでは何のボタンか分からないためtitleで補う。
-          urlが空のタブもここから修復できるよう、開けるかに関わらず出す */}
+          urlが空のタブもここから修復できるよう、開けるかに関わらず出す。
+          ロック中はアイコンを消さずに無効化する。消すと行のレイアウトが
+          変わってロックを解除するまで何ができなくなったのか分からない */}
       <span
-        className="uk-link tab_edit"
+        className={`tab_edit ${props.locked ? 'tab-action-disabled' : 'uk-link'}`}
         data-uk-icon="icon: pencil; ratio: 0.9"
         title={chrome.i18n.getMessage('content_msg_edit_tab')}
-        onClick={props.editClick}
+        aria-disabled={props.locked}
+        onClick={props.locked ? undefined : props.editClick}
       />
       <span
-        className="uk-link tab_close"
+        className={`tab_close ${props.locked ? 'tab-action-disabled' : 'uk-link'}`}
         data-uk-icon="icon: close; ratio: 0.9"
-        onClick={props.deleteClick}
+        aria-disabled={props.locked}
+        onClick={props.locked ? undefined : props.deleteClick}
       />
     </li>
   );

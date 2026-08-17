@@ -33,6 +33,11 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const [titleError, setTitleError] = useState<string | null>(null);
   const titleFieldId = useId();
   const titleHintId = useId();
+  const [lockError, setLockError] = useState<string | null>(null);
+
+  // 誤操作からブロックを守るための状態。ロック中は削除・編集の導線を止め、
+  // リンクを開いてもタブを一覧から消さない
+  const locked = block.locked === true;
 
   // 飛行中のタブ書き換えの本数。propsを見ても決着していない書き込みは
   // 分からないため、名前の編集を始めさせないための判断材料として自前で数える
@@ -88,6 +93,16 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
 
   const openLink = (index: number) => {
     const url = block.tabs[index]!.url;
+    if (locked) {
+      // ロック中は開くだけで一覧から消さない。書き戻しが要らないため
+      // 飛行中としても数えない
+      chromeService.tab
+        .createTabs({ url: url, active: false })
+        .catch((error) => {
+          chromeService.errorLog.set(error).catch(console.error);
+        });
+      return;
+    }
     // タブを開き終わってから書き戻すまでが1つの操作なので、
     // chrome.tabs.createを待つ間も飛行中として数える
     trackTabWrite(
@@ -100,6 +115,11 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   };
 
   const deleteClick = (index: number) => {
+    // 呼び出し元の導線はロック中に塞いであるが、不変条件をUIの分岐だけに
+    // 預けると導線が増えたときに保護が黙って外れる
+    if (locked) {
+      return;
+    }
     updateTabsIgnoringFailure(block.tabs.filter((_, i) => i != index));
   };
 
@@ -119,6 +139,17 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     if (openTabs.length <= 0) {
       // 開くものがないのに書き戻すと、storage.syncの書き込みクォータを
       // 無駄に消費するだけで一覧も変わらない
+      return;
+    }
+    if (locked) {
+      // ロック中は開くだけで一覧から消さない
+      Promise.all(
+        openTabs.map((tab) =>
+          chromeService.tab.createTabs({ url: tab.url, active: false }),
+        ),
+      ).catch((error) => {
+        chromeService.errorLog.set(error).catch(console.error);
+      });
       return;
     }
     // 開き終わってから書き戻すまでを1つの操作としてまとめて数える。
@@ -141,13 +172,52 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   };
 
   const deleteBlock = () => {
+    if (locked) {
+      return;
+    }
     updateTabsIgnoringFailure([]);
+  };
+
+  /**
+   * ロックを切り替えてstorageへ反映する。
+   * ロックもブロックごと書き戻すため、名前・タブの書き込みと並行すると
+   * 後から着地した側が相手の変更を打ち消す。飛行中として数え、
+   * 名前を編集している間はボタン側で塞ぐ
+   */
+  const toggleLock = () => {
+    // ボタンのdisabledで塞いでいるが、保護をDOMの属性だけに預けない
+    if (tabsWriting || titleEditing || editing) {
+      return;
+    }
+    setLockError(null);
+    trackTabWrite(
+      props.updateBlock({
+        ...block,
+        // ロックしていない状態はキーを持たない形で表す（保存側もそう書く）
+        locked: locked ? undefined : true,
+      }),
+    ).catch(() => {
+      // App側のアラートはページ最上部に出るためスクロール中は気付けない。
+      // 押しても状態が変わらない理由をカード内でも伝える
+      setLockError(
+        chrome.i18n.getMessage('content_msg_lock_block_save_failed'),
+      );
+    });
+  };
+
+  // Tab側でもロック中は編集アイコンを無効化しているが、モーダルを開く判断は
+  // ブロックの状態を持つこちらでも確かめる
+  const startTabEdit = (index: number) => {
+    if (locked) {
+      return;
+    }
+    setEditIndex(index);
   };
 
   const startTitleEdit = () => {
     // ボタンのdisabledとヘッダのinertで塞いでいるが、不変条件をDOMの属性だけに
     // 預けると、ボタンの置き場所を変えたときに保護が黙って外れる
-    if (tabsWriting || editing) {
+    if (tabsWriting || editing || locked) {
       return;
     }
     setTitleDraft(block.title ?? '');
@@ -243,7 +313,32 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
 
   return (
     <div className="tabs uk-card-default block-root-dom" ref={cardRoot}>
-      <div className="uk-card-header" inert={editing}>
+      <div className="uk-card-header block-card-header" inert={editing}>
+        {/* ロックの切り替えはカードの右上に置く。名前の編集や個々のタブの
+            操作より上位の、カード全体に効く操作であるため。
+            アイコンだけでは何のボタンか分からないので、ホバー用のtitleに
+            加えて支援技術向けにaria-labelとaria-pressedでも状態を伝える */}
+        <button
+          type="button"
+          className="uk-link block-lock-toggle"
+          data-uk-icon={`icon: ${locked ? 'lock' : 'unlock'}; ratio: 0.9`}
+          title={chrome.i18n.getMessage(
+            locked ? 'content_msg_unlock_block' : 'content_msg_lock_block',
+          )}
+          aria-label={chrome.i18n.getMessage(
+            locked ? 'content_msg_unlock_block' : 'content_msg_lock_block',
+          )}
+          aria-pressed={locked}
+          // 名前の編集中とタブの書き換え中は、ブロックごとの書き戻しが
+          // 打ち消し合うため切り替えさせない
+          disabled={tabsWriting || titleEditing}
+          onClick={toggleLock}
+        />
+        {lockError != null ? (
+          <p className="uk-text-danger block-lock-error" role="alert">
+            {lockError}
+          </p>
+        ) : null}
         {titleEditing ? (
           <form
             className="block-title-form"
@@ -318,8 +413,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
                 'content_msg_edit_block_title',
               )}
               // タブの書き換えが決着するまでは名前を編集させない。
-              // 並行させると後から着地した書き込みが名前を消す
-              disabled={tabsWriting}
+              // 並行させると後から着地した書き込みが名前を消す。
+              // ロック中も名前は編集系の操作として止める
+              disabled={tabsWriting || locked}
               onClick={startTitleEdit}
             />
           </h3>
@@ -344,7 +440,15 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
             </span>
           </div>
           <div className="uk-width-auto">
-            <span className="all_tab_delete uk-link" onClick={deleteBlock}>
+            {/* すべてのリンクを閉じるはブロックの削除に等しいため、
+                ロック中は無効化する。開く導線は残す */}
+            <span
+              className={`all_tab_delete ${
+                locked ? 'tab-action-disabled' : 'uk-link'
+              }`}
+              aria-disabled={locked}
+              onClick={locked ? undefined : deleteBlock}
+            >
               {chrome.i18n.getMessage('content_msg_all_tab_close')}
             </span>
           </div>
@@ -362,6 +466,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
               <BrokenTab
                 key={`${index}-broken`}
                 deleteClick={() => deleteClick(index)}
+                locked={locked}
               />
             ) : (
               // タブ1件の破損でブロックごと落ちると、同じブロックの正常なタブまで
@@ -370,13 +475,19 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
               // 想定していない壊れ方（titleが文字列でない等）への保険
               <ErrorBoundary
                 key={`${index}-${tab.url}`}
-                fallback={<BrokenTab deleteClick={() => deleteClick(index)} />}
+                fallback={
+                  <BrokenTab
+                    deleteClick={() => deleteClick(index)}
+                    locked={locked}
+                  />
+                }
               >
                 <Tab
                   tab={tab}
                   deleteClick={() => deleteClick(index)}
-                  editClick={() => setEditIndex(index)}
+                  editClick={() => startTabEdit(index)}
                   openLinkClick={() => openLink(index)}
+                  locked={locked}
                 />
               </ErrorBoundary>
             ),
