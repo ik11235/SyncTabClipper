@@ -252,9 +252,8 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     }
     // キーボードから起動したクリックはdetailが0になる（ロックと同じ判定）
     starKeyboardActivated.current = event.detail === 0;
-    // マウスで押したときだけ、着地後にカードを画面内へ追う
-    // （キーボードはフォーカスを戻す時点でブラウザが画面内へ入れる）
-    starFollowPending.current = event.detail !== 0;
+    // 着地後にこのカードを画面内へ追う。押した本人の操作だけを追いかける
+    starFollowPending.current = true;
     setStarError(null);
     setStarSaving(true);
     trackTabWrite(
@@ -399,7 +398,10 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
 
   // スターボタンもロックボタンと同じ理由でフォーカスを戻す。
   // スターは並び順も変えるためカード自体が一覧内を移動するが、
-  // ボタンはアンマウントされないのでrefから同じ要素へ戻せる
+  // ボタンはアンマウントされないのでrefから同じ要素へ戻せる。
+  // preventScrollを付けるのは、フォーカスに伴うブラウザの瞬間スクロールが
+  // 下のeffectで見せるスクロールを先取りして打ち消してしまうため
+  // （この2つのeffectは同じコミットで、宣言順によりこちらが先に走る）
   const starWasSaving = useRef(false);
   useEffect(() => {
     if (starWasSaving.current && !starSaving) {
@@ -408,7 +410,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
         starKeyboardActivated.current &&
         (active == null || active === document.body)
       ) {
-        starButton.current?.focus();
+        starButton.current?.focus({ preventScroll: true });
       }
     }
     starWasSaving.current = starSaving;
@@ -423,11 +425,11 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // 必ず移動後のDOMを見られる（書き込みのPromiseの中で追うと、Reactが並び替えを
   // コミットする前に走ってしまい何も起きない）。
   //
-  // 追うのはマウスで付けたときだけに絞る。
-  // ・キーボードから押したときはフォーカスをボタンへ戻す時点でブラウザが
-  //   画面内へスクロールするため、ここで動かすと二重になる
-  // ・解除したときのカードは作成日順の位置（一覧の下）へ動くので、追うと
-  //   見ている場所から大きく下へ飛んでしまう
+  // 瞬間移動させるとカードが動いたこと自体に気付けないため、スクロールを
+  // 見せて移動を伝える。ただしアニメーションを控える設定は尊重する。
+  //
+  // 追うのは付けたときだけ。解除したときのカードは作成日順の位置（一覧の下）へ
+  // 動くので、追うと見ている場所から大きく下へ飛んでしまう。
   // 押してから着地するまでにユーザーがスクロールしていた場合は引き戻すことに
   // なるが、押した時点のスクロール位置と比べる方法は使えない。カードの移動で
   // ブラウザのスクロールアンカリングが位置を補正するため、追うべき場面こそ
@@ -438,8 +440,14 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     if (!follow || !starred) {
       return;
     }
+    const reduceMotion = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    ).matches;
     // nearestなので、カードが画面内に残っている場合は何も動かさない
-    cardRoot.current?.scrollIntoView({ block: 'nearest' });
+    cardRoot.current?.scrollIntoView({
+      block: 'nearest',
+      behavior: reduceMotion ? 'auto' : 'smooth',
+    });
   }, [starred]);
 
   // 別の操作が成功してブロックが書き換わったら、前のロック失敗の赤字は

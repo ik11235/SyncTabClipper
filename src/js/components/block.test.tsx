@@ -1366,40 +1366,81 @@ describe('Block お気に入り', (): void => {
   };
 
   // 一覧の第一ソートキーなので、付けるとこのカードは先頭へ移動する。
-  // 追わないと押したカードが画面外（上）へ消える
-  test('マウスでお気に入りにしたらそのカードを画面内に追う', async (): Promise<void> => {
+  // 追わないと押したカードが画面外（上）へ消える。
+  // 瞬間移動させると動いたこと自体に気付けないため、スクロールを見せる
+  test.each([
+    ['マウス', 1],
+    ['キーボード', 0],
+  ])(
+    '%sでお気に入りにしたらスクロールしてそのカードを追う',
+    async (_name: string, detail: number): Promise<void> => {
+      const scrollIntoViewSpy = jest
+        .spyOn(Element.prototype, 'scrollIntoView')
+        .mockImplementation(() => {});
+      try {
+        const updateBlock = jest.fn().mockResolvedValue(undefined);
+        await mount(updateBlock);
+
+        await clickStarAndReceiveStarred(updateBlock, detail);
+
+        expect(scrollIntoViewSpy).toHaveBeenCalledTimes(1);
+        expect(scrollIntoViewSpy.mock.contexts[0]).toBe(
+          container.querySelector('.block-root-dom'),
+        );
+        expect(scrollIntoViewSpy).toHaveBeenCalledWith({
+          block: 'nearest',
+          behavior: 'smooth',
+        });
+      } finally {
+        scrollIntoViewSpy.mockRestore();
+      }
+    },
+  );
+
+  // アニメーションを控える設定のときは瞬間移動に戻す
+  test('アニメーションを控える設定ならスクロールを見せない', async (): Promise<void> => {
     const scrollIntoViewSpy = jest
       .spyOn(Element.prototype, 'scrollIntoView')
       .mockImplementation(() => {});
+    const matchMediaSpy = jest
+      .spyOn(window, 'matchMedia')
+      .mockImplementation((query: string) => {
+        expect(query).toBe('(prefers-reduced-motion: reduce)');
+        return { matches: true } as MediaQueryList;
+      });
     try {
       const updateBlock = jest.fn().mockResolvedValue(undefined);
       await mount(updateBlock);
 
       await clickStarAndReceiveStarred(updateBlock, 1);
 
-      expect(scrollIntoViewSpy).toHaveBeenCalledTimes(1);
-      expect(scrollIntoViewSpy.mock.contexts[0]).toBe(
-        container.querySelector('.block-root-dom'),
-      );
-      expect(scrollIntoViewSpy).toHaveBeenCalledWith({ block: 'nearest' });
+      expect(scrollIntoViewSpy).toHaveBeenCalledWith({
+        block: 'nearest',
+        behavior: 'auto',
+      });
     } finally {
+      matchMediaSpy.mockRestore();
       scrollIntoViewSpy.mockRestore();
     }
   });
 
-  // キーボードから押したときはフォーカスをボタンへ戻す時点でブラウザが
-  // 画面内へスクロールするため、ここで動かすと二重になる
-  test('キーボードからお気に入りにしたときはカードを追わない', async (): Promise<void> => {
+  // フォーカスに伴うブラウザの瞬間スクロールは、見せたいスクロールを
+  // 先取りして打ち消してしまう
+  test('キーボードのフォーカス復帰でスクロールを先取りしない', async (): Promise<void> => {
     const scrollIntoViewSpy = jest
       .spyOn(Element.prototype, 'scrollIntoView')
       .mockImplementation(() => {});
     try {
       const updateBlock = jest.fn().mockResolvedValue(undefined);
       await mount(updateBlock);
+      const focusSpy = jest.spyOn(
+        container.querySelector<HTMLButtonElement>('.block-star-toggle')!,
+        'focus',
+      );
 
       await clickStarAndReceiveStarred(updateBlock, 0);
 
-      expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+      expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
     } finally {
       scrollIntoViewSpy.mockRestore();
     }
