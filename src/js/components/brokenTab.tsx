@@ -24,7 +24,6 @@ const BrokenTab: React.FC<BrokenTabProps> = (props) => {
             ? chrome.i18n.getMessage('content_msg_locked_action_disabled')
             : chrome.i18n.getMessage('content_msg_delete_tab')
         }
-        aria-label={chrome.i18n.getMessage('content_msg_delete_tab')}
         aria-disabled={props.locked}
         onClick={props.locked ? undefined : props.deleteClick}
       />

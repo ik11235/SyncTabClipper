@@ -195,12 +195,15 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
    * （propsのlockedは着地するまで古いままなので、その隙に始まったタブ操作は
    * ロックを知らないまま書き戻し、ロックごとブロックを消してしまう）
    */
-  const toggleLock = () => {
+  const toggleLock = (event: React.MouseEvent) => {
     // ボタンのdisabledで塞いでいるが、保護をDOMの属性だけに預けない
     if (tabsWriting || titleEditing || editing || lockSaving) {
       return;
     }
-    lockHadFocus.current = document.activeElement === lockButton.current;
+    // キーボードから起動したクリックはdetailが0になる。
+    // ブラウザはmousedownでもボタンにフォーカスを移すため、
+    // activeElementを見てもマウス操作と区別できない
+    lockKeyboardActivated.current = event.detail === 0;
     setLockError(null);
     setLockSaving(true);
     trackTabWrite(
@@ -296,8 +299,8 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const cardRoot = useRef<HTMLDivElement>(null);
   const titleEditButton = useRef<HTMLButtonElement>(null);
   const lockButton = useRef<HTMLButtonElement>(null);
-  // ロックを押した時点でボタンにフォーカスがあったか（キーボード操作か）
-  const lockHadFocus = useRef(false);
+  // ロックの切り替えをキーボードから起動したか
+  const lockKeyboardActivated = useRef(false);
   const titleWasEditing = useRef(false);
   useEffect(() => {
     if (titleWasEditing.current && titleDraft == null) {
@@ -323,13 +326,12 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const lockWasSaving = useRef(false);
   useEffect(() => {
     if (lockWasSaving.current && !lockSaving) {
-      // 押した時点でボタンにフォーカスがあったときだけ戻す。
-      // マウスで押してから別の場所をクリックした場合も
-      // フォーカスはbodyに落ちるため、条件をbodyだけにすると
-      // 見ている位置まで勝手にスクロールして戻ってしまう
+      // キーボードから押したときだけ戻す。マウスで押してから別の場所を
+      // クリックした場合もフォーカスはbodyに落ちるため、bodyかどうかだけで
+      // 判断すると、見ている位置から勝手にスクロールが戻ってしまう
       const active = document.activeElement;
       if (
-        lockHadFocus.current &&
+        lockKeyboardActivated.current &&
         (active == null || active === document.body)
       ) {
         lockButton.current?.focus();
@@ -459,7 +461,12 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
               ref={titleEditButton}
               className="uk-link uk-margin-small-left block-title-edit"
               data-uk-icon="icon: pencil; ratio: 0.9"
-              title={chrome.i18n.getMessage('content_msg_edit_block_title')}
+              // 押せない理由はタブ行のアイコンと同じ文言で伝える
+              title={
+                locked
+                  ? chrome.i18n.getMessage('content_msg_locked_action_disabled')
+                  : chrome.i18n.getMessage('content_msg_edit_block_title')
+              }
               aria-label={chrome.i18n.getMessage(
                 'content_msg_edit_block_title',
               )}

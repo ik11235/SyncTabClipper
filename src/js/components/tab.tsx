@@ -63,14 +63,15 @@ export const Tab: React.FC<TabProps> = (props) => {
       <span
         className="uk-link tab_edit"
         data-uk-icon="icon: pencil; ratio: 0.9"
-        // 押せない理由はtitleで補い、名前（アクセシブル名）は状態で変えない。
-        // 差し替えると編集と削除が同じ名前になり、どちらか区別できなくなる
+        // 押せない理由はtitleで補う。名前は状態で変えない（差し替えると
+        // 編集と削除が同じ名前になり、どちらか区別できなくなる）。
+        // ロールを持たないspanにaria-labelは効かないため付けない。
+        // aria-disabledは無効の見た目をCSSから当てるための目印
         title={
           props.locked
             ? chrome.i18n.getMessage('content_msg_locked_action_disabled')
             : chrome.i18n.getMessage('content_msg_edit_tab')
         }
-        aria-label={chrome.i18n.getMessage('content_msg_edit_tab')}
         aria-disabled={props.locked}
         onClick={props.locked ? undefined : props.editClick}
       />
@@ -82,7 +83,6 @@ export const Tab: React.FC<TabProps> = (props) => {
             ? chrome.i18n.getMessage('content_msg_locked_action_disabled')
             : chrome.i18n.getMessage('content_msg_delete_tab')
         }
-        aria-label={chrome.i18n.getMessage('content_msg_delete_tab')}
         aria-disabled={props.locked}
         onClick={props.locked ? undefined : props.deleteClick}
       />

@@ -956,10 +956,11 @@ describe('Block 編集のロック', (): void => {
 
     const editIcon = container.querySelector<HTMLElement>('.tab_edit')!;
     const closeIcon = container.querySelector<HTMLElement>('.tab_close')!;
-    // 未ロックのときと同じclassName（uk-linkを外して別のクラスに
-    // 差し替えると、UIkitが付けたuk-iconごと消える）
-    expect(editIcon.className).toBe('uk-link tab_edit');
-    expect(closeIcon.className).toBe('uk-link tab_close');
+    // 未ロックのときと同じclassNameであることを見る。ロックで差し替えると
+    // UIkitが付けたuk-iconごとReactに書き換えられるため。
+    // uk-iconの保全そのものはUIkitを動かしていないjsdomでは検証できない
+    expect(editIcon.classList.contains('uk-link')).toBe(true);
+    expect(closeIcon.classList.contains('uk-link')).toBe(true);
     expect(editIcon.getAttribute('aria-disabled')).toBe('true');
     expect(closeIcon.getAttribute('aria-disabled')).toBe('true');
   });

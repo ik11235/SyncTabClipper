@@ -136,10 +136,21 @@
   margin: 0 0 8px;
 }
 
-/* 名前の編集中やタブの書き換え中は切り替えさせないため、押せないと分かるようにする */
-.block-lock-toggle:disabled {
+/*
+ * 押せないボタンの見せ方。UIkitの`.uk-link` / `.uk-icon`がcolorを指定して
+ * いるためブラウザ既定のdisabled表現は出ず、有効時と同じ見た目になる。
+ * hoverの色と下線も残るので明示的に打ち消す
+ */
+.block-lock-toggle:disabled,
+.block-title-edit:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.block-lock-toggle:disabled:hover,
+.block-title-edit:disabled:hover {
+  color: inherit;
+  text-decoration: none;
 }
 
 /*
@@ -154,6 +165,14 @@
 .all_tab_delete[aria-disabled='true'] {
   opacity: 0.5;
   cursor: default;
+}
+
+/* uk-linkのhoverが残ると、押せないのに色が変わって押せるように見える */
+.tab_edit[aria-disabled='true']:hover,
+.tab_close[aria-disabled='true']:hover,
+.all_tab_delete[aria-disabled='true']:hover {
+  color: inherit;
+  text-decoration: none;
 }
 
 /*
