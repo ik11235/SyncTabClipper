@@ -22,6 +22,8 @@ const Main: React.FC<MainProps> = (props) => {
               key={entry.indexNum}
               indexNum={entry.indexNum}
               unsupported={entry.unsupported}
+              // 復元できなかったブロックはロックしていたかも分からない
+              locked={false}
               deleteBlock={props.deleteBrokenBlock}
             />
           ) : (
@@ -34,6 +36,9 @@ const Main: React.FC<MainProps> = (props) => {
                 <BrokenBlock
                   indexNum={entry.indexNum}
                   unsupported={false}
+                  // 描画に失敗するとロックを解除する導線ごと失われるため、
+                  // ロックしていたことを削除前の警告として引き継ぐ
+                  locked={entry.locked === true}
                   deleteBlock={props.deleteBrokenBlock}
                 />
               }

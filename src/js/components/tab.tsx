@@ -7,6 +7,9 @@ interface TabProps {
   deleteClick: VoidFunction;
   editClick: VoidFunction;
   openLinkClick: VoidFunction;
+  // ロック中のブロックのタブは編集・削除できない。
+  // リンクを開く導線は残す（開いても一覧から消さないのはBlock側の判断）
+  locked: boolean;
 }
 
 /**
@@ -49,17 +52,39 @@ export const Tab: React.FC<TabProps> = (props) => {
         </span>
       )}
       {/* アイコンだけでは何のボタンか分からないためtitleで補う。
-          urlが空のタブもここから修復できるよう、開けるかに関わらず出す */}
+          urlが空のタブもここから修復できるよう、開けるかに関わらず出す。
+          ロック中はアイコンを消さずに無効化する。消すと行のレイアウトが
+          変わってロックを解除するまで何ができなくなったのか分からない。
+          classNameはロック中も変えない。UIkitがdata-uk-iconの初期化時に
+          付けるuk-iconクラスごとReactが書き換えてしまい、
+          data-uk-iconの変化しか見ていないUIkitはもう付け直さないため
+          （アイコンの色と行の高さが崩れたままリロードまで戻らない）。
+          無効の見た目はaria-disabledを見てCSS側で付ける */}
       <span
         className="uk-link tab_edit"
         data-uk-icon="icon: pencil; ratio: 0.9"
-        title={chrome.i18n.getMessage('content_msg_edit_tab')}
-        onClick={props.editClick}
+        // 押せない理由はtitleで補う。名前は状態で変えない（差し替えると
+        // 編集と削除が同じ名前になり、どちらか区別できなくなる）。
+        // ロールを持たないspanにaria-labelは効かないため付けない。
+        // aria-disabledは無効の見た目をCSSから当てるための目印
+        title={
+          props.locked
+            ? chrome.i18n.getMessage('content_msg_locked_action_disabled')
+            : chrome.i18n.getMessage('content_msg_edit_tab')
+        }
+        aria-disabled={props.locked}
+        onClick={props.locked ? undefined : props.editClick}
       />
       <span
         className="uk-link tab_close"
         data-uk-icon="icon: close; ratio: 0.9"
-        onClick={props.deleteClick}
+        title={
+          props.locked
+            ? chrome.i18n.getMessage('content_msg_locked_action_disabled')
+            : chrome.i18n.getMessage('content_msg_delete_tab')
+        }
+        aria-disabled={props.locked}
+        onClick={props.locked ? undefined : props.deleteClick}
       />
     </li>
   );

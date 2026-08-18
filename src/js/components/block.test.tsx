@@ -711,3 +711,345 @@ describe('Block タブ操作と名前の編集の排他', (): void => {
     expect(createTabsSpy).not.toHaveBeenCalled();
   });
 });
+
+// ロックはブロックを誤って削除・変更しないための保護(#194)。
+// 「URLを開いてもブロックを消さない」「削除・編集系の導線を止める」の2点を守る
+describe('Block 編集のロック', (): void => {
+  let container: HTMLDivElement;
+  let root: Root;
+  let createTabsSpy: jest.SpyInstance;
+
+  const mount = async (
+    tabs: model.Tab[],
+    updateBlock: (newBlock: model.Block) => Promise<void>,
+    locked?: boolean,
+    title?: string,
+  ): Promise<void> => {
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <Block
+          block={{
+            indexNum: 0,
+            createdAt: new Date('2021-01-02T03:04:05.678Z'),
+            tabs: tabs,
+            title: title,
+            locked: locked,
+          }}
+          updateBlock={updateBlock}
+        />,
+      );
+    });
+  };
+
+  const clickLockToggle = async (): Promise<void> => {
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.block-lock-toggle')!.click();
+    });
+  };
+
+  beforeEach((): void => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      i18n: {
+        getMessage: (key: string): string => key,
+      },
+    };
+    createTabsSpy = jest
+      .spyOn(chromeService.tab, 'createTabs')
+      .mockResolvedValue(undefined);
+  });
+
+  afterEach((): void => {
+    act(() => root.unmount());
+    container.remove();
+    createTabsSpy.mockRestore();
+  });
+
+  test('ロック中はリンクを開いてもタブを一覧から消さない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+      true,
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLAnchorElement>('a.tab_link')!.click();
+    });
+
+    expect(createTabsSpy).toHaveBeenCalledWith({
+      url: 'https://example.com/a',
+      active: false,
+    });
+    expect(updateBlock).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('a.tab_link')).toHaveLength(1);
+  });
+
+  test('ロック中は「すべてのリンクを開く」でもタブを一覧から消さない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [
+        { url: 'https://example.com/a', title: 'title-a' },
+        { url: 'https://example.com/b', title: 'title-b' },
+      ],
+      updateBlock,
+      true,
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('.all_tab_link')!.click();
+    });
+
+    expect(createTabsSpy).toHaveBeenCalledTimes(2);
+    expect(updateBlock).not.toHaveBeenCalled();
+  });
+
+  test('ロック中は「すべてのリンクを閉じる」と名前の編集を止める', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+      true,
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('.all_tab_delete')!.click();
+      container.querySelector<HTMLButtonElement>('.block-title-edit')!.click();
+    });
+
+    expect(updateBlock).not.toHaveBeenCalled();
+    expect(container.querySelector('.block-title-input')).toBeNull();
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('.block-title-edit')!
+        .hasAttribute('disabled'),
+    ).toBe(true);
+    expect(
+      container
+        .querySelector<HTMLElement>('.all_tab_delete')!
+        .getAttribute('aria-disabled'),
+    ).toBe('true');
+  });
+
+  test('ロックしてもタブと名前を保ったままupdateBlockを呼ぶ', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+      undefined,
+      '調査中のタブ',
+    );
+
+    await clickLockToggle();
+
+    expect(updateBlock).toHaveBeenCalledWith({
+      indexNum: 0,
+      createdAt: new Date('2021-01-02T03:04:05.678Z'),
+      tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+      title: '調査中のタブ',
+      locked: true,
+    });
+  });
+
+  test('ロックを解除するとlockedを落としてupdateBlockを呼ぶ', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+      true,
+    );
+
+    await clickLockToggle();
+
+    // objectContainingはキーの有無を区別しないため、値そのものを確かめる
+    // （lockedを持ったまま渡すとblockToJsonObjが"locked":trueを書き続ける）
+    expect(updateBlock).toHaveBeenCalledTimes(1);
+    expect(updateBlock.mock.calls[0][0].locked).toBeUndefined();
+  });
+
+  // App側のアラートはページ最上部に出るため、スクロール中は気付けない。
+  // 押しても状態が変わらない理由をカード内でも伝える
+  test('ロックの保存に失敗したらカード内でエラーを伝える', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockRejectedValue(new Error('failed'));
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+    );
+
+    await clickLockToggle();
+
+    const error = container.querySelector('.block-lock-error')!;
+    expect(error).not.toBeNull();
+    expect(error.getAttribute('role')).toBe('alert');
+  });
+
+  test('ロック中はタブの編集・削除アイコンを押しても何も起きない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [
+        { url: 'https://example.com/a', title: 'title-a' },
+        { url: 'https://example.com/b', title: 'title-b' },
+      ],
+      updateBlock,
+      true,
+    );
+
+    await act(async () => {
+      container.querySelectorAll<HTMLElement>('.tab_edit')[0]!.click();
+      container.querySelectorAll<HTMLElement>('.tab_close')[0]!.click();
+    });
+
+    expect(updateBlock).not.toHaveBeenCalled();
+    expect(container.querySelector('.edit-tab-modal')).toBeNull();
+    expect(container.querySelectorAll('a.tab_link')).toHaveLength(2);
+  });
+
+  // 壊れたタブの削除もタブ配列の書き換えなので、ロック中は止める
+  test('ロック中は壊れたタブも削除できない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [
+        // urlを持たないタブは壊れたタブとして表示される
+        { title: 'broken' } as unknown as model.Tab,
+        { url: 'https://example.com/b', title: 'title-b' },
+      ],
+      updateBlock,
+      true,
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('.broken_tab_close')!.click();
+    });
+
+    expect(updateBlock).not.toHaveBeenCalled();
+  });
+
+  // 見えているツールチップと支援技術に伝わる名前が食い違うと、
+  // 音声操作でツールチップの文言を読み上げても操作できない
+  test('ロックの状態をアイコンと名前で伝える', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+      true,
+    );
+
+    const button =
+      container.querySelector<HTMLButtonElement>('.block-lock-toggle')!;
+    expect(button.getAttribute('data-uk-icon')).toBe('icon: lock; ratio: 0.9');
+    expect(button.getAttribute('title')).toBe('content_msg_unlock_block');
+    expect(button.getAttribute('aria-label')).toBe('content_msg_unlock_block');
+  });
+
+  // アイコンの形だけではロック中か一目で分からないという指摘への対応。
+  // 見出し横のバッジとボタンの塗り分けの2点で状態を示す
+  test('ロック中はバッジとボタンで状態を示す', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+      true,
+    );
+
+    // バッジは見出しと同じ行に出す
+    expect(
+      container.querySelector('.uk-card-title .block-locked-badge')!
+        .textContent,
+    ).toBe('content_msg_locked_badge');
+    expect(
+      container
+        .querySelector<HTMLElement>('.block-lock-toggle')!
+        .getAttribute('data-locked'),
+    ).toBe('true');
+  });
+
+  test('ロックしていないブロックにはロックの表示を出さない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+    );
+
+    expect(container.querySelector('.block-locked-badge')).toBeNull();
+    expect(
+      container
+        .querySelector<HTMLElement>('.block-lock-toggle')!
+        .getAttribute('data-locked'),
+    ).toBe('false');
+  });
+
+  // data-uk-iconを持つ要素のclassNameをロックで切り替えると、UIkitが付けた
+  // uk-iconごとReactに書き換えられ、アイコンの色と行の高さが崩れたまま戻らない
+  test('ロック中もアイコンのclassNameは変えず、無効はaria-disabledで表す', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+      true,
+    );
+
+    const editIcon = container.querySelector<HTMLElement>('.tab_edit')!;
+    const closeIcon = container.querySelector<HTMLElement>('.tab_close')!;
+    // 未ロックのときと同じclassNameであることを見る。ロックで差し替えると
+    // UIkitが付けたuk-iconごとReactに書き換えられるため。
+    // uk-iconの保全そのものはUIkitを動かしていないjsdomでは検証できない
+    expect(editIcon.classList.contains('uk-link')).toBe(true);
+    expect(closeIcon.classList.contains('uk-link')).toBe(true);
+    expect(editIcon.getAttribute('aria-disabled')).toBe('true');
+    expect(closeIcon.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  // ロックの書き込みが着地するまでpropsのlockedは古いままで、その間に
+  // 始まったタブ操作はロックを知らないまま書き戻す。tabs:[]の書き戻しは
+  // storage側でブロックの削除になるため、ロックしたばかりのブロックが消える
+  test('ロックの保存中はタブを書き換える導線が止まる', async (): Promise<void> => {
+    // 決着させないPromiseを返して保存中の状態に留める
+    const updateBlock = jest.fn().mockReturnValue(new Promise<void>(() => {}));
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+    );
+
+    await clickLockToggle();
+
+    expect(updateBlock).toHaveBeenCalledTimes(1);
+    expect(
+      container
+        .querySelector('.uk-card-header .uk-grid')!
+        .hasAttribute('inert'),
+    ).toBe(true);
+    expect(
+      container.querySelector('.uk-card-body')!.hasAttribute('inert'),
+    ).toBe(true);
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('.block-title-edit')!
+        .hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  // ロックもブロックごと書き戻すため、名前の編集と並行すると
+  // 後から着地した側が相手の変更を打ち消す
+  test('名前を編集している間はロックを切り替えられない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.block-title-edit')!.click();
+    });
+    await clickLockToggle();
+
+    expect(updateBlock).not.toHaveBeenCalled();
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('.block-lock-toggle')!
+        .hasAttribute('disabled'),
+    ).toBe(true);
+  });
+});

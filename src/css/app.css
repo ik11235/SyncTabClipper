@@ -104,6 +104,118 @@
 }
 
 /*
+ * ブロックの編集ロック (#194)
+ *
+ * ロックの切り替えはカード全体に効く操作なので、見出しや個々のタブの操作より
+ * 上位にあることが分かるよう、カードヘッダの右上に置く。
+ * 見出しの下へ回り込ませたくないため絶対配置にし、
+ * 長い名前がボタンの下へ潜り込まないようヘッダに右余白を確保する。
+ */
+.block-card-header {
+  position: relative;
+  padding-right: 44px;
+}
+
+.block-lock-toggle {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  /* アイコン(ratio 0.9で約18px)だけではクリックの的が小さいので、
+     ブロックを守る操作として押しやすい大きさを確保する */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.block-lock-error {
+  margin: 0 0 8px;
+}
+
+/*
+ * ロック中のブロックの見せ方 (#194)
+ *
+ * アイコンの形（lock / unlock）だけでは一覧を眺めたときに区別が付かないので、
+ * バッジとボタンの塗り分けの2点で状態を示す。カードの縁やヘッダの地色まで
+ * 変えると一覧が騒がしくなるため、カード本体の見た目は変えない。
+ * UIkitのprimary #1e87f0 は白背景に対するコントラスト比が約3.2:1しかなく
+ * バッジの文字には足りないため、同系でより濃い色を専用に定義する。
+ */
+.block-locked-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* 見出しと同じ行に並ぶため、見出しの文字サイズを継がずに固定する */
+  margin-left: 8px;
+  padding: 1px 10px 1px 8px;
+  border-radius: 10px;
+  background: #1a5fa0;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+  vertical-align: middle;
+  /* 長い名前で折り返しても「ロック中」が分断されないようにする */
+  white-space: nowrap;
+}
+
+/* ロック中はボタン自体も塗り分けて、解除の的だと分かるようにする */
+.block-lock-toggle[data-locked='true'] {
+  color: #fff;
+  background: #1a5fa0;
+  border-radius: 50%;
+}
+
+.block-lock-toggle[data-locked='true']:hover,
+.block-lock-toggle[data-locked='true']:focus {
+  color: #fff;
+  background: #14487a;
+}
+
+/*
+ * 押せないボタンの見せ方。UIkitの`.uk-link` / `.uk-icon`がcolorを指定して
+ * いるためブラウザ既定のdisabled表現は出ず、有効時と同じ見た目になる。
+ * hoverの色と下線も残るので明示的に打ち消す
+ */
+.block-lock-toggle:disabled,
+.block-title-edit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.block-lock-toggle:disabled:hover,
+.block-title-edit:disabled:hover {
+  color: inherit;
+  text-decoration: none;
+}
+
+/*
+ * ロック中に止めた操作。inertと違いクリックハンドラを外しているだけなので、
+ * 押せなくなったことが見て分かるよう、inertの見せ方（淡色）に揃える。
+ * classNameではなくaria-disabledを見るのは、data-uk-iconを持つ要素の
+ * classNameをReactに書き換えさせるとUIkitが付けたuk-iconごと消え、
+ * アイコンの色と行の高さが崩れたまま戻らないため
+ */
+.tab_edit[aria-disabled='true'],
+.tab_close[aria-disabled='true'],
+.all_tab_delete[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* uk-linkのhoverが残ると、押せないのに色が変わって押せるように見える */
+.tab_edit[aria-disabled='true']:hover,
+.tab_close[aria-disabled='true']:hover,
+.all_tab_delete[aria-disabled='true']:hover {
+  color: inherit;
+  text-decoration: none;
+}
+
+/*
  * 名前を編集している間は、カードのタブ一覧と操作リンクをinertで止めている。
  * タブの編集モーダルはオーバーレイが背後を覆うので無効だと分かるが、
  * 名前のインライン編集にはオーバーレイがない。ブラウザはinertを淡色化しない

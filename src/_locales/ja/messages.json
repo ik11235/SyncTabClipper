@@ -81,6 +81,9 @@
   "content_msg_edit_tab": {
     "message": "編集"
   },
+  "content_msg_delete_tab": {
+    "message": "削除"
+  },
   "content_msg_edit_tab_heading": {
     "message": "リンクを編集"
   },
@@ -107,6 +110,24 @@
   },
   "content_msg_edit_block_title": {
     "message": "名前を編集"
+  },
+  "content_msg_lock_block": {
+    "message": "編集をロックする"
+  },
+  "content_msg_unlock_block": {
+    "message": "編集のロックを解除する"
+  },
+  "content_msg_lock_block_save_failed": {
+    "message": "ロックの変更に失敗しました。もう一度お試しください。"
+  },
+  "content_msg_locked_badge": {
+    "message": "ロック中"
+  },
+  "content_msg_locked_action_disabled": {
+    "message": "ロック中のため操作できません"
+  },
+  "content_msg_locked_block_delete_confirm": {
+    "message": "このブロックは編集をロックしていましたが、データを表示できないためロックを解除できません。削除するとすべての同期端末から消えます。削除しますか？"
   },
   "content_msg_edit_block_title_label": {
     "message": "ブロックの名前"
