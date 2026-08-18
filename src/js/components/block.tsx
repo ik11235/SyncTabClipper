@@ -366,15 +366,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const tabsLocked = editing || titleEditing || lockSaving;
 
   return (
-    // ロック中はカードごと見た目を変える。アイコンの差し替えだけでは
-    // ロックしているか一目で分からず、一覧を眺めても区別が付かない。
-    // 状態はclassNameではなくdata属性で持たせ、UIkitがdata-uk-icon要素へ
-    // 付けたクラスをReactの書き換えで失う経路を作らない
-    <div
-      className="tabs uk-card-default block-root-dom"
-      data-locked={locked}
-      ref={cardRoot}
-    >
+    <div className="tabs uk-card-default block-root-dom" ref={cardRoot}>
       <div className="uk-card-header block-card-header" inert={editing}>
         {/* ロックの切り替えはカードの右上に置く。名前の編集や個々のタブの
             操作より上位の、カード全体に効く操作であるため。
@@ -461,6 +453,14 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
                     block.tabs.length,
                   ])}
             </span>
+            {/* ロック中であることを見出しの隣で文字でも出す。アイコンの形だけに
+                頼ると、色覚や視力の差、アイコンの見落としで状態を取り違える */}
+            {locked ? (
+              <span className="block-locked-badge">
+                <span data-uk-icon="icon: lock; ratio: 0.7" />
+                {chrome.i18n.getMessage('content_msg_locked_badge')}
+              </span>
+            ) : null}
             {/* 名前を付けるのはこの機能の主導線なので、タブ行のアイコン
                 （span）と違ってキーボードから到達できるbutton要素で置く。
                 アイコンだけでは何のボタンか分からないため、ホバー用のtitleに
@@ -487,16 +487,6 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
             />
           </h3>
         )}
-        {/* ロック中であることを文字でも出す。アイコンの形だけに頼ると、
-            色覚や視力の差、アイコンの見落としで状態を取り違える */}
-        {locked ? (
-          <p className="uk-margin-remove-top block-locked-badge-row">
-            <span className="block-locked-badge">
-              <span data-uk-icon="icon: lock; ratio: 0.7" />
-              {chrome.i18n.getMessage('content_msg_locked_badge')}
-            </span>
-          </p>
-        ) : null}
         <p className="uk-text-meta uk-margin-remove-top">
           {chrome.i18n.getMessage('content_msg_created_at')}
           <time dateTime={createdAt.toISOString()}>

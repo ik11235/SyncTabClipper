@@ -945,8 +945,8 @@ describe('Block 編集のロック', (): void => {
   });
 
   // アイコンの形だけではロック中か一目で分からないという指摘への対応。
-  // カード・バッジ・ボタンの3か所で状態を示す
-  test('ロック中はカードとバッジで状態を示す', async (): Promise<void> => {
+  // 見出し横のバッジとボタンの塗り分けの2点で状態を示す
+  test('ロック中はバッジとボタンで状態を示す', async (): Promise<void> => {
     const updateBlock = jest.fn().mockResolvedValue(undefined);
     await mount(
       [{ url: 'https://example.com/a', title: 'title-a' }],
@@ -954,14 +954,11 @@ describe('Block 編集のロック', (): void => {
       true,
     );
 
+    // バッジは見出しと同じ行に出す
     expect(
-      container
-        .querySelector<HTMLElement>('.block-root-dom')!
-        .getAttribute('data-locked'),
-    ).toBe('true');
-    expect(container.querySelector('.block-locked-badge')!.textContent).toBe(
-      'content_msg_locked_badge',
-    );
+      container.querySelector('.uk-card-title .block-locked-badge')!
+        .textContent,
+    ).toBe('content_msg_locked_badge');
     expect(
       container
         .querySelector<HTMLElement>('.block-lock-toggle')!
@@ -976,12 +973,12 @@ describe('Block 編集のロック', (): void => {
       updateBlock,
     );
 
+    expect(container.querySelector('.block-locked-badge')).toBeNull();
     expect(
       container
-        .querySelector<HTMLElement>('.block-root-dom')!
+        .querySelector<HTMLElement>('.block-lock-toggle')!
         .getAttribute('data-locked'),
     ).toBe('false');
-    expect(container.querySelector('.block-locked-badge')).toBeNull();
   });
 
   // data-uk-iconを持つ要素のclassNameをロックで切り替えると、UIkitが付けた

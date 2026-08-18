@@ -140,26 +140,17 @@
  * ロック中のブロックの見せ方 (#194)
  *
  * アイコンの形（lock / unlock）だけでは一覧を眺めたときに区別が付かないので、
- * カードの縁・ヘッダの地色・バッジ・ボタンの反転の4点で状態を示す。
+ * バッジとボタンの塗り分けの2点で状態を示す。カードの縁やヘッダの地色まで
+ * 変えると一覧が騒がしくなるため、カード本体の見た目は変えない。
  * UIkitのprimary #1e87f0 は白背景に対するコントラスト比が約3.2:1しかなく
  * バッジの文字には足りないため、同系でより濃い色を専用に定義する。
  */
-.block-root-dom[data-locked='true'] {
-  border-left: 4px solid #1a5fa0;
-}
-
-.block-root-dom[data-locked='true'] > .uk-card-header {
-  background: #eef4fb;
-}
-
-.block-locked-badge-row {
-  margin-bottom: 4px;
-}
-
 .block-locked-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  /* 見出しと同じ行に並ぶため、見出しの文字サイズを継がずに固定する */
+  margin-left: 8px;
   padding: 1px 10px 1px 8px;
   border-radius: 10px;
   background: #1a5fa0;
@@ -167,6 +158,9 @@
   font-size: 12px;
   font-weight: 700;
   line-height: 1.6;
+  vertical-align: middle;
+  /* 長い名前で折り返しても「ロック中」が分断されないようにする */
+  white-space: nowrap;
 }
 
 /* ロック中はボタン自体も塗り分けて、解除の的だと分かるようにする */
