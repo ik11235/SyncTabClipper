@@ -20,3 +20,14 @@ for (const [name, impl] of Object.entries(polyfills)) {
     globalThis[name] = impl;
   }
 }
+
+// jsdomはレイアウトを持たないためscrollIntoViewを実装していない。
+// 呼び出すとTypeErrorになりテストが本番と違う経路を通るため、
+// 何もしない実装を入れる（本番のChromeにはネイティブ実装がある）。
+// 呼ばれたことの検証はテスト側でspyOnして行う
+if (
+  typeof globalThis.Element !== 'undefined' &&
+  typeof globalThis.Element.prototype.scrollIntoView !== 'function'
+) {
+  globalThis.Element.prototype.scrollIntoView = function () {};
+}

@@ -239,7 +239,11 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
    * スターを切り替えてstorageへ反映する。
    * ロックと同じくブロックごと書き戻すため、名前・タブ・ロックの書き込みと
    * 並行させない。ロック中でも押せる点だけがロックの切り替えと異なる
-   * （お気に入りは並び順と装飾にしか効かず、タブを失う操作ではない）
+   * （お気に入りは並び順と装飾にしか効かず、タブを失う操作ではない）。
+   * なおロック中でも押せる＝ロック中のブロックをstorageへ書き戻せるため、
+   * 保存は常に現在のスキーマ版数で行われる（v1/v2で保存されていたブロックは
+   * v3になる）。ロックはこの拡張機能のUIでの誤操作を防ぐもので、
+   * 保存データを変えさせない仕組みではない、という既存の立場のままとする
    */
   const toggleStar = (event: React.MouseEvent) => {
     // ボタンのdisabledで塞いでいるが、保護をDOMの属性だけに預けない
@@ -259,6 +263,12 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     ).then(
       () => {
         setStarSaving(false);
+        // お気に入りは一覧の第一ソートキーなので、着地するとこのカードが
+        // 一覧内を移動する。スクロール位置は動かないため、そのままでは
+        // 押したカードが画面外へ消え、成功したのかも分からないまま
+        // カーソルの下が別のブロックのボタンに入れ替わる。カードを追う
+        // （nearestなので、画面内に残っている場合は何も動かさない）
+        cardRoot.current?.scrollIntoView({ block: 'nearest' });
       },
       () => {
         setStarSaving(false);
@@ -434,10 +444,12 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     <div className="tabs uk-card-default block-root-dom" ref={cardRoot}>
       {/* お気に入りのリボン。一覧を眺めたときに目を引くのが役目なので、
           カード上端の全幅ではなく左肩に旗のように出す。
-          アイコンや色だけの強調にしないため文字も入れ、
-          これ自体が状態表示（ロック中バッジに相当するもの）を兼ねる */}
+          アイコンや色だけの強調にしないため文字も入れる。
+          支援技術にはロック中バッジと同じく見出しの中で伝えるため
+          （見出し送りで状態を拾えるようにする）、リボン自体はaria-hiddenで
+          二重に読ませない */}
       {starred ? (
-        <div className="block-star-ribbon">
+        <div className="block-star-ribbon" aria-hidden={true}>
           <span data-uk-icon="icon: star; ratio: 0.7" />
           {chrome.i18n.getMessage('content_msg_starred_ribbon')}
         </div>
@@ -548,6 +560,14 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
                     block.tabs.length,
                   ])}
             </span>
+            {/* お気に入りであることを見出しの中でも伝える。見た目はリボンが
+                担うのでここは支援技術専用にし（見えている文字が二重になる）、
+                ロック中バッジと同じく見出し送りで状態を拾えるようにする */}
+            {starred ? (
+              <span className="uk-hidden-visually block-starred-status">
+                {chrome.i18n.getMessage('content_msg_starred_ribbon')}
+              </span>
+            ) : null}
             {/* ロック中であることを見出しの隣で文字でも出す。アイコンの形だけに
                 頼ると、色覚や視力の差、アイコンの見落としで状態を取り違える */}
             {locked ? (

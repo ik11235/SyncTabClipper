@@ -215,8 +215,21 @@ describe('App', (): void => {
         expect.objectContaining({ indexNum: 1, starred: true }),
       );
       expect(blockTitles()).toEqual(['title-old', 'title-new']);
-      // リボンは先頭に移ったブロックにだけ出る
-      expect(container.querySelectorAll('.block-star-ribbon')).toHaveLength(1);
+      // リボンは先頭に移ったブロックにだけ出る。件数だけでは
+      // 2枚目に出ていても通ってしまうため、位置まで見る
+      const cards = container.querySelectorAll('.block-root-dom');
+      expect(cards[0]!.querySelector('.block-star-ribbon')).not.toBeNull();
+      expect(cards[1]!.querySelector('.block-star-ribbon')).toBeNull();
+
+      // 解除すると作成日順の位置へ戻る
+      await act(async () => {
+        container
+          .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[0]!
+          .click();
+      });
+
+      expect(blockTitles()).toEqual(['title-new', 'title-old']);
+      expect(container.querySelector('.block-star-ribbon')).toBeNull();
     } finally {
       setBlockSpy.mockRestore();
     }
