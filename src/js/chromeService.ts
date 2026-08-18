@@ -97,7 +97,7 @@ export namespace chromeService {
           .filter((obj) => obj[1] != null)
           .map((arr) => inflateEntry(arr[1], arr[0])),
       );
-      return entries.toSorted(sortBlock);
+      return entries.toSorted(blockService.compareBlockEntry);
     }
 
     /**
@@ -132,16 +132,6 @@ export namespace chromeService {
         };
       }
     }
-
-    const sortBlock = (a: model.BlockEntry, b: model.BlockEntry): number => {
-      const aBroken = blockService.isBrokenBlock(a);
-      const bBroken = blockService.isBrokenBlock(b);
-      if (aBroken || bBroken) {
-        // BrokenBlockはcreatedAtが分からないため末尾に寄せる
-        return Number(aBroken) - Number(bBroken);
-      }
-      return b.createdAt.getTime() - a.createdAt.getTime();
-    };
   }
 
   export namespace tab {

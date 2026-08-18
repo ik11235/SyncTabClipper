@@ -173,11 +173,61 @@ describe('App', (): void => {
     }
   });
 
-  test('あるブロックの更新時に他のブロックは再レンダリングされない', async (): Promise<void> => {
+  // storageから読み込んだ並びを固定したままだと、お気に入りにしたブロックが
+  // リロードするまで先頭に来ない
+  test('お気に入りにしたブロックはその場で一覧の先頭へ移る', async (): Promise<void> => {
     getAllBlockSpy.mockResolvedValue([
       {
         indexNum: 0,
+        createdAt: new Date('2021-01-03T03:04:05.678Z'),
+        title: 'title-new',
+        tabs: [{ url: 'https://example.com/a', title: 'tab-a' }],
+      },
+      {
+        indexNum: 1,
         createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        title: 'title-old',
+        tabs: [{ url: 'https://example.com/b', title: 'tab-b' }],
+      },
+    ]);
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+
+    try {
+      await mount();
+
+      const blockTitles = (): (string | null)[] =>
+        Array.from(container.querySelectorAll('.block-title')).map(
+          (e) => e.textContent,
+        );
+      // 作成日の降順。お気に入りを付ける前は新しいブロックが先頭
+      expect(blockTitles()).toEqual(['title-new', 'title-old']);
+
+      // 古いブロック（2枚目）をお気に入りにする
+      await act(async () => {
+        container
+          .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[1]!
+          .click();
+      });
+
+      expect(setBlockSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ indexNum: 1, starred: true }),
+      );
+      expect(blockTitles()).toEqual(['title-old', 'title-new']);
+      // リボンは先頭に移ったブロックにだけ出る
+      expect(container.querySelectorAll('.block-star-ribbon')).toHaveLength(1);
+    } finally {
+      setBlockSpy.mockRestore();
+    }
+  });
+
+  test('あるブロックの更新時に他のブロックは再レンダリングされない', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        // 一覧は作成日の降順に並ぶため、先頭に来るブロックAを新しくしておく
+        indexNum: 0,
+        createdAt: new Date('2021-01-03T03:04:05.678Z'),
         tabs: [
           { url: 'https://example.com/a1', title: 'title-a1' },
           { url: 'https://example.com/a2', title: 'title-a2' },
@@ -185,7 +235,7 @@ describe('App', (): void => {
       },
       {
         indexNum: 1,
-        createdAt: new Date('2021-01-03T03:04:05.678Z'),
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
         // ブロックAの更新後のタブ数(1)と重ならない数にして、
         // どちらのブロックのレンダリングかを引数で見分けられるようにする
         tabs: [

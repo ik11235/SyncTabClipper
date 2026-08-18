@@ -37,10 +37,18 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // ロックの書き込みが飛行中かどうか。着地するまでpropsのlockedは古いままなので、
   // その間に始まったタブ操作は自分がロック中であることを知らずに書き戻す
   const [lockSaving, setLockSaving] = useState(false);
+  const [starError, setStarError] = useState<string | null>(null);
+  // スターの書き込みが飛行中かどうか。ロックと同じ理由で、着地するまでは
+  // タブ側の導線を止める
+  const [starSaving, setStarSaving] = useState(false);
 
   // 誤操作からブロックを守るための状態。ロック中は削除・編集の導線を止め、
   // リンクを開いてもタブを一覧から消さない
   const locked = block.locked === true;
+
+  // お気に入りかどうか。一覧での並び順と装飾にしか影響しないため、
+  // ロック中でも付け外しできる（ロックはデータを失う操作を止めるためのもの）
+  const starred = block.starred === true;
 
   // 飛行中のタブ書き換えの本数。propsを見ても決着していない書き込みは
   // 分からないため、名前の編集を始めさせないための判断材料として自前で数える
@@ -197,7 +205,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
    */
   const toggleLock = (event: React.MouseEvent) => {
     // ボタンのdisabledで塞いでいるが、保護をDOMの属性だけに預けない
-    if (tabsWriting || titleEditing || editing || lockSaving) {
+    if (tabsWriting || titleEditing || editing || lockSaving || starSaving) {
       return;
     }
     // キーボードから起動したクリックはdetailが0になる。
@@ -222,6 +230,41 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
         // 押しても状態が変わらない理由をカード内でも伝える
         setLockError(
           chrome.i18n.getMessage('content_msg_lock_block_save_failed'),
+        );
+      },
+    );
+  };
+
+  /**
+   * スターを切り替えてstorageへ反映する。
+   * ロックと同じくブロックごと書き戻すため、名前・タブ・ロックの書き込みと
+   * 並行させない。ロック中でも押せる点だけがロックの切り替えと異なる
+   * （お気に入りは並び順と装飾にしか効かず、タブを失う操作ではない）
+   */
+  const toggleStar = (event: React.MouseEvent) => {
+    // ボタンのdisabledで塞いでいるが、保護をDOMの属性だけに預けない
+    if (tabsWriting || titleEditing || editing || lockSaving || starSaving) {
+      return;
+    }
+    // キーボードから起動したクリックはdetailが0になる（ロックと同じ判定）
+    starKeyboardActivated.current = event.detail === 0;
+    setStarError(null);
+    setStarSaving(true);
+    trackTabWrite(
+      props.updateBlock({
+        ...block,
+        // お気に入りでない状態はキーを持たない形で表す（保存側もそう書く）
+        starred: starred ? undefined : true,
+      }),
+    ).then(
+      () => {
+        setStarSaving(false);
+      },
+      () => {
+        setStarSaving(false);
+        // App側のアラートはページ最上部に出るためスクロール中は気付けない
+        setStarError(
+          chrome.i18n.getMessage('content_msg_star_block_save_failed'),
         );
       },
     );
@@ -299,8 +342,11 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const cardRoot = useRef<HTMLDivElement>(null);
   const titleEditButton = useRef<HTMLButtonElement>(null);
   const lockButton = useRef<HTMLButtonElement>(null);
+  const starButton = useRef<HTMLButtonElement>(null);
   // ロックの切り替えをキーボードから起動したか
   const lockKeyboardActivated = useRef(false);
+  // スターの切り替えをキーボードから起動したか
+  const starKeyboardActivated = useRef(false);
   const titleWasEditing = useRef(false);
   useEffect(() => {
     if (titleWasEditing.current && titleDraft == null) {
@@ -340,10 +386,28 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     lockWasSaving.current = lockSaving;
   }, [lockSaving]);
 
+  // スターボタンもロックボタンと同じ理由でフォーカスを戻す。
+  // スターは並び順も変えるためカード自体が一覧内を移動するが、
+  // ボタンはアンマウントされないのでrefから同じ要素へ戻せる
+  const starWasSaving = useRef(false);
+  useEffect(() => {
+    if (starWasSaving.current && !starSaving) {
+      const active = document.activeElement;
+      if (
+        starKeyboardActivated.current &&
+        (active == null || active === document.body)
+      ) {
+        starButton.current?.focus();
+      }
+    }
+    starWasSaving.current = starSaving;
+  }, [starSaving]);
+
   // 別の操作が成功してブロックが書き換わったら、前のロック失敗の赤字は
   // 現在の状態を説明していない。直近の操作が失敗したかのように見えるため消す
   useEffect(() => {
     setLockError(null);
+    setStarError(null);
   }, [block]);
 
   const editingTab = editIndex == null ? null : block.tabs[editIndex];
@@ -362,12 +426,43 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // 見出しの入力欄自体は編集中も操作できる必要があるので、
   // inertはヘッダ全体ではなく操作リンクの行に付ける。
   // ロックの書き込み中も同じ理由でタブ側を止める。着地するまでpropsのlockedは
-  // 古いままで、その間に始まったタブ操作はロックを知らないまま書き戻す
-  const tabsLocked = editing || titleEditing || lockSaving;
+  // 古いままで、その間に始まったタブ操作はロックを知らないまま書き戻す。
+  // スターの書き込み中も同じ（着地前のタブ操作はスターごと書き戻してしまう）
+  const tabsLocked = editing || titleEditing || lockSaving || starSaving;
 
   return (
     <div className="tabs uk-card-default block-root-dom" ref={cardRoot}>
+      {/* お気に入りのリボン。一覧を眺めたときに目を引くのが役目なので、
+          カード上端の全幅ではなく左肩に旗のように出す。
+          アイコンや色だけの強調にしないため文字も入れ、
+          これ自体が状態表示（ロック中バッジに相当するもの）を兼ねる */}
+      {starred ? (
+        <div className="block-star-ribbon">
+          <span data-uk-icon="icon: star; ratio: 0.7" />
+          {chrome.i18n.getMessage('content_msg_starred_ribbon')}
+        </div>
+      ) : null}
       <div className="uk-card-header block-card-header" inert={editing}>
+        {/* お気に入りの切り替えはロックと並べてカードの右上に置く。
+            どちらもカード全体に効く操作で、粒度が揃っているため。
+            ロックと違いロック中でも押せる（並び順と装飾しか変えない）。
+            状態はロックと同じ理由でaria-pressedではなく名前で伝える */}
+        <button
+          type="button"
+          ref={starButton}
+          className="uk-link block-star-toggle"
+          data-starred={starred}
+          data-uk-icon="icon: star; ratio: 0.9"
+          title={chrome.i18n.getMessage(
+            starred ? 'content_msg_unstar_block' : 'content_msg_star_block',
+          )}
+          aria-label={chrome.i18n.getMessage(
+            starred ? 'content_msg_unstar_block' : 'content_msg_star_block',
+          )}
+          // ロックボタンと同じ理由。ブロックごとの書き戻しが打ち消し合う
+          disabled={tabsWriting || titleEditing}
+          onClick={toggleStar}
+        />
         {/* ロックの切り替えはカードの右上に置く。名前の編集や個々のタブの
             操作より上位の、カード全体に効く操作であるため。
             アイコンだけでは何のボタンか分からないのでtitleで補い、
@@ -508,7 +603,15 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
             {lockError}
           </p>
         ) : null}
-        <div className="uk-grid" inert={titleEditing || lockSaving}>
+        {starError != null ? (
+          <p className="uk-text-danger block-star-error" role="alert">
+            {starError}
+          </p>
+        ) : null}
+        <div
+          className="uk-grid"
+          inert={titleEditing || lockSaving || starSaving}
+        >
           <div className="uk-width-auto">
             <span className="all_tab_link uk-link" onClick={openAllTab}>
               {chrome.i18n.getMessage('content_msg_all_tab_open')}

@@ -1053,3 +1053,187 @@ describe('Block 編集のロック', (): void => {
     ).toBe(true);
   });
 });
+
+describe('Block お気に入り', (): void => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  const mount = async (
+    updateBlock: (newBlock: model.Block) => Promise<void>,
+    block?: Partial<model.Block>,
+  ): Promise<void> => {
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <Block
+          block={{
+            indexNum: 0,
+            createdAt: new Date('2021-01-02T03:04:05.678Z'),
+            tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+            ...block,
+          }}
+          updateBlock={updateBlock}
+        />,
+      );
+    });
+  };
+
+  const clickStarToggle = async (): Promise<void> => {
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.block-star-toggle')!.click();
+    });
+  };
+
+  beforeEach((): void => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      i18n: {
+        getMessage: (key: string): string => key,
+      },
+    };
+  });
+
+  afterEach((): void => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  test('お気に入りにするとタブ・名前・ロックを保ったままupdateBlockを呼ぶ', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock, { title: '調査中のタブ', locked: true });
+
+    await clickStarToggle();
+
+    expect(updateBlock).toHaveBeenCalledWith({
+      indexNum: 0,
+      createdAt: new Date('2021-01-02T03:04:05.678Z'),
+      tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+      title: '調査中のタブ',
+      locked: true,
+      starred: true,
+    });
+  });
+
+  test('お気に入りを解除するとstarredを落としてupdateBlockを呼ぶ', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock, { starred: true });
+
+    await clickStarToggle();
+
+    // objectContainingはキーの有無を区別しないため、値そのものを確かめる
+    // （starredを持ったまま渡すとblockToJsonObjが"starred":trueを書き続ける）
+    expect(updateBlock).toHaveBeenCalledTimes(1);
+    expect(updateBlock.mock.calls[0][0].starred).toBeUndefined();
+  });
+
+  // お気に入りは並び順と装飾しか変えないため、タブを失う操作を止めるための
+  // ロックの対象にしない
+  test('ロック中でもお気に入りは付け外しできる', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock, { locked: true });
+
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('.block-star-toggle')!
+        .hasAttribute('disabled'),
+    ).toBe(false);
+
+    await clickStarToggle();
+
+    expect(updateBlock).toHaveBeenCalledTimes(1);
+    expect(updateBlock.mock.calls[0][0].starred).toBe(true);
+  });
+
+  // 色やアイコンの形だけの強調にならないよう、リボンには文字も入れる
+  test('お気に入りのブロックにはリボンを出す', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock, { starred: true });
+
+    expect(container.querySelector('.block-star-ribbon')!.textContent).toBe(
+      'content_msg_starred_ribbon',
+    );
+    expect(
+      container
+        .querySelector<HTMLElement>('.block-star-toggle')!
+        .getAttribute('data-starred'),
+    ).toBe('true');
+  });
+
+  test('お気に入りでないブロックにはリボンを出さない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    expect(container.querySelector('.block-star-ribbon')).toBeNull();
+    expect(
+      container
+        .querySelector<HTMLElement>('.block-star-toggle')!
+        .getAttribute('data-starred'),
+    ).toBe('false');
+  });
+
+  test('お気に入りの状態を名前で伝える', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock, { starred: true });
+
+    const button =
+      container.querySelector<HTMLButtonElement>('.block-star-toggle')!;
+    expect(button.getAttribute('title')).toBe('content_msg_unstar_block');
+    expect(button.getAttribute('aria-label')).toBe('content_msg_unstar_block');
+  });
+
+  // App側のアラートはページ最上部に出るため、スクロール中は気付けない
+  test('お気に入りの保存に失敗したらカード内でエラーを伝える', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockRejectedValue(new Error('failed'));
+    await mount(updateBlock);
+
+    await clickStarToggle();
+
+    const error = container.querySelector('.block-star-error')!;
+    expect(error).not.toBeNull();
+    expect(error.getAttribute('role')).toBe('alert');
+  });
+
+  // ロックと同じ理由。着地するまでpropsのstarredは古いままで、その間に
+  // 始まったタブ操作はお気に入りを知らないまま書き戻す
+  test('お気に入りの保存中はタブを書き換える導線が止まる', async (): Promise<void> => {
+    // 決着させないPromiseを返して保存中の状態に留める
+    const updateBlock = jest.fn().mockReturnValue(new Promise<void>(() => {}));
+    await mount(updateBlock);
+
+    await clickStarToggle();
+
+    expect(updateBlock).toHaveBeenCalledTimes(1);
+    expect(
+      container
+        .querySelector('.uk-card-header .uk-grid')!
+        .hasAttribute('inert'),
+    ).toBe(true);
+    expect(
+      container.querySelector('.uk-card-body')!.hasAttribute('inert'),
+    ).toBe(true);
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('.block-lock-toggle')!
+        .hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  test('名前を編集している間はお気に入りを切り替えられない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.block-title-edit')!.click();
+    });
+    await clickStarToggle();
+
+    expect(updateBlock).not.toHaveBeenCalled();
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('.block-star-toggle')!
+        .hasAttribute('disabled'),
+    ).toBe(true);
+  });
+});
