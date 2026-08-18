@@ -54,40 +54,35 @@ export const Tab: React.FC<TabProps> = (props) => {
       {/* アイコンだけでは何のボタンか分からないためtitleで補う。
           urlが空のタブもここから修復できるよう、開けるかに関わらず出す。
           ロック中はアイコンを消さずに無効化する。消すと行のレイアウトが
-          変わってロックを解除するまで何ができなくなったのか分からない */}
+          変わってロックを解除するまで何ができなくなったのか分からない。
+          classNameはロック中も変えない。UIkitがdata-uk-iconの初期化時に
+          付けるuk-iconクラスごとReactが書き換えてしまい、
+          data-uk-iconの変化しか見ていないUIkitはもう付け直さないため
+          （アイコンの色と行の高さが崩れたままリロードまで戻らない）。
+          無効の見た目はaria-disabledを見てCSS側で付ける */}
       <span
-        className={`tab_edit ${props.locked ? 'tab-action-disabled' : 'uk-link'}`}
+        className="uk-link tab_edit"
         data-uk-icon="icon: pencil; ratio: 0.9"
-        // 淡色になるだけでは押せない理由が伝わらないため、
-        // ロック中は名前自体を「操作できない」に差し替える
-        role="button"
-        title={chrome.i18n.getMessage(
+        // 押せない理由はtitleで補い、名前（アクセシブル名）は状態で変えない。
+        // 差し替えると編集と削除が同じ名前になり、どちらか区別できなくなる
+        title={
           props.locked
-            ? 'content_msg_locked_action_disabled'
-            : 'content_msg_edit_tab',
-        )}
-        aria-label={chrome.i18n.getMessage(
-          props.locked
-            ? 'content_msg_locked_action_disabled'
-            : 'content_msg_edit_tab',
-        )}
+            ? chrome.i18n.getMessage('content_msg_locked_action_disabled')
+            : chrome.i18n.getMessage('content_msg_edit_tab')
+        }
+        aria-label={chrome.i18n.getMessage('content_msg_edit_tab')}
         aria-disabled={props.locked}
         onClick={props.locked ? undefined : props.editClick}
       />
       <span
-        className={`tab_close ${props.locked ? 'tab-action-disabled' : 'uk-link'}`}
+        className="uk-link tab_close"
         data-uk-icon="icon: close; ratio: 0.9"
-        role="button"
-        title={chrome.i18n.getMessage(
+        title={
           props.locked
-            ? 'content_msg_locked_action_disabled'
-            : 'content_msg_delete_tab',
-        )}
-        aria-label={chrome.i18n.getMessage(
-          props.locked
-            ? 'content_msg_locked_action_disabled'
-            : 'content_msg_delete_tab',
-        )}
+            ? chrome.i18n.getMessage('content_msg_locked_action_disabled')
+            : chrome.i18n.getMessage('content_msg_delete_tab')
+        }
+        aria-label={chrome.i18n.getMessage('content_msg_delete_tab')}
         aria-disabled={props.locked}
         onClick={props.locked ? undefined : props.deleteClick}
       />

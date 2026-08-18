@@ -13,22 +13,18 @@ const BrokenTab: React.FC<BrokenTabProps> = (props) => {
   return (
     <li className="tab-root-dom broken-tab-root-dom">
       <span>{chrome.i18n.getMessage('content_msg_broken_tab')}</span>
+      {/* classNameはロック中も変えない（UIkitが付けるuk-iconごと
+          Reactに書き換えられ、アイコンの見た目が戻らなくなるため）。
+          無効の見た目はaria-disabledを見てCSS側で付ける */}
       <span
-        className={`tab_close broken_tab_close ${
-          props.locked ? 'tab-action-disabled' : 'uk-link'
-        }`}
+        className="uk-link tab_close broken_tab_close"
         data-uk-icon="icon: close; ratio: 0.9"
-        role="button"
-        title={chrome.i18n.getMessage(
+        title={
           props.locked
-            ? 'content_msg_locked_action_disabled'
-            : 'content_msg_delete_tab',
-        )}
-        aria-label={chrome.i18n.getMessage(
-          props.locked
-            ? 'content_msg_locked_action_disabled'
-            : 'content_msg_delete_tab',
-        )}
+            ? chrome.i18n.getMessage('content_msg_locked_action_disabled')
+            : chrome.i18n.getMessage('content_msg_delete_tab')
+        }
+        aria-label={chrome.i18n.getMessage('content_msg_delete_tab')}
         aria-disabled={props.locked}
         onClick={props.locked ? undefined : props.deleteClick}
       />

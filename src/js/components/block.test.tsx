@@ -864,9 +864,10 @@ describe('Block 編集のロック', (): void => {
 
     await clickLockToggle();
 
-    expect(updateBlock).toHaveBeenCalledWith(
-      expect.objectContaining({ locked: undefined }),
-    );
+    // objectContainingはキーの有無を区別しないため、値そのものを確かめる
+    // （lockedを持ったまま渡すとblockToJsonObjが"locked":trueを書き続ける）
+    expect(updateBlock).toHaveBeenCalledTimes(1);
+    expect(updateBlock.mock.calls[0][0].locked).toBeUndefined();
   });
 
   // App側のアラートはページ最上部に出るため、スクロール中は気付けない。
@@ -926,7 +927,9 @@ describe('Block 編集のロック', (): void => {
     expect(updateBlock).not.toHaveBeenCalled();
   });
 
-  test('ロックの状態をアイコンとaria-pressedで伝える', async (): Promise<void> => {
+  // 見えているツールチップと支援技術に伝わる名前が食い違うと、
+  // 音声操作でツールチップの文言を読み上げても操作できない
+  test('ロックの状態をアイコンと名前で伝える', async (): Promise<void> => {
     const updateBlock = jest.fn().mockResolvedValue(undefined);
     await mount(
       [{ url: 'https://example.com/a', title: 'title-a' }],
@@ -936,8 +939,29 @@ describe('Block 編集のロック', (): void => {
 
     const button =
       container.querySelector<HTMLButtonElement>('.block-lock-toggle')!;
-    expect(button.getAttribute('aria-pressed')).toBe('true');
     expect(button.getAttribute('data-uk-icon')).toBe('icon: lock; ratio: 0.9');
+    expect(button.getAttribute('title')).toBe('content_msg_unlock_block');
+    expect(button.getAttribute('aria-label')).toBe('content_msg_unlock_block');
+  });
+
+  // data-uk-iconを持つ要素のclassNameをロックで切り替えると、UIkitが付けた
+  // uk-iconごとReactに書き換えられ、アイコンの色と行の高さが崩れたまま戻らない
+  test('ロック中もアイコンのclassNameは変えず、無効はaria-disabledで表す', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+      true,
+    );
+
+    const editIcon = container.querySelector<HTMLElement>('.tab_edit')!;
+    const closeIcon = container.querySelector<HTMLElement>('.tab_close')!;
+    // 未ロックのときと同じclassName（uk-linkを外して別のクラスに
+    // 差し替えると、UIkitが付けたuk-iconごと消える）
+    expect(editIcon.className).toBe('uk-link tab_edit');
+    expect(closeIcon.className).toBe('uk-link tab_close');
+    expect(editIcon.getAttribute('aria-disabled')).toBe('true');
+    expect(closeIcon.getAttribute('aria-disabled')).toBe('true');
   });
 
   // ロックの書き込みが着地するまでpropsのlockedは古いままで、その間に

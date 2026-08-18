@@ -136,12 +136,22 @@
   margin: 0 0 8px;
 }
 
+/* 名前の編集中やタブの書き換え中は切り替えさせないため、押せないと分かるようにする */
+.block-lock-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /*
  * ロック中に止めた操作。inertと違いクリックハンドラを外しているだけなので、
  * 押せなくなったことが見て分かるよう、inertの見せ方（淡色）に揃える。
- * uk-linkを外しているためポインタも既定に戻す
+ * classNameではなくaria-disabledを見るのは、data-uk-iconを持つ要素の
+ * classNameをReactに書き換えさせるとUIkitが付けたuk-iconごと消え、
+ * アイコンの色と行の高さが崩れたまま戻らないため
  */
-.tab-action-disabled {
+.tab_edit[aria-disabled='true'],
+.tab_close[aria-disabled='true'],
+.all_tab_delete[aria-disabled='true'] {
   opacity: 0.5;
   cursor: default;
 }

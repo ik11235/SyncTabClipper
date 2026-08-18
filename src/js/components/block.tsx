@@ -200,6 +200,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     if (tabsWriting || titleEditing || editing || lockSaving) {
       return;
     }
+    lockHadFocus.current = document.activeElement === lockButton.current;
     setLockError(null);
     setLockSaving(true);
     trackTabWrite(
@@ -294,6 +295,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // キーボード操作の現在位置が失われる。開いたときのボタンへ戻す
   const cardRoot = useRef<HTMLDivElement>(null);
   const titleEditButton = useRef<HTMLButtonElement>(null);
+  const lockButton = useRef<HTMLButtonElement>(null);
+  // ロックを押した時点でボタンにフォーカスがあったか（キーボード操作か）
+  const lockHadFocus = useRef(false);
   const titleWasEditing = useRef(false);
   useEffect(() => {
     if (titleWasEditing.current && titleDraft == null) {
@@ -316,12 +320,18 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // bodyへ落とす。書き込みが決着したらキーボード操作の現在位置を戻す。
   // 名前の編集と違い、押した後もボタン自体は同じ場所に残るので、
   // フォーカスが失われている場合だけ戻せば足りる
-  const lockButton = useRef<HTMLButtonElement>(null);
   const lockWasSaving = useRef(false);
   useEffect(() => {
     if (lockWasSaving.current && !lockSaving) {
+      // 押した時点でボタンにフォーカスがあったときだけ戻す。
+      // マウスで押してから別の場所をクリックした場合も
+      // フォーカスはbodyに落ちるため、条件をbodyだけにすると
+      // 見ている位置まで勝手にスクロールして戻ってしまう
       const active = document.activeElement;
-      if (active == null || active === document.body) {
+      if (
+        lockHadFocus.current &&
+        (active == null || active === document.body)
+      ) {
         lockButton.current?.focus();
       }
     }
@@ -358,10 +368,12 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       <div className="uk-card-header block-card-header" inert={editing}>
         {/* ロックの切り替えはカードの右上に置く。名前の編集や個々のタブの
             操作より上位の、カード全体に効く操作であるため。
-            アイコンだけでは何のボタンか分からないのでホバー用のtitleで補う。
-            支援技術にはaria-pressedだけで状態を伝え、aria-labelは
-            状態で変えない（「解除する」と「押されている」が重なると、
-            解除済みなのかロック中なのか読み手に区別できなくなる） */}
+            アイコンだけでは何のボタンか分からないのでtitleで補い、
+            支援技術にも同じ文言をaria-labelで渡す。
+            状態はaria-pressedではなく名前（「ロックする」「解除する」）で
+            伝える。両方を使うと「解除する」と「押されている」が重なって、
+            解除済みなのかロック中なのか読み手に区別できなくなるうえ、
+            見えているツールチップと名前が食い違って音声操作の的も外れる */}
         <button
           type="button"
           ref={lockButton}
@@ -370,8 +382,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           title={chrome.i18n.getMessage(
             locked ? 'content_msg_unlock_block' : 'content_msg_lock_block',
           )}
-          aria-label={chrome.i18n.getMessage('content_msg_lock_block')}
-          aria-pressed={locked}
+          aria-label={chrome.i18n.getMessage(
+            locked ? 'content_msg_unlock_block' : 'content_msg_lock_block',
+          )}
           // 名前の編集中とタブの書き換え中は、ブロックごとの書き戻しが
           // 打ち消し合うため切り替えさせない
           disabled={tabsWriting || titleEditing}
@@ -489,11 +502,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
             {/* すべてのリンクを閉じるはブロックの削除に等しいため、
                 ロック中は無効化する。開く導線は残す */}
             <span
-              className={`all_tab_delete ${
-                locked ? 'tab-action-disabled' : 'uk-link'
-              }`}
-              role="button"
-              // 淡色になるだけでは押せない理由が伝わらないため補う
+              className="all_tab_delete uk-link"
+              // 淡色になるだけでは押せない理由が伝わらないため補う。
+              // 無効の見た目はaria-disabledを見てCSS側で付ける
               title={
                 locked
                   ? chrome.i18n.getMessage('content_msg_locked_action_disabled')
