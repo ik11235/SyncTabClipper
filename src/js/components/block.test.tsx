@@ -1196,6 +1196,24 @@ describe('Block お気に入り', (): void => {
     expect(error.getAttribute('role')).toBe('alert');
   });
 
+  // 再試行している間も古い赤字が残っていると、まだ失敗しているように見える
+  test('お気に入りを押し直すと前回の失敗の赤字は消える', async (): Promise<void> => {
+    const updateBlock = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('failed'))
+      // 2回目は決着させず、飛行中の状態で赤字が消えていることを見る
+      .mockReturnValue(new Promise<void>(() => {}));
+    await mount(updateBlock);
+
+    await clickStarToggle();
+    expect(container.querySelector('.block-star-error')).not.toBeNull();
+
+    await clickStarToggle();
+
+    expect(updateBlock).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('.block-star-error')).toBeNull();
+  });
+
   // 別の操作が成功してブロックが書き換わったら、前の失敗の赤字は
   // 現在の状態を説明していない
   test('ブロックが書き換わるとお気に入りのエラーは消える', async (): Promise<void> => {
@@ -1313,9 +1331,48 @@ describe('Block お気に入り', (): void => {
     expect(status.classList.contains('uk-hidden-visually')).toBe(true);
   });
 
+  /**
+   * スターを押し、App側の並び替えとともにstarredが降りてくる状況を作る。
+   * 追随はstarredの変化を見るeffectで行うため、書き込みが成功しただけでは
+   * 起きない（並び替えのコミットを待つのが目的なので、これが正しい経路）
+   * @param {jest.Mock} updateBlock 押したときに呼ばれるモック
+   * @return {Promise<void>} 反映を待つPromise
+   */
+  const clickStarAndReceiveStarred = async (
+    updateBlock: jest.Mock,
+  ): Promise<void> => {
+    await clickStarToggle();
+    await act(async () => {
+      root.render(
+        <Block
+          block={{
+            indexNum: 0,
+            createdAt: new Date('2021-01-02T03:04:05.678Z'),
+            tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+            starred: true,
+          }}
+          updateBlock={updateBlock}
+        />,
+      );
+    });
+  };
+
+  /**
+   * ウィンドウのスクロール位置を差し替える。jsdomのwindow.scrollYは
+   * getterで固定されているため、書き換えるには再定義が必要
+   * @param {number} scrollY 設定するスクロール位置
+   */
+  const setScrollY = (scrollY: number): void => {
+    Object.defineProperty(window, 'scrollY', {
+      value: scrollY,
+      configurable: true,
+      writable: true,
+    });
+  };
+
   // 一覧の第一ソートキーなので、着地するとこのカードが一覧内を移動する。
   // スクロール位置は動かないため、追わないと押したカードが画面外へ消える
-  test('お気に入りを付けたらそのカードを画面内に追う', async (): Promise<void> => {
+  test('お気に入りが着地したらそのカードを画面内に追う', async (): Promise<void> => {
     const scrollIntoViewSpy = jest
       .spyOn(Element.prototype, 'scrollIntoView')
       .mockImplementation(() => {});
@@ -1323,10 +1380,10 @@ describe('Block お気に入り', (): void => {
       const updateBlock = jest.fn().mockResolvedValue(undefined);
       await mount(updateBlock);
 
-      await clickStarToggle();
+      await clickStarAndReceiveStarred(updateBlock);
 
       expect(scrollIntoViewSpy).toHaveBeenCalledTimes(1);
-      expect(scrollIntoViewSpy.mock.instances[0]).toBe(
+      expect(scrollIntoViewSpy.mock.contexts[0]).toBe(
         container.querySelector('.block-root-dom'),
       );
       expect(scrollIntoViewSpy).toHaveBeenCalledWith({ block: 'nearest' });
@@ -1335,8 +1392,64 @@ describe('Block お気に入り', (): void => {
     }
   });
 
-  // 保存に失敗したときはカードは動かないので、追う必要もない
-  test('お気に入りの保存に失敗したら画面を動かさない', async (): Promise<void> => {
+  // 一覧を下までスクロールした先のカードを押す場合が本来の動機なので、
+  // スクロール位置が0以外でも（クリック時から動いていなければ）追う
+  test('スクロールした先のカードでもお気に入りの着地後に追う', async (): Promise<void> => {
+    const scrollIntoViewSpy = jest
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => {});
+    setScrollY(800);
+    try {
+      const updateBlock = jest.fn().mockResolvedValue(undefined);
+      await mount(updateBlock);
+
+      await clickStarAndReceiveStarred(updateBlock);
+
+      expect(scrollIntoViewSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      scrollIntoViewSpy.mockRestore();
+      setScrollY(0);
+    }
+  });
+
+  // フォーカスを奪わないのと同じ理由。書き込みを待つ間にユーザーが一覧を
+  // スクロールしていたら、見ている位置から勝手に引き戻さない
+  test('待っている間にスクロールしていたらカードを追わない', async (): Promise<void> => {
+    const scrollIntoViewSpy = jest
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => {});
+    setScrollY(0);
+    try {
+      const updateBlock = jest.fn().mockResolvedValue(undefined);
+      await mount(updateBlock);
+
+      await clickStarToggle();
+      setScrollY(1200);
+      await act(async () => {
+        root.render(
+          <Block
+            block={{
+              indexNum: 0,
+              createdAt: new Date('2021-01-02T03:04:05.678Z'),
+              tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+              starred: true,
+            }}
+            updateBlock={updateBlock}
+          />,
+        );
+      });
+
+      expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+    } finally {
+      scrollIntoViewSpy.mockRestore();
+      setScrollY(0);
+    }
+  });
+
+  // 保存に失敗したときはカードが動かないので追う必要もない。
+  // 追う意図を消しておかないと、後で別の理由でstarredが変わったときに
+  // 関係のないスクロールが起きる
+  test('お気に入りの保存に失敗したらカードを追わない', async (): Promise<void> => {
     const scrollIntoViewSpy = jest
       .spyOn(Element.prototype, 'scrollIntoView')
       .mockImplementation(() => {});
@@ -1344,7 +1457,7 @@ describe('Block お気に入り', (): void => {
       const updateBlock = jest.fn().mockRejectedValue(new Error('failed'));
       await mount(updateBlock);
 
-      await clickStarToggle();
+      await clickStarAndReceiveStarred(updateBlock);
 
       expect(scrollIntoViewSpy).not.toHaveBeenCalled();
     } finally {

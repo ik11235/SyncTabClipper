@@ -235,6 +235,76 @@ describe('App', (): void => {
     }
   });
 
+  // 押したカードは並び替えで一覧内を移動するため、追わないと画面外へ消える。
+  // 追随を書き込みのPromiseの中で行うと、Reactが並び替えをコミットする前に
+  // 走って何も起きない。「並び替え後のDOMを見て呼ばれているか」まで見る
+  test('お気に入りの並び替えが済んだ後にカードを画面内に追う', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-03T03:04:05.678Z'),
+        title: 'title-new',
+        tabs: [{ url: 'https://example.com/a', title: 'tab-a' }],
+      },
+      {
+        indexNum: 1,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        title: 'title-old',
+        tabs: [{ url: 'https://example.com/b', title: 'tab-b' }],
+      },
+    ]);
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    // 呼ばれた瞬間の一覧の並びと、対象のカードを記録する
+    const callsAtScroll: { titles: (string | null)[]; isTarget: boolean }[] =
+      [];
+    const scrollIntoViewSpy = jest
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(function (this: Element) {
+        callsAtScroll.push({
+          titles: Array.from(container.querySelectorAll('.block-title')).map(
+            (e) => e.textContent,
+          ),
+          isTarget: this === container.querySelector('.block-root-dom'),
+        });
+      });
+
+    try {
+      await mount();
+
+      // act()の外でクリックする。act()は状態更新を同期的にフラッシュするため、
+      // 「書き込みのPromise内で追う」誤った実装でも並び替え後のDOMが見えてしまい、
+      // 本番の順序（並び替えのコミットはスケジューラ経由で後になる）を再現できない
+      (
+        globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+      ).IS_REACT_ACT_ENVIRONMENT = false;
+      try {
+        // 2枚目（古いブロック）をお気に入りにする
+        container
+          .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[1]!
+          .click();
+        // 書き込み→state更新→並び替えのコミット→effectまで進むのを待つ
+        for (let i = 0; i < 50 && callsAtScroll.length <= 0; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      } finally {
+        (
+          globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+        ).IS_REACT_ACT_ENVIRONMENT = true;
+      }
+
+      expect(callsAtScroll).toHaveLength(1);
+      // 並び替えが済んだ後の並びを見て呼ばれている
+      expect(callsAtScroll[0]!.titles).toEqual(['title-old', 'title-new']);
+      // 追いかけたのは移動して先頭に来た当該カード
+      expect(callsAtScroll[0]!.isTarget).toBe(true);
+    } finally {
+      scrollIntoViewSpy.mockRestore();
+      setBlockSpy.mockRestore();
+    }
+  });
+
   test('あるブロックの更新時に他のブロックは再レンダリングされない', async (): Promise<void> => {
     getAllBlockSpy.mockResolvedValue([
       {

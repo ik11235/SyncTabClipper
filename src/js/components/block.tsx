@@ -252,6 +252,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     }
     // キーボードから起動したクリックはdetailが0になる（ロックと同じ判定）
     starKeyboardActivated.current = event.detail === 0;
+    // お気に入りは一覧の第一ソートキーなので、着地するとこのカードが移動する。
+    // 押した時点のスクロール位置を覚えておき、移動後に追うかどうかの判断に使う
+    starFollowFrom.current = window.scrollY;
     setStarError(null);
     setStarSaving(true);
     trackTabWrite(
@@ -263,15 +266,11 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     ).then(
       () => {
         setStarSaving(false);
-        // お気に入りは一覧の第一ソートキーなので、着地するとこのカードが
-        // 一覧内を移動する。スクロール位置は動かないため、そのままでは
-        // 押したカードが画面外へ消え、成功したのかも分からないまま
-        // カーソルの下が別のブロックのボタンに入れ替わる。カードを追う
-        // （nearestなので、画面内に残っている場合は何も動かさない）
-        cardRoot.current?.scrollIntoView({ block: 'nearest' });
       },
       () => {
         setStarSaving(false);
+        // 書き込みが失敗すればカードは動かないので、追う必要もない
+        starFollowFrom.current = null;
         // App側のアラートはページ最上部に出るためスクロール中は気付けない
         setStarError(
           chrome.i18n.getMessage('content_msg_star_block_save_failed'),
@@ -355,6 +354,8 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const starButton = useRef<HTMLButtonElement>(null);
   // ロックの切り替えをキーボードから起動したか
   const lockKeyboardActivated = useRef(false);
+  // スターの切り替えを押した時点のスクロール位置。nullなら追わない
+  const starFollowFrom = useRef<number | null>(null);
   // スターの切り替えをキーボードから起動したか
   const starKeyboardActivated = useRef(false);
   const titleWasEditing = useRef(false);
@@ -412,6 +413,25 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     }
     starWasSaving.current = starSaving;
   }, [starSaving]);
+
+  // お気に入りは一覧の第一ソートキーなので、切り替わるとこのカードが一覧内を
+  // 移動する。スクロール位置は動かないため、追わないと押したカードが画面外へ
+  // 消え、成功したのかも分からないままカーソルの下が別のブロックのボタンに
+  // 入れ替わる。
+  // starredはApp側の並び替えと同じコミットで降りてくるので、この依存で待てば
+  // 必ず移動後のDOMを見られる（書き込みのPromiseの中で追うと、Reactが並び替えを
+  // コミットする前に走ってしまい何も起きない）。
+  // ただしフォーカスと同じ理由で、書き込みを待つ間にユーザーが一覧を
+  // スクロールしていたら追わない。見ている位置から勝手に引き戻さないため
+  useEffect(() => {
+    const followFrom = starFollowFrom.current;
+    starFollowFrom.current = null;
+    if (followFrom == null || followFrom !== window.scrollY) {
+      return;
+    }
+    // nearestなので、カードが画面内に残っている場合は何も動かさない
+    cardRoot.current?.scrollIntoView({ block: 'nearest' });
+  }, [starred]);
 
   // 別の操作が成功してブロックが書き換わったら、前のロック失敗の赤字は
   // 現在の状態を説明していない。直近の操作が失敗したかのように見えるため消す
