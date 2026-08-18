@@ -252,9 +252,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     }
     // キーボードから起動したクリックはdetailが0になる（ロックと同じ判定）
     starKeyboardActivated.current = event.detail === 0;
-    // お気に入りは一覧の第一ソートキーなので、着地するとこのカードが移動する。
-    // 押した時点のスクロール位置を覚えておき、移動後に追うかどうかの判断に使う
-    starFollowFrom.current = window.scrollY;
+    // マウスで押したときだけ、着地後にカードを画面内へ追う
+    // （キーボードはフォーカスを戻す時点でブラウザが画面内へ入れる）
+    starFollowPending.current = event.detail !== 0;
     setStarError(null);
     setStarSaving(true);
     trackTabWrite(
@@ -270,7 +270,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       () => {
         setStarSaving(false);
         // 書き込みが失敗すればカードは動かないので、追う必要もない
-        starFollowFrom.current = null;
+        starFollowPending.current = false;
         // App側のアラートはページ最上部に出るためスクロール中は気付けない
         setStarError(
           chrome.i18n.getMessage('content_msg_star_block_save_failed'),
@@ -354,8 +354,8 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const starButton = useRef<HTMLButtonElement>(null);
   // ロックの切り替えをキーボードから起動したか
   const lockKeyboardActivated = useRef(false);
-  // スターの切り替えを押した時点のスクロール位置。nullなら追わない
-  const starFollowFrom = useRef<number | null>(null);
+  // 着地後にカードを画面内へ追うか。マウスで付けたときだけ立てる
+  const starFollowPending = useRef(false);
   // スターの切り替えをキーボードから起動したか
   const starKeyboardActivated = useRef(false);
   const titleWasEditing = useRef(false);
@@ -414,19 +414,28 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     starWasSaving.current = starSaving;
   }, [starSaving]);
 
-  // お気に入りは一覧の第一ソートキーなので、切り替わるとこのカードが一覧内を
-  // 移動する。スクロール位置は動かないため、追わないと押したカードが画面外へ
-  // 消え、成功したのかも分からないままカーソルの下が別のブロックのボタンに
-  // 入れ替わる。
+  // お気に入りは一覧の第一ソートキーなので、付けるとこのカードは先頭へ移動する。
+  // スクロール位置は見えている内容に追随するだけなので、押したカードは画面外
+  // （上）へ消え、成功したのかも分からないままカーソルの下が別のブロックの
+  // ボタンに入れ替わる。押した本人が結果を見失わないよう画面内へ入れる。
+  //
   // starredはApp側の並び替えと同じコミットで降りてくるので、この依存で待てば
   // 必ず移動後のDOMを見られる（書き込みのPromiseの中で追うと、Reactが並び替えを
   // コミットする前に走ってしまい何も起きない）。
-  // ただしフォーカスと同じ理由で、書き込みを待つ間にユーザーが一覧を
-  // スクロールしていたら追わない。見ている位置から勝手に引き戻さないため
+  //
+  // 追うのはマウスで付けたときだけに絞る。
+  // ・キーボードから押したときはフォーカスをボタンへ戻す時点でブラウザが
+  //   画面内へスクロールするため、ここで動かすと二重になる
+  // ・解除したときのカードは作成日順の位置（一覧の下）へ動くので、追うと
+  //   見ている場所から大きく下へ飛んでしまう
+  // 押してから着地するまでにユーザーがスクロールしていた場合は引き戻すことに
+  // なるが、押した時点のスクロール位置と比べる方法は使えない。カードの移動で
+  // ブラウザのスクロールアンカリングが位置を補正するため、追うべき場面こそ
+  // 位置が変わって判定が外れる
   useEffect(() => {
-    const followFrom = starFollowFrom.current;
-    starFollowFrom.current = null;
-    if (followFrom == null || followFrom !== window.scrollY) {
+    const follow = starFollowPending.current;
+    starFollowPending.current = false;
+    if (!follow || !starred) {
       return;
     }
     // nearestなので、カードが画面内に残っている場合は何も動かさない

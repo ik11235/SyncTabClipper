@@ -1332,16 +1332,24 @@ describe('Block お気に入り', (): void => {
   });
 
   /**
-   * スターを押し、App側の並び替えとともにstarredが降りてくる状況を作る。
+   * スターを押し、App側の並び替えとともに新しいstarredが降りてくる状況を作る。
    * 追随はstarredの変化を見るeffectで行うため、書き込みが成功しただけでは
    * 起きない（並び替えのコミットを待つのが目的なので、これが正しい経路）
    * @param {jest.Mock} updateBlock 押したときに呼ばれるモック
+   * @param {number} detail クリックのdetail（0はキーボードからの起動）
+   * @param {boolean} starredBefore 押す前のお気に入りの状態
    * @return {Promise<void>} 反映を待つPromise
    */
   const clickStarAndReceiveStarred = async (
     updateBlock: jest.Mock,
+    detail: number,
+    starredBefore = false,
   ): Promise<void> => {
-    await clickStarToggle();
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.block-star-toggle')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true, detail }));
+    });
     await act(async () => {
       root.render(
         <Block
@@ -1349,7 +1357,7 @@ describe('Block お気に入り', (): void => {
             indexNum: 0,
             createdAt: new Date('2021-01-02T03:04:05.678Z'),
             tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
-            starred: true,
+            ...(starredBefore ? {} : { starred: true }),
           }}
           updateBlock={updateBlock}
         />,
@@ -1357,22 +1365,9 @@ describe('Block お気に入り', (): void => {
     });
   };
 
-  /**
-   * ウィンドウのスクロール位置を差し替える。jsdomのwindow.scrollYは
-   * getterで固定されているため、書き換えるには再定義が必要
-   * @param {number} scrollY 設定するスクロール位置
-   */
-  const setScrollY = (scrollY: number): void => {
-    Object.defineProperty(window, 'scrollY', {
-      value: scrollY,
-      configurable: true,
-      writable: true,
-    });
-  };
-
-  // 一覧の第一ソートキーなので、着地するとこのカードが一覧内を移動する。
-  // スクロール位置は動かないため、追わないと押したカードが画面外へ消える
-  test('お気に入りが着地したらそのカードを画面内に追う', async (): Promise<void> => {
+  // 一覧の第一ソートキーなので、付けるとこのカードは先頭へ移動する。
+  // 追わないと押したカードが画面外（上）へ消える
+  test('マウスでお気に入りにしたらそのカードを画面内に追う', async (): Promise<void> => {
     const scrollIntoViewSpy = jest
       .spyOn(Element.prototype, 'scrollIntoView')
       .mockImplementation(() => {});
@@ -1380,7 +1375,7 @@ describe('Block お気に入り', (): void => {
       const updateBlock = jest.fn().mockResolvedValue(undefined);
       await mount(updateBlock);
 
-      await clickStarAndReceiveStarred(updateBlock);
+      await clickStarAndReceiveStarred(updateBlock, 1);
 
       expect(scrollIntoViewSpy).toHaveBeenCalledTimes(1);
       expect(scrollIntoViewSpy.mock.contexts[0]).toBe(
@@ -1392,57 +1387,40 @@ describe('Block お気に入り', (): void => {
     }
   });
 
-  // 一覧を下までスクロールした先のカードを押す場合が本来の動機なので、
-  // スクロール位置が0以外でも（クリック時から動いていなければ）追う
-  test('スクロールした先のカードでもお気に入りの着地後に追う', async (): Promise<void> => {
+  // キーボードから押したときはフォーカスをボタンへ戻す時点でブラウザが
+  // 画面内へスクロールするため、ここで動かすと二重になる
+  test('キーボードからお気に入りにしたときはカードを追わない', async (): Promise<void> => {
     const scrollIntoViewSpy = jest
       .spyOn(Element.prototype, 'scrollIntoView')
       .mockImplementation(() => {});
-    setScrollY(800);
     try {
       const updateBlock = jest.fn().mockResolvedValue(undefined);
       await mount(updateBlock);
 
-      await clickStarAndReceiveStarred(updateBlock);
-
-      expect(scrollIntoViewSpy).toHaveBeenCalledTimes(1);
-    } finally {
-      scrollIntoViewSpy.mockRestore();
-      setScrollY(0);
-    }
-  });
-
-  // フォーカスを奪わないのと同じ理由。書き込みを待つ間にユーザーが一覧を
-  // スクロールしていたら、見ている位置から勝手に引き戻さない
-  test('待っている間にスクロールしていたらカードを追わない', async (): Promise<void> => {
-    const scrollIntoViewSpy = jest
-      .spyOn(Element.prototype, 'scrollIntoView')
-      .mockImplementation(() => {});
-    setScrollY(0);
-    try {
-      const updateBlock = jest.fn().mockResolvedValue(undefined);
-      await mount(updateBlock);
-
-      await clickStarToggle();
-      setScrollY(1200);
-      await act(async () => {
-        root.render(
-          <Block
-            block={{
-              indexNum: 0,
-              createdAt: new Date('2021-01-02T03:04:05.678Z'),
-              tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
-              starred: true,
-            }}
-            updateBlock={updateBlock}
-          />,
-        );
-      });
+      await clickStarAndReceiveStarred(updateBlock, 0);
 
       expect(scrollIntoViewSpy).not.toHaveBeenCalled();
     } finally {
       scrollIntoViewSpy.mockRestore();
-      setScrollY(0);
+    }
+  });
+
+  // 解除したカードは作成日順の位置（一覧の下）へ動くため、追うと見ている
+  // 場所から大きく下へ飛んでしまう
+  test('お気に入りを解除したときはカードを追わない', async (): Promise<void> => {
+    const scrollIntoViewSpy = jest
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => {});
+    try {
+      const updateBlock = jest.fn().mockResolvedValue(undefined);
+      await mount(updateBlock, { starred: true });
+
+      await clickStarAndReceiveStarred(updateBlock, 1, true);
+
+      expect(container.querySelector('.block-star-ribbon')).toBeNull();
+      expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+    } finally {
+      scrollIntoViewSpy.mockRestore();
     }
   });
 
@@ -1457,7 +1435,7 @@ describe('Block お気に入り', (): void => {
       const updateBlock = jest.fn().mockRejectedValue(new Error('failed'));
       await mount(updateBlock);
 
-      await clickStarAndReceiveStarred(updateBlock);
+      await clickStarAndReceiveStarred(updateBlock, 1);
 
       expect(scrollIntoViewSpy).not.toHaveBeenCalled();
     } finally {

@@ -276,22 +276,25 @@ describe('App', (): void => {
       // act()の外でクリックする。act()は状態更新を同期的にフラッシュするため、
       // 「書き込みのPromise内で追う」誤った実装でも並び替え後のDOMが見えてしまい、
       // 本番の順序（並び替えのコミットはスケジューラ経由で後になる）を再現できない
-      (
-        globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
-      ).IS_REACT_ACT_ENVIRONMENT = false;
+      const actEnv = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+      const previousActEnv = actEnv.IS_REACT_ACT_ENVIRONMENT;
+      actEnv.IS_REACT_ACT_ENVIRONMENT = false;
       try {
-        // 2枚目（古いブロック）をお気に入りにする
+        // 2枚目（古いブロック）をマウスでお気に入りにする
+        // （HTMLElement.click()はdetailが0でキーボード起動と区別できない）
         container
           .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[1]!
-          .click();
+          .dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
         // 書き込み→state更新→並び替えのコミット→effectまで進むのを待つ
         for (let i = 0; i < 50 && callsAtScroll.length <= 0; i++) {
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
+        // 待機を抜けた後に2回目が来ないことも見る（追随は1回だけ）
+        for (let i = 0; i < 5; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
       } finally {
-        (
-          globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
-        ).IS_REACT_ACT_ENVIRONMENT = true;
+        actEnv.IS_REACT_ACT_ENVIRONMENT = previousActEnv;
       }
 
       expect(callsAtScroll).toHaveLength(1);
