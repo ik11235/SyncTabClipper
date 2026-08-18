@@ -944,6 +944,46 @@ describe('Block 編集のロック', (): void => {
     expect(button.getAttribute('aria-label')).toBe('content_msg_unlock_block');
   });
 
+  // アイコンの形だけではロック中か一目で分からないという指摘への対応。
+  // カード・バッジ・ボタンの3か所で状態を示す
+  test('ロック中はカードとバッジで状態を示す', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+      true,
+    );
+
+    expect(
+      container
+        .querySelector<HTMLElement>('.block-root-dom')!
+        .getAttribute('data-locked'),
+    ).toBe('true');
+    expect(container.querySelector('.block-locked-badge')!.textContent).toBe(
+      'content_msg_locked_badge',
+    );
+    expect(
+      container
+        .querySelector<HTMLElement>('.block-lock-toggle')!
+        .getAttribute('data-locked'),
+    ).toBe('true');
+  });
+
+  test('ロックしていないブロックにはロックの表示を出さない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+    );
+
+    expect(
+      container
+        .querySelector<HTMLElement>('.block-root-dom')!
+        .getAttribute('data-locked'),
+    ).toBe('false');
+    expect(container.querySelector('.block-locked-badge')).toBeNull();
+  });
+
   // data-uk-iconを持つ要素のclassNameをロックで切り替えると、UIkitが付けた
   // uk-iconごとReactに書き換えられ、アイコンの色と行の高さが崩れたまま戻らない
   test('ロック中もアイコンのclassNameは変えず、無効はaria-disabledで表す', async (): Promise<void> => {

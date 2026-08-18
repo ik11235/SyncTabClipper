@@ -120,6 +120,9 @@
   "content_msg_lock_block_save_failed": {
     "message": "Failed to change the lock. Please try again."
   },
+  "content_msg_locked_badge": {
+    "message": "Locked"
+  },
   "content_msg_locked_action_disabled": {
     "message": "Not available while this block is locked"
   },

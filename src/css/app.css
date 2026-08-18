@@ -137,6 +137,52 @@
 }
 
 /*
+ * ロック中のブロックの見せ方 (#194)
+ *
+ * アイコンの形（lock / unlock）だけでは一覧を眺めたときに区別が付かないので、
+ * カードの縁・ヘッダの地色・バッジ・ボタンの反転の4点で状態を示す。
+ * UIkitのprimary #1e87f0 は白背景に対するコントラスト比が約3.2:1しかなく
+ * バッジの文字には足りないため、同系でより濃い色を専用に定義する。
+ */
+.block-root-dom[data-locked='true'] {
+  border-left: 4px solid #1a5fa0;
+}
+
+.block-root-dom[data-locked='true'] > .uk-card-header {
+  background: #eef4fb;
+}
+
+.block-locked-badge-row {
+  margin-bottom: 4px;
+}
+
+.block-locked-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 10px 1px 8px;
+  border-radius: 10px;
+  background: #1a5fa0;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+/* ロック中はボタン自体も塗り分けて、解除の的だと分かるようにする */
+.block-lock-toggle[data-locked='true'] {
+  color: #fff;
+  background: #1a5fa0;
+  border-radius: 50%;
+}
+
+.block-lock-toggle[data-locked='true']:hover,
+.block-lock-toggle[data-locked='true']:focus {
+  color: #fff;
+  background: #14487a;
+}
+
+/*
  * 押せないボタンの見せ方。UIkitの`.uk-link` / `.uk-icon`がcolorを指定して
  * いるためブラウザ既定のdisabled表現は出ず、有効時と同じ見た目になる。
  * hoverの色と下線も残るので明示的に打ち消す
