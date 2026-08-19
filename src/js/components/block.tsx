@@ -1,10 +1,4 @@
-import React, {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { model } from '../types/interface';
 import { chromeService } from '../chromeService';
 import { openableTab, Tab } from './tab';
@@ -17,62 +11,6 @@ import { ErrorBoundary } from './errorBoundary';
 // 入力欄のmaxLengthとしてだけ効かせ、インポートしたデータがこれより長い名前を
 // 持っていた場合は黙って切り捨てず、そのまま保持する
 const BLOCK_TITLE_MAX_LENGTH = 100;
-
-// お気に入りにしたカードを追いかけるスクロールにかける時間。
-// scrollIntoViewのbehavior:'smooth'は所要時間をブラウザが決めるため、
-// 移動距離が短いと速すぎて動いたことに気付けない。距離に関係なく
-// この時間をかけて、必ずスクロールが目に入るようにする
-const FOLLOW_SCROLL_DURATION_MS = 500;
-
-/**
- * 要素が画面内に収まるまでに必要なスクロール量を求める。
- * scrollIntoViewの`block: 'nearest'`と同じ考え方で、
- * すでに収まっている場合は動かす必要がないので0を返す
- * @param {Element} element 対象の要素
- * @return {number} 下方向を正とするスクロール量
- */
-function scrollDeltaIntoView(element: Element): number {
-  const rect = element.getBoundingClientRect();
-  if (rect.top < 0) {
-    // 画面より上にある。上端を画面の上端に合わせる
-    return rect.top;
-  }
-  if (rect.bottom > window.innerHeight) {
-    // 画面より下にある。下端を画面の下端に合わせるが、画面より高い要素では
-    // 上端合わせに留める（下端に合わせるとカードの先頭が画面の外に出る）
-    return Math.min(rect.bottom - window.innerHeight, rect.top);
-  }
-  return 0;
-}
-
-/**
- * ウィンドウを一定時間かけてスクロールする
- * @param {number} delta スクロール量（下方向を正）
- * @param {number} duration かける時間(ms)
- * @return {() => void} 途中で止める関数
- */
-function animateScrollBy(delta: number, duration: number): () => void {
-  const from = window.scrollY;
-  let startedAt: number | null = null;
-  let frame = 0;
-  const step = (now: number): void => {
-    if (startedAt == null) {
-      startedAt = now;
-    }
-    const progress = Math.min((now - startedAt) / duration, 1);
-    // ease-in-out。等速だと動き出しと止まりが唐突に見える
-    const eased =
-      progress < 0.5 ? 4 * progress ** 3 : 1 - (-2 * progress + 2) ** 3 / 2;
-    window.scrollTo({ top: from + delta * eased });
-    if (progress < 1) {
-      frame = requestAnimationFrame(step);
-    }
-  };
-  frame = requestAnimationFrame(step);
-  return () => {
-    cancelAnimationFrame(frame);
-  };
-}
 
 interface BlockProps {
   block: model.Block;
@@ -314,8 +252,6 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     }
     // キーボードから起動したクリックはdetailが0になる（ロックと同じ判定）
     starKeyboardActivated.current = event.detail === 0;
-    // 着地後にこのカードを画面内へ追う。押した本人の操作だけを追いかける
-    starFollowPending.current = true;
     setStarError(null);
     setStarSaving(true);
     trackTabWrite(
@@ -330,8 +266,6 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       },
       () => {
         setStarSaving(false);
-        // 書き込みが失敗すればカードは動かないので、追う必要もない
-        starFollowPending.current = false;
         // App側のアラートはページ最上部に出るためスクロール中は気付けない
         setStarError(
           chrome.i18n.getMessage('content_msg_star_block_save_failed'),
@@ -415,8 +349,6 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const starButton = useRef<HTMLButtonElement>(null);
   // ロックの切り替えをキーボードから起動したか
   const lockKeyboardActivated = useRef(false);
-  // 着地後にカードを画面内へ追うか。マウスで付けたときだけ立てる
-  const starFollowPending = useRef(false);
   // スターの切り替えをキーボードから起動したか
   const starKeyboardActivated = useRef(false);
   const titleWasEditing = useRef(false);
@@ -461,9 +393,8 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // スターボタンもロックボタンと同じ理由でフォーカスを戻す。
   // スターは並び順も変えるためカード自体が一覧内を移動するが、
   // ボタンはアンマウントされないのでrefから同じ要素へ戻せる。
-  // preventScrollを付けるのは、フォーカスに伴うブラウザの瞬間スクロールが
-  // 下のeffectで見せるスクロールを先取りして打ち消してしまうため
-  // （この2つのeffectは同じコミットで、宣言順によりこちらが先に走る）
+  // preventScrollを付けるのは、フォーカスに伴うブラウザの瞬間スクロールが、
+  // Main側がカードの移動に合わせて見せているスクロールを乱すため
   const starWasSaving = useRef(false);
   useEffect(() => {
     if (starWasSaving.current && !starSaving) {
@@ -477,50 +408,6 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     }
     starWasSaving.current = starSaving;
   }, [starSaving]);
-
-  // お気に入りは一覧の第一ソートキーなので、付けるとこのカードは先頭へ移動する。
-  // スクロール位置は見えている内容に追随するだけなので、押したカードは画面外
-  // （上）へ消え、成功したのかも分からないままカーソルの下が別のブロックの
-  // ボタンに入れ替わる。押した本人が結果を見失わないよう画面内へ入れる。
-  //
-  // starredはApp側の並び替えと同じコミットで降りてくるので、この依存で待てば
-  // 必ず移動後のDOMを見られる（書き込みのPromiseの中で追うと、Reactが並び替えを
-  // コミットする前に走ってしまい何も起きない）。
-  //
-  // カードが移動したことはMain側がカード自体を滑らせて見せる。こちらは
-  // 移動先が画面の外だったときに、見失わないよう画面内へ入れる役目に絞る。
-  // 瞬間移動だと画面が飛んだように見えるため、こちらもスクロールを見せる。
-  //
-  // 追うのは付けたときだけ。解除したときのカードは作成日順の位置（一覧の下）へ
-  // 動くので、追うと見ている場所から大きく下へ飛んでしまう。
-  // 押してから着地するまでにユーザーがスクロールしていた場合は引き戻すことに
-  // なるが、押した時点のスクロール位置と比べる方法は使えない。カードの移動で
-  // ブラウザのスクロールアンカリングが位置を補正するため、追うべき場面こそ
-  // 位置が変わって判定が外れる。
-  //
-  // レイアウトeffectにしているのは、カードの位置をMainが移動のtransformを
-  // 載せる前に測るため。子のレイアウトeffectは親より先に走る
-  // （通常のeffectだと、滑り出す前の位置を測って行き先を誤る）
-  useLayoutEffect(() => {
-    const follow = starFollowPending.current;
-    starFollowPending.current = false;
-    const card = cardRoot.current;
-    if (!follow || !starred || card == null) {
-      return;
-    }
-    const delta = scrollDeltaIntoView(card);
-    if (delta === 0) {
-      // カードが画面内に残っているなら動かす必要がない
-      return;
-    }
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      window.scrollTo({ top: window.scrollY + delta });
-      return;
-    }
-    // 中断する関数をクリーンアップとして返す。アンマウントや次の切り替えで
-    // 前のスクロールが残らないようにする
-    return animateScrollBy(delta, FOLLOW_SCROLL_DURATION_MS);
-  }, [starred]);
 
   // 別の操作が成功してブロックが書き換わったら、前のロック失敗の赤字は
   // 現在の状態を説明していない。直近の操作が失敗したかのように見えるため消す
