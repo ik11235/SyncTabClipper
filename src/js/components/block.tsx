@@ -12,6 +12,62 @@ import { ErrorBoundary } from './errorBoundary';
 // 持っていた場合は黙って切り捨てず、そのまま保持する
 const BLOCK_TITLE_MAX_LENGTH = 100;
 
+// お気に入りにしたカードを追いかけるスクロールにかける時間。
+// scrollIntoViewのbehavior:'smooth'は所要時間をブラウザが決めるため、
+// 移動距離が短いと速すぎて動いたことに気付けない。距離に関係なく
+// この時間をかけて、必ずスクロールが目に入るようにする
+const FOLLOW_SCROLL_DURATION_MS = 500;
+
+/**
+ * 要素が画面内に収まるまでに必要なスクロール量を求める。
+ * scrollIntoViewの`block: 'nearest'`と同じ考え方で、
+ * すでに収まっている場合は動かす必要がないので0を返す
+ * @param {Element} element 対象の要素
+ * @return {number} 下方向を正とするスクロール量
+ */
+function scrollDeltaIntoView(element: Element): number {
+  const rect = element.getBoundingClientRect();
+  if (rect.top < 0) {
+    // 画面より上にある。上端を画面の上端に合わせる
+    return rect.top;
+  }
+  if (rect.bottom > window.innerHeight) {
+    // 画面より下にある。下端を画面の下端に合わせるが、画面より高い要素では
+    // 上端合わせに留める（下端に合わせるとカードの先頭が画面の外に出る）
+    return Math.min(rect.bottom - window.innerHeight, rect.top);
+  }
+  return 0;
+}
+
+/**
+ * ウィンドウを一定時間かけてスクロールする
+ * @param {number} delta スクロール量（下方向を正）
+ * @param {number} duration かける時間(ms)
+ * @return {() => void} 途中で止める関数
+ */
+function animateScrollBy(delta: number, duration: number): () => void {
+  const from = window.scrollY;
+  let startedAt: number | null = null;
+  let frame = 0;
+  const step = (now: number): void => {
+    if (startedAt == null) {
+      startedAt = now;
+    }
+    const progress = Math.min((now - startedAt) / duration, 1);
+    // ease-in-out。等速だと動き出しと止まりが唐突に見える
+    const eased =
+      progress < 0.5 ? 4 * progress ** 3 : 1 - (-2 * progress + 2) ** 3 / 2;
+    window.scrollTo({ top: from + delta * eased });
+    if (progress < 1) {
+      frame = requestAnimationFrame(step);
+    }
+  };
+  frame = requestAnimationFrame(step);
+  return () => {
+    cancelAnimationFrame(frame);
+  };
+}
+
 interface BlockProps {
   block: model.Block;
   // storageへの永続化とブロック一覧stateの更新はApp側で行う。
@@ -437,17 +493,22 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   useEffect(() => {
     const follow = starFollowPending.current;
     starFollowPending.current = false;
-    if (!follow || !starred) {
+    const card = cardRoot.current;
+    if (!follow || !starred || card == null) {
       return;
     }
-    const reduceMotion = window.matchMedia(
-      '(prefers-reduced-motion: reduce)',
-    ).matches;
-    // nearestなので、カードが画面内に残っている場合は何も動かさない
-    cardRoot.current?.scrollIntoView({
-      block: 'nearest',
-      behavior: reduceMotion ? 'auto' : 'smooth',
-    });
+    const delta = scrollDeltaIntoView(card);
+    if (delta === 0) {
+      // カードが画面内に残っているなら動かす必要がない
+      return;
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      window.scrollTo({ top: window.scrollY + delta });
+      return;
+    }
+    // 中断する関数をクリーンアップとして返す。アンマウントや次の切り替えで
+    // 前のスクロールが残らないようにする
+    return animateScrollBy(delta, FOLLOW_SCROLL_DURATION_MS);
   }, [starred]);
 
   // 別の操作が成功してブロックが書き換わったら、前のロック失敗の赤字は

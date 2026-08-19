@@ -256,18 +256,27 @@ describe('App', (): void => {
     const setBlockSpy = jest
       .spyOn(chromeService.storage, 'setBlock')
       .mockResolvedValue(undefined);
-    // 呼ばれた瞬間の一覧の並びと、対象のカードを記録する
+    // 追随の可否と量はカードの位置を測って決める。その測定はeffectの中で
+    // 同期的に行われるため、測った瞬間の並びを見れば「並び替えのコミット後に
+    // 走っているか」が分かる
     const callsAtScroll: { titles: (string | null)[]; isTarget: boolean }[] =
       [];
-    const scrollIntoViewSpy = jest
-      .spyOn(Element.prototype, 'scrollIntoView')
-      .mockImplementation(function (this: Element) {
-        callsAtScroll.push({
-          titles: Array.from(container.querySelectorAll('.block-title')).map(
-            (e) => e.textContent,
-          ),
-          isTarget: this === container.querySelector('.block-root-dom'),
-        });
+    const scrollToSpy = jest
+      .spyOn(window, 'scrollTo')
+      .mockImplementation(() => {});
+    const rectSpy = jest
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: Element): DOMRect {
+        if (this.classList.contains('block-root-dom')) {
+          callsAtScroll.push({
+            titles: Array.from(container.querySelectorAll('.block-title')).map(
+              (e) => e.textContent,
+            ),
+            isTarget: this === container.querySelector('.block-root-dom'),
+          });
+        }
+        // 画面外にあることにして、追随が実際に走る状況を作る
+        return { top: 1000, bottom: 1200 } as DOMRect;
       });
 
     try {
@@ -298,12 +307,13 @@ describe('App', (): void => {
       }
 
       expect(callsAtScroll).toHaveLength(1);
-      // 並び替えが済んだ後の並びを見て呼ばれている
+      // 並び替えが済んだ後の並びを見て測っている
       expect(callsAtScroll[0]!.titles).toEqual(['title-old', 'title-new']);
       // 追いかけたのは移動して先頭に来た当該カード
       expect(callsAtScroll[0]!.isTarget).toBe(true);
     } finally {
-      scrollIntoViewSpy.mockRestore();
+      rectSpy.mockRestore();
+      scrollToSpy.mockRestore();
       setBlockSpy.mockRestore();
     }
   });

@@ -1365,43 +1365,127 @@ describe('Block お気に入り', (): void => {
     });
   };
 
+  // 画面より下にあるカード。scrollDeltaIntoViewは下端合わせを選ぶので、
+  // 必要なスクロール量は 1200 - 768(jsdomのinnerHeight) = 432 になる
+  const OFF_SCREEN_RECT = { top: 1000, bottom: 1200 } as DOMRect;
+  const EXPECTED_SCROLL_DELTA = 1200 - 768;
+
+  /**
+   * 追随のスクロールを終わりまで進める。requestAnimationFrame経由で動かすため、
+   * 時間を進めないとスクロールは一度も起きない。
+   * 「追わない」ことを確かめるテストでも、進めずに見ると必ず通ってしまう
+   */
+  const runFollowScroll = (): void => {
+    jest.advanceTimersByTime(600);
+  };
+
+  /**
+   * カードが画面外にある状況を作り、スクロールの呼び出しを記録する。
+   * jsdomはレイアウトを持たないため、位置は自分で与えないと常に0になる
+   * @return {object} scrollToのspyと、最後に指示された位置を返す関数
+   */
+  const spyOnFollowScroll = (): {
+    scrollToSpy: jest.SpyInstance;
+    rectSpy: jest.SpyInstance;
+    lastTop: () => number | undefined;
+  } => {
+    const scrollToSpy = jest
+      .spyOn(window, 'scrollTo')
+      .mockImplementation(() => {});
+    const rectSpy = jest
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockReturnValue(OFF_SCREEN_RECT);
+    return {
+      scrollToSpy,
+      rectSpy,
+      lastTop: (): number | undefined => {
+        const calls = scrollToSpy.mock.calls;
+        const last = calls[calls.length - 1]?.[0] as
+          ScrollToOptions | undefined;
+        return last?.top;
+      },
+    };
+  };
+
   // 一覧の第一ソートキーなので、付けるとこのカードは先頭へ移動する。
-  // 追わないと押したカードが画面外（上）へ消える。
-  // 瞬間移動させると動いたこと自体に気付けないため、スクロールを見せる
+  // 追わないと押したカードが画面外へ消える。
+  // 瞬間移動させると動いたこと自体に気付けないため、
+  // 距離に関係なく一定時間をかけてスクロールする
   test.each([
     ['マウス', 1],
     ['キーボード', 0],
   ])(
-    '%sでお気に入りにしたらスクロールしてそのカードを追う',
+    '%sでお気に入りにしたら一定時間かけてカードまでスクロールする',
     async (_name: string, detail: number): Promise<void> => {
-      const scrollIntoViewSpy = jest
-        .spyOn(Element.prototype, 'scrollIntoView')
-        .mockImplementation(() => {});
+      const { scrollToSpy, rectSpy, lastTop } = spyOnFollowScroll();
+      jest.useFakeTimers();
       try {
         const updateBlock = jest.fn().mockResolvedValue(undefined);
         await mount(updateBlock);
 
         await clickStarAndReceiveStarred(updateBlock, detail);
 
-        expect(scrollIntoViewSpy).toHaveBeenCalledTimes(1);
-        expect(scrollIntoViewSpy.mock.contexts[0]).toBe(
-          container.querySelector('.block-root-dom'),
-        );
-        expect(scrollIntoViewSpy).toHaveBeenCalledWith({
-          block: 'nearest',
-          behavior: 'smooth',
-        });
+        // 半分の時点では動き出しているが、まだ目的地には着いていない
+        jest.advanceTimersByTime(250);
+        expect(scrollToSpy.mock.calls.length).toBeGreaterThan(1);
+        expect(lastTop()).toBeGreaterThan(0);
+        expect(lastTop()).toBeLessThan(EXPECTED_SCROLL_DELTA);
+
+        // 500msかけて目的地へ着く
+        jest.advanceTimersByTime(300);
+        expect(lastTop()).toBe(EXPECTED_SCROLL_DELTA);
+
+        // 着いた後は動かし続けない
+        const callsAtEnd = scrollToSpy.mock.calls.length;
+        jest.advanceTimersByTime(500);
+        expect(scrollToSpy.mock.calls.length).toBe(callsAtEnd);
       } finally {
-        scrollIntoViewSpy.mockRestore();
+        jest.useRealTimers();
+        rectSpy.mockRestore();
+        scrollToSpy.mockRestore();
       }
     },
   );
 
-  // アニメーションを控える設定のときは瞬間移動に戻す
+  // スクロールの途中で状態が変わったら、古い行き先へ動かし続けない
+  test('スクロール中にお気に入りが変わったら追随を止める', async (): Promise<void> => {
+    const { scrollToSpy, rectSpy } = spyOnFollowScroll();
+    jest.useFakeTimers();
+    try {
+      const updateBlock = jest.fn().mockResolvedValue(undefined);
+      await mount(updateBlock);
+
+      await clickStarAndReceiveStarred(updateBlock, 1);
+      jest.advanceTimersByTime(100);
+      expect(scrollToSpy.mock.calls.length).toBeGreaterThan(1);
+
+      // まだ着いていないうちにお気に入りが外れた状態が降りてくる
+      await act(async () => {
+        root.render(
+          <Block
+            block={{
+              indexNum: 0,
+              createdAt: new Date('2021-01-02T03:04:05.678Z'),
+              tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+            }}
+            updateBlock={updateBlock}
+          />,
+        );
+      });
+      const callsAtChange = scrollToSpy.mock.calls.length;
+      jest.advanceTimersByTime(500);
+
+      expect(scrollToSpy.mock.calls.length).toBe(callsAtChange);
+    } finally {
+      jest.useRealTimers();
+      rectSpy.mockRestore();
+      scrollToSpy.mockRestore();
+    }
+  });
+
+  // アニメーションを控える設定のときは、待たせずに一度で移動する
   test('アニメーションを控える設定ならスクロールを見せない', async (): Promise<void> => {
-    const scrollIntoViewSpy = jest
-      .spyOn(Element.prototype, 'scrollIntoView')
-      .mockImplementation(() => {});
+    const { scrollToSpy, rectSpy, lastTop } = spyOnFollowScroll();
     const matchMediaSpy = jest
       .spyOn(window, 'matchMedia')
       .mockImplementation((query: string) => {
@@ -1414,22 +1498,43 @@ describe('Block お気に入り', (): void => {
 
       await clickStarAndReceiveStarred(updateBlock, 1);
 
-      expect(scrollIntoViewSpy).toHaveBeenCalledWith({
-        block: 'nearest',
-        behavior: 'auto',
-      });
+      expect(scrollToSpy).toHaveBeenCalledTimes(1);
+      expect(lastTop()).toBe(EXPECTED_SCROLL_DELTA);
     } finally {
       matchMediaSpy.mockRestore();
-      scrollIntoViewSpy.mockRestore();
+      rectSpy.mockRestore();
+      scrollToSpy.mockRestore();
+    }
+  });
+
+  // カードが画面内に残っているなら動かす必要がない
+  test('カードが画面内にあるならスクロールしない', async (): Promise<void> => {
+    const scrollToSpy = jest
+      .spyOn(window, 'scrollTo')
+      .mockImplementation(() => {});
+    const rectSpy = jest
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ top: 100, bottom: 300 } as DOMRect);
+    jest.useFakeTimers();
+    try {
+      const updateBlock = jest.fn().mockResolvedValue(undefined);
+      await mount(updateBlock);
+
+      await clickStarAndReceiveStarred(updateBlock, 1);
+      runFollowScroll();
+
+      expect(scrollToSpy).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+      rectSpy.mockRestore();
+      scrollToSpy.mockRestore();
     }
   });
 
   // フォーカスに伴うブラウザの瞬間スクロールは、見せたいスクロールを
   // 先取りして打ち消してしまう
   test('キーボードのフォーカス復帰でスクロールを先取りしない', async (): Promise<void> => {
-    const scrollIntoViewSpy = jest
-      .spyOn(Element.prototype, 'scrollIntoView')
-      .mockImplementation(() => {});
+    const { scrollToSpy, rectSpy } = spyOnFollowScroll();
     try {
       const updateBlock = jest.fn().mockResolvedValue(undefined);
       await mount(updateBlock);
@@ -1442,26 +1547,29 @@ describe('Block お気に入り', (): void => {
 
       expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
     } finally {
-      scrollIntoViewSpy.mockRestore();
+      rectSpy.mockRestore();
+      scrollToSpy.mockRestore();
     }
   });
 
   // 解除したカードは作成日順の位置（一覧の下）へ動くため、追うと見ている
   // 場所から大きく下へ飛んでしまう
   test('お気に入りを解除したときはカードを追わない', async (): Promise<void> => {
-    const scrollIntoViewSpy = jest
-      .spyOn(Element.prototype, 'scrollIntoView')
-      .mockImplementation(() => {});
+    const { scrollToSpy, rectSpy } = spyOnFollowScroll();
+    jest.useFakeTimers();
     try {
       const updateBlock = jest.fn().mockResolvedValue(undefined);
       await mount(updateBlock, { starred: true });
 
       await clickStarAndReceiveStarred(updateBlock, 1, true);
+      runFollowScroll();
 
       expect(container.querySelector('.block-star-ribbon')).toBeNull();
-      expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+      expect(scrollToSpy).not.toHaveBeenCalled();
     } finally {
-      scrollIntoViewSpy.mockRestore();
+      jest.useRealTimers();
+      rectSpy.mockRestore();
+      scrollToSpy.mockRestore();
     }
   });
 
@@ -1469,18 +1577,20 @@ describe('Block お気に入り', (): void => {
   // 追う意図を消しておかないと、後で別の理由でstarredが変わったときに
   // 関係のないスクロールが起きる
   test('お気に入りの保存に失敗したらカードを追わない', async (): Promise<void> => {
-    const scrollIntoViewSpy = jest
-      .spyOn(Element.prototype, 'scrollIntoView')
-      .mockImplementation(() => {});
+    const { scrollToSpy, rectSpy } = spyOnFollowScroll();
+    jest.useFakeTimers();
     try {
       const updateBlock = jest.fn().mockRejectedValue(new Error('failed'));
       await mount(updateBlock);
 
       await clickStarAndReceiveStarred(updateBlock, 1);
+      runFollowScroll();
 
-      expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+      expect(scrollToSpy).not.toHaveBeenCalled();
     } finally {
-      scrollIntoViewSpy.mockRestore();
+      jest.useRealTimers();
+      rectSpy.mockRestore();
+      scrollToSpy.mockRestore();
     }
   });
 
