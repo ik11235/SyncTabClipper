@@ -32,6 +32,25 @@ if (
   globalThis.Element.prototype.scrollIntoView = function () {};
 }
 
+// jsdomはWeb Animations APIを実装していない。
+// 呼び出すとTypeErrorになりテストが本番と違う経路を通るため、
+// 何もしない実装を入れる（本番のChromeにはネイティブ実装がある）。
+// どんなアニメーションを指示したかの検証はテスト側でspyOnして行う
+if (
+  typeof globalThis.Element !== 'undefined' &&
+  typeof globalThis.Element.prototype.animate !== 'function'
+) {
+  globalThis.Element.prototype.animate = function () {
+    return {
+      cancel: function () {},
+      finish: function () {},
+      finished: Promise.resolve(),
+      play: function () {},
+      pause: function () {},
+    };
+  };
+}
+
 // jsdomはメディアクエリを評価しないためmatchMediaも持たない。
 // どのクエリにも一致しない実装を入れる（本番のChromeにはネイティブ実装がある）。
 // 一致する状態を試すテストはspyOnで差し替える

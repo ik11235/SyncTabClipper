@@ -1,4 +1,10 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { model } from '../types/interface';
 import { chromeService } from '../chromeService';
 import { openableTab, Tab } from './tab';
@@ -481,16 +487,21 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // 必ず移動後のDOMを見られる（書き込みのPromiseの中で追うと、Reactが並び替えを
   // コミットする前に走ってしまい何も起きない）。
   //
-  // 瞬間移動させるとカードが動いたこと自体に気付けないため、スクロールを
-  // 見せて移動を伝える。ただしアニメーションを控える設定は尊重する。
+  // カードが移動したことはMain側がカード自体を滑らせて見せる。こちらは
+  // 移動先が画面の外だったときに、見失わないよう画面内へ入れる役目に絞る。
+  // 瞬間移動だと画面が飛んだように見えるため、こちらもスクロールを見せる。
   //
   // 追うのは付けたときだけ。解除したときのカードは作成日順の位置（一覧の下）へ
   // 動くので、追うと見ている場所から大きく下へ飛んでしまう。
   // 押してから着地するまでにユーザーがスクロールしていた場合は引き戻すことに
   // なるが、押した時点のスクロール位置と比べる方法は使えない。カードの移動で
   // ブラウザのスクロールアンカリングが位置を補正するため、追うべき場面こそ
-  // 位置が変わって判定が外れる
-  useEffect(() => {
+  // 位置が変わって判定が外れる。
+  //
+  // レイアウトeffectにしているのは、カードの位置をMainが移動のtransformを
+  // 載せる前に測るため。子のレイアウトeffectは親より先に走る
+  // （通常のeffectだと、滑り出す前の位置を測って行き先を誤る）
+  useLayoutEffect(() => {
     const follow = starFollowPending.current;
     starFollowPending.current = false;
     const card = cardRoot.current;
@@ -539,7 +550,12 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const tabsLocked = editing || titleEditing || lockSaving || starSaving;
 
   return (
-    <div className="tabs uk-card-default block-root-dom" ref={cardRoot}>
+    <div
+      className="tabs uk-card-default block-root-dom"
+      // 並び替えで動いたカードを見分けるための印。Main側が位置を追跡する
+      data-block-index={block.indexNum}
+      ref={cardRoot}
+    >
       {/* お気に入りのリボン。一覧を眺めたときに目を引くのが役目なので、
           カード上端の全幅ではなく左肩に旗のように出す。
           アイコンや色だけの強調にしないため文字も入れる。

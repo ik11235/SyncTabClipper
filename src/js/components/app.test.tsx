@@ -173,6 +173,228 @@ describe('App', (): void => {
     }
   });
 
+  // 2件のブロックを、お気に入りを付けると並びが入れ替わる形で用意する
+  const twoBlocks = (): void => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-03T03:04:05.678Z'),
+        title: 'title-new',
+        tabs: [{ url: 'https://example.com/a', title: 'tab-a' }],
+      },
+      {
+        indexNum: 1,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        title: 'title-old',
+        tabs: [{ url: 'https://example.com/b', title: 'tab-b' }],
+      },
+    ]);
+  };
+
+  /**
+   * jsdomはレイアウトを持たないためoffsetTopが常に0になり、カードが動いても
+   * 位置の差が出ない。カードが縦に100pxずつ並んでいるものとして、
+   * 兄弟の中での順番から位置を作る（並び替えに追随する）
+   * @return {jest.SpyInstance} 元に戻すためのspy
+   */
+  const stubCardLayout = (): jest.SpyInstance => {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'offsetTop',
+    )!;
+    Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
+      configurable: true,
+      get(this: HTMLElement): number {
+        const siblings = Array.from(this.parentElement?.children ?? []);
+        return siblings.indexOf(this) * 100;
+      },
+    });
+    // mockRestore相当の後片付けをspyと同じ形で返す
+    return {
+      mockRestore: (): void => {
+        Object.defineProperty(HTMLElement.prototype, 'offsetTop', descriptor);
+      },
+    } as jest.SpyInstance;
+  };
+
+  // カードが瞬間移動すると、どこからどこへ動いたのか分からない。
+  // 位置が変わったカードを元の位置から滑らせて見せる
+  test('並び替えで位置が変わったカードを元の位置から滑らせる', async (): Promise<void> => {
+    twoBlocks();
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    const layoutStub = stubCardLayout();
+    const animateSpy = jest
+      .spyOn(Element.prototype, 'animate')
+      .mockReturnValue({ cancel: (): void => {} } as Animation);
+
+    try {
+      await mount();
+      // マウント時は比較対象がないので何も動かさない
+      expect(animateSpy).not.toHaveBeenCalled();
+
+      // 2枚目（title-old）をお気に入りにする。1枚目と入れ替わる
+      await act(async () => {
+        container
+          .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[1]!
+          .click();
+      });
+
+      // 動いた2枚がそれぞれ元の位置から滑る。
+      // title-oldは100px下から、title-newは100px上から
+      const moves = animateSpy.mock.calls.map(([keyframes, options]) => ({
+        from: (keyframes as Keyframe[])[0]!.transform,
+        to: (keyframes as Keyframe[])[1]!.transform,
+        options: options,
+      }));
+      expect(moves).toEqual([
+        {
+          from: 'translateY(100px)',
+          to: 'none',
+          options: { duration: 500, easing: 'ease-in-out' },
+        },
+        {
+          from: 'translateY(-100px)',
+          to: 'none',
+          options: { duration: 500, easing: 'ease-in-out' },
+        },
+      ]);
+    } finally {
+      animateSpy.mockRestore();
+      layoutStub.mockRestore();
+      setBlockSpy.mockRestore();
+    }
+  });
+
+  // Blockは追随スクロールの行き先を決めるためにカードの位置を測る。
+  // Mainが移動のtransformを載せた後で測ると、滑り出す前の位置（移動前の位置）を
+  // 読んでしまい行き先を誤る。Block側をレイアウトeffectにして順序を保っている
+  test('カードの位置はMainが移動のtransformを載せる前に測る', async (): Promise<void> => {
+    twoBlocks();
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    const layoutStub = stubCardLayout();
+    const events: string[] = [];
+    const scrollToSpy = jest
+      .spyOn(window, 'scrollTo')
+      .mockImplementation(() => {});
+    const rectSpy = jest
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: Element): DOMRect {
+        if (this.classList.contains('block-root-dom')) {
+          events.push('measure');
+        }
+        // 画面外にあることにして、追随スクロールが実際に走る状況を作る
+        return { top: 1000, bottom: 1200 } as DOMRect;
+      });
+    const animateSpy = jest
+      .spyOn(Element.prototype, 'animate')
+      .mockImplementation((): Animation => {
+        events.push('animate');
+        return { cancel: (): void => {} } as Animation;
+      });
+
+    try {
+      await mount();
+      events.length = 0;
+
+      await act(async () => {
+        container
+          .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[1]!
+          .click();
+      });
+
+      expect(events).toContain('measure');
+      expect(events).toContain('animate');
+      expect(events.indexOf('animate')).toBeGreaterThan(
+        events.indexOf('measure'),
+      );
+    } finally {
+      animateSpy.mockRestore();
+      rectSpy.mockRestore();
+      scrollToSpy.mockRestore();
+      layoutStub.mockRestore();
+      setBlockSpy.mockRestore();
+    }
+  });
+
+  // 先頭のブロックをお気に入りにしても並びは変わらない。
+  // 位置が変わっていないカードを動かすと、その場で無駄に揺れる
+  test('位置が変わらなければカードを滑らせない', async (): Promise<void> => {
+    twoBlocks();
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    const layoutStub = stubCardLayout();
+    const animateSpy = jest
+      .spyOn(Element.prototype, 'animate')
+      .mockReturnValue({ cancel: (): void => {} } as Animation);
+
+    try {
+      await mount();
+
+      // すでに先頭にいる1枚目（title-new）をお気に入りにする
+      await act(async () => {
+        container
+          .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[0]!
+          .click();
+      });
+
+      expect(setBlockSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ indexNum: 0, starred: true }),
+      );
+      expect(
+        Array.from(container.querySelectorAll('.block-title')).map(
+          (e) => e.textContent,
+        ),
+      ).toEqual(['title-new', 'title-old']);
+      expect(animateSpy).not.toHaveBeenCalled();
+    } finally {
+      animateSpy.mockRestore();
+      layoutStub.mockRestore();
+      setBlockSpy.mockRestore();
+    }
+  });
+
+  // アニメーションを控える設定のときは瞬間移動のままにする
+  test('アニメーションを控える設定ならカードを滑らせない', async (): Promise<void> => {
+    twoBlocks();
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    const layoutStub = stubCardLayout();
+    const animateSpy = jest
+      .spyOn(Element.prototype, 'animate')
+      .mockReturnValue({ cancel: (): void => {} } as Animation);
+    const matchMediaSpy = jest
+      .spyOn(window, 'matchMedia')
+      .mockReturnValue({ matches: true } as MediaQueryList);
+
+    try {
+      await mount();
+      await act(async () => {
+        container
+          .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[1]!
+          .click();
+      });
+
+      // 並びは変わるが、滑らせはしない
+      expect(
+        Array.from(container.querySelectorAll('.block-title')).map(
+          (e) => e.textContent,
+        ),
+      ).toEqual(['title-old', 'title-new']);
+      expect(animateSpy).not.toHaveBeenCalled();
+    } finally {
+      matchMediaSpy.mockRestore();
+      animateSpy.mockRestore();
+      layoutStub.mockRestore();
+      setBlockSpy.mockRestore();
+    }
+  });
+
   // storageから読み込んだ並びを固定したままだと、お気に入りにしたブロックが
   // リロードするまで先頭に来ない
   test('お気に入りにしたブロックはその場で一覧の先頭へ移る', async (): Promise<void> => {
