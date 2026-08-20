@@ -27,6 +27,11 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const createdAt = block.createdAt;
   // 編集中のタブのindex。nullなら編集モーダルを出さない
   const [editIndex, setEditIndex] = useState<number | null>(null);
+  // 編集を始めた時点のタブ。編集対象はindexで指しているため、開いている間に
+  // 一覧が読み直されると（#249。他のtabsページ・他端末の変更）同じindexが
+  // 別のタブを指しうる。開いたタブと突き合わせて、無関係なタブを
+  // 上書きしないための控え
+  const [editTarget, setEditTarget] = useState<model.Tab | null>(null);
   // 名前の編集中かどうか。編集を始めたときの名前をdraftの初期値にする
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [titleSaving, setTitleSaving] = useState(false);
@@ -142,12 +147,19 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
 
   // 保存できたときだけモーダルを閉じる。失敗時はrejectをモーダル側へ返し、
   // 入力を残したまま再試行できるようにする
-  const saveEditedTab = (index: number, newTab: model.Tab): Promise<void> =>
-    updateTabs(block.tabs.map((tab, i) => (i == index ? newTab : tab))).then(
-      () => {
-        setEditIndex(null);
-      },
-    );
+  const saveEditedTab = (newTab: model.Tab): Promise<void> => {
+    // 編集を始めたタブが見つからないなら書かない。モーダル側でも保存を
+    // 止めているが、保護をUIの分岐だけに預けると導線が増えたときに
+    // 黙って外れる（見つからないまま書くと無関係なタブを上書きする）
+    if (editTargetIndex < 0) {
+      return Promise.reject(new Error('edit target lost'));
+    }
+    return updateTabs(
+      block.tabs.map((tab, i) => (i == editTargetIndex ? newTab : tab)),
+    ).then(() => {
+      closeTabEdit();
+    });
+  };
 
   const openAllTab = () => {
     // 壊れたタブを踏むとmapの途中で例外になり、残りのタブが開かれないまま
@@ -278,7 +290,17 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     if (locked) {
       return;
     }
+    const target = block.tabs[index];
+    if (target == null) {
+      return;
+    }
     setEditIndex(index);
+    setEditTarget(target);
+  };
+
+  const closeTabEdit = () => {
+    setEditIndex(null);
+    setEditTarget(null);
   };
 
   const startTitleEdit = () => {
@@ -311,8 +333,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     setTitleSaving(true);
     props
       .updateBlock({
-        // 編集している間はタブ側の導線を止めてあるので、propsのタブ配列は
-        // 編集を始めたときから変わっていない
+        // 編集している間はタブ側の導線を止めてあるので、このページの操作では
+        // タブ配列は変わらない。一覧の読み直し(#249)で変わることはあるため、
+        // 編集を始めた時点ではなく最新のpropsを書き戻す
         ...block,
         title: newTitle.length <= 0 ? undefined : newTitle,
       })
@@ -409,19 +432,44 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   }, [starSaving]);
 
   // 別の操作が成功してブロックが書き換わったら、前のロック失敗の赤字は
-  // 現在の状態を説明していない。直近の操作が失敗したかのように見えるため消す
+  // 現在の状態を説明していない。直近の操作が失敗したかのように見えるため消す。
+  // 一覧の読み直し(#249)でも新しいオブジェクトが降りてくるため、他端末の
+  // 変更で赤字が消えることはある。失敗自体はerrorLog経由でページ上部の
+  // アラートに残るので、消える方に倒している
   useEffect(() => {
     setLockError(null);
     setStarError(null);
   }, [block]);
 
-  const editingTab = editIndex == null ? null : block.tabs[editIndex];
+  // 編集対象のいまの位置。開いている間に一覧が読み直されるとindexの指す先が
+  // ずれるため、ずれていたときだけ同じ内容のタブを探し直す。
+  // 最初からindexを捨てて内容で探すと、同じURL・同じ名前のタブを複数持つ
+  // ブロック（同じページを2枚開いて保存した場合など）で、常に先頭の重複を
+  // 書き換えてしまう
+  const sameAsEditTarget = (tab: model.Tab): boolean =>
+    editTarget != null &&
+    tab.url === editTarget.url &&
+    tab.title === editTarget.title;
+  const editTargetIndex = ((): number => {
+    if (editTarget == null || editIndex == null) {
+      return -1;
+    }
+    const atEditIndex = block.tabs[editIndex];
+    if (atEditIndex != null && sameAsEditTarget(atEditIndex)) {
+      return editIndex;
+    }
+    return block.tabs.findIndex(sameAsEditTarget);
+  })();
+  // 編集していたタブが失われたか。この場合もモーダルは閉じず、入力を見せた
+  // まま保存だけを止める（黙って消すと、書いていた内容が理由も分からず
+  // 失われる）。ブロックごと消えた場合はカードがアンマウントされるため、
+  // ここでは救えない
+  const editTargetLost = editTarget != null && editTargetIndex < 0;
   // モーダルのオーバーレイはクリックしか遮らず、背後のリンクにはTabキーで
-  // 到達できてしまう。編集対象をindexで持っているため、開いている間に
-  // このブロックのタブが増減すると別のタブを上書きしたり、後から着地した
-  // 保存が消したはずのタブを書き戻したりする。背後を操作不能にして塞ぐ
+  // 到達できてしまう。開いている間にこのブロックのタブが増減すると、
+  // 後から着地した保存が消したはずのタブを書き戻す。背後を操作不能にして塞ぐ
   // （aria-modalを名乗る以上、支援技術に対しても背後は無効であるべき）
-  const editing = editingTab != null && editIndex != null;
+  const editing = editTarget != null && editIndex != null;
   const titleEditing = titleDraft != null;
   // 名前もタブもブロックごと書き戻すため、両者が並行すると後から着地した側が
   // 相手の変更を打ち消す（名前が消える・開いたタブが一覧に戻る）。
@@ -702,13 +750,16 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           )}
         </ul>
       </div>
-      {editingTab != null && editIndex != null ? (
+      {editTarget != null && editIndex != null ? (
         <EditTabModal
           // 編集対象が変わったときに前のタブの入力が残らないようにする
           key={editIndex}
-          tab={editingTab}
-          onSave={(newTab) => saveEditedTab(editIndex, newTab)}
-          onCancel={() => setEditIndex(null)}
+          // 表示するのは編集を始めた時点のタブ。propsは入力欄の初期値としてしか
+          // 読まれないため、読み直しで入れ替わったタブを渡す意味はない
+          tab={editTarget}
+          targetLost={editTargetLost}
+          onSave={saveEditedTab}
+          onCancel={closeTabEdit}
         />
       ) : null}
     </div>

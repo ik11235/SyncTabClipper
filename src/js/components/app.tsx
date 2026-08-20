@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { model } from '../types/interface';
 import { blockService } from '../blockService';
 import { chromeService } from '../chromeService';
@@ -13,14 +19,67 @@ const App: React.FC = () => {
   // Main/Blockはpropsの表示に徹する（nullはロード中を表す）
   const [blocks, setBlocks] = useState<model.BlockEntry[] | null>(null);
 
-  useEffect(() => {
-    chromeService.storage
-      .getAllBlock()
-      .then(setBlocks)
-      .catch((error) => {
-        chromeService.errorLog.set(error).catch(console.error);
-      });
+  // 直前の更新がstorageの読み直しによるものか。インポートやタブ操作は
+  // ブロック1件ごとにstorageを書くため、読み直しは短時間に何度も走る。
+  // 「自分の操作で並び替わった」ことを前提に画面を動かす演出
+  // (useBlockMoveAnimation)を、外から降ってきた変更で動かさないための印
+  const [fromStorage, setFromStorage] = useState(false);
+
+  // 読み直しが飛行中か。並行して走らせると、先に始まった読み込みが後から
+  // 着地して古い一覧に戻す。1件ずつ書き込むインポートでは全件の読み直しが
+  // 書き込みの回数だけ重なるため、飛行中の変更は1回に畳んで待たせる
+  const reloading = useRef(false);
+  const reloadQueued = useRef(false);
+
+  const reload = useCallback((): void => {
+    if (reloading.current) {
+      reloadQueued.current = true;
+      return;
+    }
+    reloading.current = true;
+    const run = (): void => {
+      chromeService.storage
+        .getAllBlock()
+        .then((entries) => {
+          setBlocks(entries);
+          setFromStorage(true);
+        })
+        .catch((error) => {
+          chromeService.errorLog.set(error).catch(console.error);
+        })
+        .finally(() => {
+          // 待たせていた変更は、いま読んだ内容より新しいので読み直す
+          if (reloadQueued.current) {
+            reloadQueued.current = false;
+            run();
+            return;
+          }
+          reloading.current = false;
+        });
+    };
+    run();
   }, []);
+
+  useEffect(() => {
+    reload();
+
+    // 一覧はマウント時に読んだstorageの内容を持ち続けるため、他のtabsページや
+    // 他の端末(sync)での変更を知らずに書き戻すと相手の変更を消してしまう。
+    // ブロックの保存データが変わったら読み直して追随する
+    const onChanged = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string,
+    ) => {
+      if (
+        areaName === 'sync' &&
+        Object.keys(changes).some(chromeService.storage.isBlockDataKey)
+      ) {
+        reload();
+      }
+    };
+    chrome.storage.onChanged.addListener(onChanged);
+    return () => chrome.storage.onChanged.removeListener(onChanged);
+  }, [reload]);
 
   // ブロックの変更をstorageへ永続化し、成功時のみstateへ反映する。
   // タブが空になったブロックはstorage側で削除されるため一覧からも除く。
@@ -32,6 +91,8 @@ const App: React.FC = () => {
       chromeService.storage
         .setBlock(newBlock)
         .then(() => {
+          // この画面の操作による更新なので、並び替わったカードの移動は見せる
+          setFromStorage(false);
           setBlocks((prevBlocks) => {
             if (prevBlocks == null) {
               return prevBlocks;
@@ -59,6 +120,7 @@ const App: React.FC = () => {
     chromeService.storage
       .removeBlock(indexNum)
       .then(() => {
+        setFromStorage(false);
         setBlocks((prevBlocks) => {
           if (prevBlocks == null) {
             return prevBlocks;
@@ -85,6 +147,7 @@ const App: React.FC = () => {
   const deleteAllBlocks = useCallback(
     (): Promise<void> =>
       chromeService.storage.allClear().then(() => {
+        setFromStorage(false);
         setBlocks([]);
       }),
     [],
@@ -116,6 +179,7 @@ const App: React.FC = () => {
             {sortedBlocks != null ? (
               <Main
                 blocks={sortedBlocks}
+                fromStorage={fromStorage}
                 updateBlock={updateBlock}
                 deleteBrokenBlock={deleteBrokenBlock}
               />

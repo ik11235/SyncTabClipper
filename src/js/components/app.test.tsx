@@ -5,6 +5,7 @@ import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import App from './app';
 import { chromeService } from '../chromeService';
+import { model } from '../types/interface';
 
 // テスティングライブラリを介さず素のactを使うため必要
 (
@@ -29,6 +30,15 @@ describe('App', (): void => {
       root = createRoot(container);
       root.render(<App />);
     });
+  };
+
+  // storage.syncの変更をChromeと同様に購読側へ通知する
+  const notifySync = (changes: {
+    [key: string]: chrome.storage.StorageChange;
+  }): void => {
+    for (const listener of onChangedListeners) {
+      listener(changes, 'sync');
+    }
   };
 
   beforeEach((): void => {
@@ -1510,6 +1520,210 @@ describe('App', (): void => {
       expect(localData[chromeService.errorLog.errorKey]).toBeUndefined();
     } finally {
       consoleErrorSpy.mockRestore();
+    }
+  });
+  // 一覧はマウント時のstorageの内容を持ち続けるため、他のtabsページや
+  // 他の端末(sync)での変更に追随できないと、古い一覧からの書き戻しで
+  // 相手の変更を消してしまう
+  test('ブロックの保存データが変わると一覧を読み直す', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/a', title: 'tab-a' }],
+      },
+    ]);
+
+    await mount();
+    expect(container.textContent).toContain('tab-a');
+
+    // 他のtabsページがブロックに名前を付けた状況
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        title: 'title-from-other-tab',
+        tabs: [{ url: 'https://example.com/a', title: 'tab-a' }],
+      },
+    ]);
+    await act(async () => {
+      notifySync({ td_0: { newValue: 'changed' } });
+    });
+
+    expect(container.textContent).toContain('title-from-other-tab');
+  });
+
+  test('ブロック数が変わると一覧を読み直す', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([]);
+
+    await mount();
+    expect(container.textContent).toContain('content_msg_not_tab');
+
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/a', title: 'tab-a' }],
+      },
+    ]);
+    await act(async () => {
+      notifySync({ t_len: { newValue: '1' } });
+    });
+
+    expect(container.textContent).toContain('tab-a');
+  });
+
+  test.each([
+    ['一覧に関係のないsyncのキー', { other: { newValue: 'x' } }, 'sync'],
+    ['localの変更', { td_0: { newValue: 'x' } }, 'local'],
+  ])(
+    '%sでは一覧を読み直さない',
+    async (
+      _name: string,
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string,
+    ): Promise<void> => {
+      getAllBlockSpy.mockResolvedValue([]);
+
+      await mount();
+      expect(getAllBlockSpy).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        for (const listener of onChangedListeners) {
+          listener(changes, areaName);
+        }
+      });
+
+      expect(getAllBlockSpy).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  // 変更が連続すると読み直しが重なる。並行して走らせると先に始まった読み込みが
+  // 後から着地して古い一覧に戻すため、飛行中の変更は1回に畳んで待たせる
+  test('読み直しが重なっても1回に畳み、最後の内容が残る', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/a', title: 'tab-a' }],
+      },
+    ]);
+
+    await mount();
+    expect(getAllBlockSpy).toHaveBeenCalledTimes(1);
+
+    // 1回目の読み直しを飛行中のまま止めておく
+    let resolveFirst: (entries: model.BlockEntry[]) => void = () => undefined;
+    getAllBlockSpy.mockImplementationOnce(
+      () =>
+        new Promise<model.BlockEntry[]>((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+
+    // インポートのようにブロック1件ごとにstorageが変わる状況
+    await act(async () => {
+      notifySync({ td_0: { newValue: 'first' } });
+      notifySync({ td_1: { newValue: 'second' } });
+      notifySync({ td_2: { newValue: 'third' } });
+    });
+    // 飛行中は読み直しを増やさない
+    expect(getAllBlockSpy).toHaveBeenCalledTimes(2);
+
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/c', title: 'tab-c' }],
+      },
+    ]);
+    await act(async () => {
+      resolveFirst([
+        {
+          indexNum: 0,
+          createdAt: new Date('2021-01-02T03:04:05.678Z'),
+          tabs: [{ url: 'https://example.com/b', title: 'tab-b' }],
+        },
+      ]);
+    });
+
+    // 待たせていた変更は1回だけ読み直し、その内容が最後に残る
+    expect(getAllBlockSpy).toHaveBeenCalledTimes(3);
+    expect(container.textContent).toContain('tab-c');
+    expect(container.textContent).not.toContain('tab-b');
+  });
+
+  // storage由来の更新のあとに自分で操作したときは、画面の追従が戻っていないと
+  // お気に入りにしたカードの行き先が見えない（#196の演出が黙って効かなくなる）
+  test('storage由来の更新のあとでも自分の操作では画面が動く', async (): Promise<void> => {
+    twoBlocks();
+    const { scroll, restore } = stubMoveAnimation(500);
+
+    try {
+      await mount();
+
+      // 他端末の変更が届いて一覧を読み直す（内容は同じなので並びは変わらない）
+      await act(async () => {
+        notifySync({ td_0: { newValue: 'touched' } });
+      });
+      expect(scroll.tops).toEqual([]);
+
+      await starSecondBlock();
+
+      // 自分の操作なので画面は移動先へ動く
+      expect(scroll.tops.length).toBeGreaterThan(0);
+    } finally {
+      restore();
+    }
+  });
+
+  // 他端末でお気に入りが付くと一覧が並び替わる。自分で操作していないのに
+  // 画面が動くと、読んでいた位置を理由もなく失う
+  test('storage由来の更新では並び替えで画面を動かさない', async (): Promise<void> => {
+    const blockAt = (
+      indexNum: number,
+      day: string,
+      starred: boolean,
+    ): model.BlockEntry => ({
+      indexNum: indexNum,
+      createdAt: new Date(`2021-01-${day}T03:04:05.678Z`),
+      tabs: [
+        { url: `https://example.com/${indexNum}`, title: `tab-${indexNum}` },
+      ],
+      starred: starred,
+    });
+    getAllBlockSpy.mockResolvedValue([
+      blockAt(0, '03', false),
+      blockAt(1, '02', false),
+    ]);
+    const restoreLayout = stubCardLayout();
+    const scrollToSpy = jest
+      .spyOn(window, 'scrollTo')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      // 他端末で2枚目にお気に入りが付き、一覧の先頭へ動く
+      getAllBlockSpy.mockResolvedValue([
+        blockAt(1, '02', true),
+        blockAt(0, '03', false),
+      ]);
+      await act(async () => {
+        notifySync({ td_1: { newValue: 'starred' } });
+      });
+
+      // 並びは追随する
+      expect(
+        Array.from(
+          container.querySelectorAll<HTMLElement>('[data-block-index]'),
+        ).map((card) => card.dataset.blockIndex),
+      ).toEqual(['1', '0']);
+      // 画面は動かさない
+      expect(scrollToSpy).not.toHaveBeenCalled();
+    } finally {
+      scrollToSpy.mockRestore();
+      restoreLayout.mockRestore();
     }
   });
 });

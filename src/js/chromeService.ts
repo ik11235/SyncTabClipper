@@ -7,6 +7,17 @@ export namespace chromeService {
     const tabLengthKey: string = 't_len';
     const tabKey = (index: number): string => `td_${index}`;
 
+    /**
+     * storage.syncのキーがブロック一覧の内容に関わるものかを返す。
+     * storage.onChangedの購読側が、一覧に関係のない変更で
+     * 読み直さないための判定に使う
+     * @param {string} key 変更されたstorageのキー
+     * @return {boolean} ブロックの保存データ or ブロック数のキーならtrue
+     */
+    export function isBlockDataKey(key: string): boolean {
+      return key === tabLengthKey || /^td_\d+$/.test(key);
+    }
+
     function deleteSyncStorage(key: string): Promise<void> {
       return chrome.storage.sync.remove(key);
     }
@@ -155,12 +166,101 @@ export namespace chromeService {
       return chrome.tabs.query(queryInfo);
     }
 
-    export async function createTabsPageTab(): Promise<void> {
-      const url = chrome.runtime.getURL('tabs.html');
-      await chrome.tabs.create({
+    export function tabsPageUrl(): string {
+      return chrome.runtime.getURL('tabs.html');
+    }
+
+    /**
+     * タブがtabsページかを返す。
+     * 読み込みが始まったばかりのタブはurlが空でpendingUrlにだけ入るため、
+     * 両方を見る（判定を漏らすと、開いたばかりのtabsページを
+     * 保存対象に含めたり2枚目を開いたりする）
+     * @param {chrome.tabs.Tab} tab 判定するタブ
+     * @return {boolean} tabsページならtrue
+     */
+    export function isTabsPage(tab: chrome.tabs.Tab): boolean {
+      const url = tabsPageUrl();
+      return tab.url === url || tab.pendingUrl === url;
+    }
+
+    /**
+     * 開かれているtabsページを探す。
+     * chrome.tabs.queryのurl条件はコミット済みのURLにしか当たらず、
+     * 開いた直後のtabsページを取りこぼす（連打すると2枚目が開く）ため、
+     * 全タブを引いてisTabsPageで絞る
+     * @return {Promise<chrome.tabs.Tab[]>} 開かれているtabsページ
+     */
+    async function openedTabsPages(): Promise<chrome.tabs.Tab[]> {
+      const tabs = await queryTabs({});
+      return tabs.filter((tab) => tab.id != null && isTabsPage(tab));
+    }
+
+    /**
+     * tabsページを開く。既に開かれているtabsページがあれば新規に開かず
+     * そのタブへ切り替える。
+     *
+     * 一覧はマウント時のstorageの内容を持つため、同じ端末で複数枚開かれて
+     * いると古い一覧からの書き戻しで他のタブでの変更が失われる。開く枚数を
+     * 1枚に寄せて頻度を下げる（ユーザーが自力で複数枚開いた状態は起こりうる
+     * ため、その場合も残りを閉じたりはせず1枚を選んで切り替える）
+     * @param {number} [adoptInto] tabsページを置いておきたいウィンドウのid。
+     *   渡すと、別ウィンドウにあるtabsページをこのウィンドウへ引き取る。
+     *   このウィンドウのタブをこれから閉じる呼び出し元（アイコンからの保存）が、
+     *   最後のタブまで閉じてウィンドウごと消してしまうのを防ぐためのもので、
+     *   何も閉じない呼び出し元（コンテキストメニュー）は渡さない
+     *   （ユーザーがtabsページ専用に開いているウィンドウを空にしてしまう）
+     * @return {Promise<void>}
+     */
+    export async function createTabsPageTab(adoptInto?: number): Promise<void> {
+      const url = tabsPageUrl();
+      // 新しく開く場合も引き取り先のウィンドウに置く。省略するとChromeは
+      // 最後にアクティブだったウィンドウに開くため、storageへの書き込みを
+      // 待つ間にユーザーが別のウィンドウへ移ると、これから全タブを閉じる
+      // ウィンドウにtabsページが残らずウィンドウごと消える
+      const createProperties: chrome.tabs.CreateProperties = {
         active: true,
         url: url,
-      });
+        ...(adoptInto == null ? {} : { windowId: adoptInto }),
+      };
+      const opened = await openedTabsPages();
+      // 複数枚開かれている場合は、引き取り先のウィンドウにあるものを優先する。
+      // 引き取る必要がなく、ユーザーが見ていた位置もそのまま使える
+      const target =
+        (adoptInto == null
+          ? undefined
+          : opened.find((tab) => tab.windowId === adoptInto)) ?? opened[0];
+      if (target == null) {
+        await chrome.tabs.create(createProperties);
+        return;
+      }
+      const targetId = target.id!;
+      // 引き取れないウィンドウ（ポップアップ、別プロファイル）もあるため、
+      // 移動の失敗でtabsページを開くのをやめない。移動できなくても
+      // そのタブを前に出せば一覧は見られる
+      let movedInto: number | null = null;
+      if (adoptInto != null && target.windowId !== adoptInto) {
+        try {
+          await chrome.tabs.move(targetId, { windowId: adoptInto, index: -1 });
+          movedInto = adoptInto;
+        } catch (error) {
+          console.error(error);
+        }
+      }
+      try {
+        await chrome.tabs.update(targetId, { active: true });
+      } catch (error) {
+        // 探した後に閉じられたタブへ書くと失敗する。一覧を開けないまま
+        // 終わると、呼び出し元は保存だけ済んで何も起きていないように見える
+        console.error(error);
+        await chrome.tabs.create(createProperties);
+        return;
+      }
+      const shownIn = movedInto ?? target.windowId;
+      if (shownIn != null && shownIn !== adoptInto) {
+        // 別ウィンドウのタブはアクティブにしても前面に来ないため、
+        // ウィンドウ自体もフォーカスする
+        await chrome.windows.update(shownIn, { focused: true });
+      }
     }
   }
 
