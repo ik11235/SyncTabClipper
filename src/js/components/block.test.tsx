@@ -1670,17 +1670,23 @@ describe('Block 落ちたタブの表示が読み直しで戻るか', (): void =
     expect(container.textContent).toContain('title-a');
   });
 
-  test('直っていないタブは読み直してもカードのまま', async (): Promise<void> => {
+  test('直っていないタブは読み直しごとに1回だけ再試行してカードのまま', async (): Promise<void> => {
     const broken = { url: 'https://example.com/a', title: brokenTitle };
     await render([broken, { url: 'https://example.com/b', title: 'title-b' }]);
+    // 1回のレンダリング試行でReactがconsole.errorへ出す回数
+    const perAttempt = consoleErrorSpy.mock.calls.length;
 
     // 壊れたまま読み直された（別のオブジェクトだが中身は同じ）
-    await render([
-      { ...broken },
-      { url: 'https://example.com/b', title: 'title-b' },
-    ]);
+    for (let i = 0; i < 2; i += 1) {
+      await render([
+        { ...broken },
+        { url: 'https://example.com/b', title: 'title-b' },
+      ]);
+    }
 
     expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(1);
     expect(container.textContent).toContain('title-b');
+    // 読み直し2回で試行は3回。カードのままでも再試行が二重に走らない
+    expect(consoleErrorSpy.mock.calls.length).toBe(perAttempt * 3);
   });
 });

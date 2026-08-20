@@ -5,14 +5,17 @@ interface ErrorBoundaryProps {
   children: React.ReactNode;
   // 例外を捕捉したときに代わりに表示する要素。省略時は何も表示しない
   fallback?: React.ReactNode;
-  // 表示をやり直す契機。捕捉後にこの値が変わったら子のレンダリングを再試行する。
-  // 呼び出し側は「落ちた原因のデータ」そのものを渡す（データが差し替わって
-  // 初めて再試行されるため、直っていないうちは何度読み直しても再試行しない）
+  // 表示をやり直す契機。この値が変わったら子のレンダリングを再試行する。
+  // 一覧の読み直し(#249)は内容が同じでもBlockEntryを作り直すため、
+  // 呼び出し側が落ちた原因のデータを渡すと「読み直しごとに1回再試行する」
+  // 意味になる。直っていなければ同じレンダーの中でfallbackへ戻る
   resetKey?: unknown;
 }
 
 interface ErrorBoundaryState {
   hasError: boolean;
+  // 直近のレンダリングで見たresetKey。propsとの差分でリセットを判断する
+  resetKey: unknown;
 }
 
 /**
@@ -27,21 +30,32 @@ export class ErrorBoundary extends React.Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
 > {
-  state: ErrorBoundaryState = { hasError: false };
+  state: ErrorBoundaryState = {
+    hasError: false,
+    resetKey: this.props.resetKey,
+  };
 
-  static getDerivedStateFromError(): ErrorBoundaryState {
+  // 直近にerrorLogへ記録したメッセージ。同じ壊れ方で再試行するたびに
+  // 記録し直すと、利用者が閉じたアラートとバッジが読み直しごとに復活する
+  private loggedMessage: string | null = null;
+
+  static getDerivedStateFromError(): Partial<ErrorBoundaryState> {
     return { hasError: true };
   }
 
-  componentDidUpdate(prevProps: ErrorBoundaryProps): void {
-    // 再試行するのは落ちている間だけ。resetKeyが変わり続けても、
-    // 落ちていない子を無駄に作り直さない
-    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
-      // 直っていなければ再試行でまた捕捉してfallbackに戻る。
-      // このとき増えるレンダリングはresetKeyが変わった1回分に留まる
-      // （propsは既に新しい値なので、この更新では再試行しない）
-      this.setState({ hasError: false });
+  // componentDidUpdateでリセットすると、fallbackを描いたコミットの後に
+  // 子を描き直す別のコミットが挟まる。そのコミットでは親は再レンダリング
+  // されないため、親のuseLayoutEffectが古いDOM（fallback）を見たまま
+  // 取り残される（並び替えの演出が誤発火する）。同じレンダーの中で
+  // 決着させるため、propsからstateを導出する形でリセットする
+  static getDerivedStateFromProps(
+    props: ErrorBoundaryProps,
+    state: ErrorBoundaryState,
+  ): Partial<ErrorBoundaryState> | null {
+    if (props.resetKey !== state.resetKey) {
+      return { hasError: false, resetKey: props.resetKey };
     }
+    return null;
   }
 
   componentDidCatch(error: unknown): void {
@@ -52,6 +66,13 @@ export class ErrorBoundary extends React.Component<
       console.error(error);
       return;
     }
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === this.loggedMessage) {
+      // 再試行して同じ壊れ方で落ちただけ。通知は既に出している
+      console.error(error);
+      return;
+    }
+    this.loggedMessage = message;
     chromeService.errorLog.set(error).catch(console.error);
   }
 

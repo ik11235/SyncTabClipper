@@ -40,8 +40,8 @@ const Main: React.FC<MainProps> = (props) => {
             <ErrorBoundary
               key={entry.indexNum}
               // 読み直しで同じ位置のブロックが差し替わったら表示をやり直す。
-              // 参照が変わるのは中身が読み直されたブロックだけなので、
-              // 落ちていない兄弟の編集中モーダルや入力を巻き込まない
+              // 再試行が起きるのは落ちている境界だけなので、
+              // 落ちていない兄弟の編集中モーダルや入力は巻き込まない
               resetKey={entry}
               fallback={
                 <BrokenBlock

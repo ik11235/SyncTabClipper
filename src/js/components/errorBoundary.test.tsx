@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { act } from 'react';
+import { act, useLayoutEffect, useRef } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { ErrorBoundary } from './errorBoundary';
 import { chromeService } from '../chromeService';
@@ -134,9 +134,65 @@ describe('ErrorBoundary', (): void => {
 
     await render({ throws: false, resetKey: 'v2' });
 
-    // resetKeyの変更で親が再レンダリングされる1回だけ
+    // resetKeyの変更で親が再レンダリングされる1回だけ。
+    // StrictModeを使わない前提の回数（使うと二重に呼ばれる）
     expect(renderCount).toBe(rendersBefore + 1);
     expect(container.textContent).toBe('child');
+  });
+
+  // 親のuseLayoutEffectは子のコミット後のDOMを測る。リセットを別のコミットに
+  // 分けると、親が測るのはfallbackを描いた時点のDOMになり、直った後の
+  // レイアウトを見逃す（main.tsxの並び替え演出が誤った位置から動かす）
+  test('復帰は親のレイアウト測定と同じコミットで終わる', async (): Promise<void> => {
+    const observed: string[] = [];
+    const Parent: React.FC<{ throws: boolean; resetKey: string }> = (props) => {
+      const ref = useRef<HTMLDivElement>(null);
+      useLayoutEffect(() => {
+        observed.push(ref.current!.textContent ?? '');
+      });
+      return (
+        <div ref={ref}>
+          <ErrorBoundary
+            resetKey={props.resetKey}
+            fallback={<span>broken</span>}
+          >
+            <Child throws={props.throws} />
+          </ErrorBoundary>
+        </div>
+      );
+    };
+
+    await act(async () => {
+      root.render(<Parent throws={true} resetKey="v1" />);
+    });
+    await act(async () => {
+      root.render(<Parent throws={false} resetKey="v2" />);
+    });
+
+    // 直った後のDOMを親が測れている（最後の測定がfallbackで止まらない）
+    expect(container.textContent).toBe('child');
+    expect(observed[observed.length - 1]).toBe('child');
+  });
+
+  // 記録するとバッジとアラートが出る。同じ壊れ方で再試行するたびに
+  // 記録し直すと、利用者が閉じたアラートが読み直しごとに復活する
+  test('同じ壊れ方で再試行してもerrorLogへは記録し直さない', async (): Promise<void> => {
+    const errorLogSpy = jest
+      .spyOn(chromeService.errorLog, 'set')
+      .mockResolvedValue(undefined);
+
+    try {
+      await render({ throws: true, resetKey: 'v1' });
+      expect(errorLogSpy).toHaveBeenCalledTimes(1);
+
+      // 壊れたまま読み直された（再試行してまた同じ例外で落ちる）
+      await render({ throws: true, resetKey: 'v2' });
+      await render({ throws: true, resetKey: 'v3' });
+
+      expect(errorLogSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      errorLogSpy.mockRestore();
+    }
   });
 
   test('fallbackを渡さない境界は捕捉した例外をerrorLogへ記録する', async (): Promise<void> => {

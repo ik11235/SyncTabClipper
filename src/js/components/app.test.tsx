@@ -1595,18 +1595,23 @@ describe('App', (): void => {
 
     try {
       await mount();
+      // 1回のレンダリング試行でReactがconsole.errorへ出す回数
+      const perAttempt = consoleErrorSpy.mock.calls.length;
 
-      // 読み直しても壊れ方は同じ（再試行してまた落ちる）
-      getAllBlockSpy.mockResolvedValue(brokenBlocks());
-      await act(async () => {
-        notifySync({ td_1: { newValue: 'touched' } });
-      });
+      // 読み直しても壊れ方は同じ（再試行してまた落ちる）。
+      // 一覧の読み直しは内容が同じでもBlockEntryを作り直すため、
+      // resetKeyは毎回変わり、読み直しごとに1回だけ再試行される
+      for (const key of ['td_1', 't_len']) {
+        getAllBlockSpy.mockResolvedValue(brokenBlocks());
+        await act(async () => {
+          notifySync({ [key]: { newValue: 'touched' } });
+        });
+      }
 
       expect(container.textContent).toContain('content_msg_broken_block');
-      expect(container.textContent).not.toContain('title-broken');
       expect(container.textContent).toContain('title-valid');
-      // 再試行を繰り返して一覧が空になったりしない
-      expect(container.textContent).not.toContain('content_msg_not_tab');
+      // 読み直し2回で試行は3回。リセットと例外を繰り返して回り続けない
+      expect(consoleErrorSpy.mock.calls.length).toBe(perAttempt * 3);
     } finally {
       consoleErrorSpy.mockRestore();
     }
