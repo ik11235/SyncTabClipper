@@ -65,7 +65,35 @@ export namespace blockService {
       // ロックしていないブロックも同様にキーを作らない。
       // falseを書いてもロックしていないことしか意味せず、既定値と同じ
       ...(block.locked === true ? { locked: true } : {}),
+      // スターも同じ。付けていないブロックにキーを作らない
+      ...(block.starred === true ? { starred: true } : {}),
     };
+  }
+
+  /**
+   * 一覧に並べるときのブロックの比較関数。
+   * 第一キーがスター（お気に入り）の有無、第二キーが作成日の降順。
+   * storageから読み込んだ直後の並びと、スターを付け外しした後の並びを
+   * 同じ規則にするため、storage側とUI側の両方からこれを使う
+   * @param {model.BlockEntry} a 比較する要素
+   * @param {model.BlockEntry} b 比較する要素
+   * @return {number} Array.prototype.sortの比較結果
+   */
+  export function compareBlockEntry(
+    a: model.BlockEntry,
+    b: model.BlockEntry,
+  ): number {
+    const aBroken = isBrokenBlock(a);
+    const bBroken = isBrokenBlock(b);
+    if (aBroken || bBroken) {
+      // BrokenBlockはcreatedAtもスターも分からないため末尾に寄せる
+      return Number(aBroken) - Number(bBroken);
+    }
+    if ((a.starred === true) !== (b.starred === true)) {
+      // スターを付けたブロックを先頭へ。作成日より優先する
+      return a.starred === true ? -1 : 1;
+    }
+    return b.createdAt.getTime() - a.createdAt.getTime();
   }
 
   // エクスポート/ストレージJSONのブロック表現（v2エンベロープのフィールドを含む）
@@ -81,11 +109,14 @@ export namespace blockService {
   // lockedを知らない旧バージョンが同じブロックを書き戻すとロックは失われるが、
   // 版数を上げて旧バージョンから一切表示できなくするより軽い副作用とみなす。
   // ロックはこの拡張機能のUIの誤操作を防ぐもので、データの改変を保証する仕組みではない
+  // starredもtitle/lockedと同じ扱い。スターを知らない旧バージョンが書き戻すと
+  // 失われるが、失われるのは一覧での並び順と装飾だけで、タブは残る
   type BlockJson = {
     created_at: number;
     tabs: model.Tab[];
     title?: string;
     locked?: boolean;
+    starred?: boolean;
     v?: number;
     d?: string;
   };
@@ -159,6 +190,16 @@ export namespace blockService {
     return locked === true ? { locked: true } : {};
   }
 
+  /**
+   * ブロックへスターを載せる。lockedと同じく、付けていないときはキー自体を
+   * 作らず、真偽値のtrue以外はスターとみなさない
+   * @param {unknown} starred 保存データが持っていたstarred
+   * @return {object} starredを持つオブジェクト。付いていなければ空オブジェクト
+   */
+  function blockStarredField(starred: unknown): { starred?: boolean } {
+    return starred === true ? { starred: true } : {};
+  }
+
   function jsonObjToBlock(object: BlockJson, index: number): model.Block {
     return {
       indexNum: index,
@@ -166,6 +207,7 @@ export namespace blockService {
       tabs: object.tabs,
       ...blockTitleField(object.title),
       ...blockLockedField(object.locked),
+      ...blockStarredField(object.starred),
     };
   }
 
@@ -187,6 +229,7 @@ export namespace blockService {
       tabs: tabs,
       ...blockTitleField(js.title),
       ...blockLockedField(js.locked),
+      ...blockStarredField(js.starred),
     };
   }
 

@@ -19,6 +19,13 @@ export namespace model {
      * undefinedになる
      */
     locked?: boolean;
+    /**
+     * ブロックにスター（お気に入り）を付けているか。
+     * 付けたブロックは一覧の先頭へ寄せ、リボンで目立たせる。
+     * 付けていないブロック（旧スキーマで保存されたデータを含む）は
+     * undefinedになる
+     */
+    starred?: boolean;
   }
 
   interface Tab {

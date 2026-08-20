@@ -20,3 +20,24 @@ for (const [name, impl] of Object.entries(polyfills)) {
     globalThis[name] = impl;
   }
 }
+
+// jsdomはメディアクエリを評価しないためmatchMediaも持たない。
+// どのクエリにも一致しない実装を入れる（本番のChromeにはネイティブ実装がある）。
+// 一致する状態を試すテストはspyOnで差し替える
+if (
+  typeof globalThis.window !== 'undefined' &&
+  typeof globalThis.window.matchMedia !== 'function'
+) {
+  globalThis.window.matchMedia = function (query) {
+    return {
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: function () {},
+      removeEventListener: function () {},
+      dispatchEvent: function () {
+        return false;
+      },
+    };
+  };
+}

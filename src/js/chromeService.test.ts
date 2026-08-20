@@ -213,7 +213,7 @@ describe('chromeService.storage.getAllBlock', (): void => {
 
   // 作成日が壊れていてもタブ自体は読めるので、ブロックごと捨てずに残す。
   // Invalid Dateのまま返すとblock.tsxのtoISOString()がRangeErrorになり、
-  // sortBlockの比較関数もNaNで非一貫になる
+  // compareBlockEntryの比較結果もNaNで非一貫になる
   test('created_atがDateの表現範囲外でもタブを保ったまま返る', async (): Promise<void> => {
     syncData['t_len'] = '1';
     syncData['td_0'] =

@@ -4,6 +4,7 @@ import { blockService } from '../blockService';
 import Block from './block';
 import BrokenBlock from './brokenBlock';
 import { ErrorBoundary } from './errorBoundary';
+import { useBlockMoveAnimation } from './useBlockMoveAnimation';
 
 interface MainProps {
   blocks: model.BlockEntry[];
@@ -13,9 +14,12 @@ interface MainProps {
 
 // ブロック一覧のstateはAppが所有し、Mainはpropsの表示に徹する
 const Main: React.FC<MainProps> = (props) => {
+  // 並び替えでカードが動いたことを見せるのはこのフックが担う
+  const listRoot = useBlockMoveAnimation(props.blocks);
+
   if (props.blocks.length > 0) {
     return (
-      <div>
+      <div ref={listRoot}>
         {props.blocks.map((entry) =>
           blockService.isBrokenBlock(entry) ? (
             <BrokenBlock

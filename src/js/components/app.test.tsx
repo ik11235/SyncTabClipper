@@ -173,11 +173,622 @@ describe('App', (): void => {
     }
   });
 
-  test('あるブロックの更新時に他のブロックは再レンダリングされない', async (): Promise<void> => {
+  // 2件のブロックを、お気に入りを付けると並びが入れ替わる形で用意する
+  const twoBlocks = (): void => {
     getAllBlockSpy.mockResolvedValue([
       {
         indexNum: 0,
+        createdAt: new Date('2021-01-03T03:04:05.678Z'),
+        title: 'title-new',
+        tabs: [{ url: 'https://example.com/a', title: 'tab-a' }],
+      },
+      {
+        indexNum: 1,
         createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        title: 'title-old',
+        tabs: [{ url: 'https://example.com/b', title: 'tab-b' }],
+      },
+    ]);
+  };
+
+  // テスト内でカード1枚の高さとして扱う値
+  const CARD_HEIGHT = 100;
+
+  /**
+   * jsdomはレイアウトを持たないためoffsetTopが常に0になり、カードが動いても
+   * 位置の差が出ない。カードが縦にCARD_HEIGHTずつ並んでいるものとして、
+   * 兄弟の中での順番から位置を作る（並び替えに追随する）
+   * @return {jest.SpyInstance} 元に戻すためのspy
+   */
+  const stubCardLayout = (): jest.SpyInstance => {
+    const topDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'offsetTop',
+    )!;
+    const heightDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'offsetHeight',
+    )!;
+    Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
+      configurable: true,
+      get(this: HTMLElement): number {
+        const siblings = Array.from(this.parentElement?.children ?? []);
+        return siblings.indexOf(this) * CARD_HEIGHT;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get: (): number => CARD_HEIGHT,
+    });
+    // mockRestore相当の後片付けをspyと同じ形で返す
+    return {
+      mockRestore: (): void => {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          'offsetTop',
+          topDescriptor,
+        );
+        Object.defineProperty(
+          HTMLElement.prototype,
+          'offsetHeight',
+          heightDescriptor,
+        );
+      },
+    } as jest.SpyInstance;
+  };
+
+  /**
+   * ウィンドウをスクロールできる状態にする。jsdomはレイアウトを持たないため
+   * scrollYもscrollHeightも0で、スクロールできる範囲が存在しない
+   * @param {number} initialScrollY 最初のスクロール位置
+   * @return {object} 指示されたスクロール位置の記録と、後片付けする関数
+   */
+  const stubScrollableWindow = (
+    initialScrollY: number,
+  ): {
+    tops: number[];
+    setScrollY: (value: number) => void;
+    restore: () => void;
+  } => {
+    let scrollY = initialScrollY;
+    const tops: number[] = [];
+    // scrollYはjsdomでは値プロパティなのでspyOnのgetterでは差し替えられない
+    const scrollYDescriptor = Object.getOwnPropertyDescriptor(
+      window,
+      'scrollY',
+    );
+    Object.defineProperty(window, 'scrollY', {
+      configurable: true,
+      get: (): number => scrollY,
+    });
+    // scrollHeightはElement.prototypeのgetterなので、要素側に直接生やす
+    Object.defineProperty(document.documentElement, 'scrollHeight', {
+      configurable: true,
+      get: (): number => 5000,
+    });
+    const scrollToSpy = jest.spyOn(window, 'scrollTo').mockImplementation(((
+      options: ScrollToOptions,
+    ): void => {
+      scrollY = options.top!;
+      tops.push(scrollY);
+    }) as typeof window.scrollTo);
+    return {
+      tops: tops,
+      // ブラウザがスクロール位置を勝手に動かす状況（スクロールアンカリング）を作る
+      setScrollY: (value: number): void => {
+        scrollY = value;
+      },
+      restore: (): void => {
+        scrollToSpy.mockRestore();
+        delete (document.documentElement as unknown as Record<string, unknown>)
+          .scrollHeight;
+        if (scrollYDescriptor != null) {
+          Object.defineProperty(window, 'scrollY', scrollYDescriptor);
+        }
+      },
+    };
+  };
+
+  /**
+   * 並び替えの見せ方を確かめるための下準備。jsdomはレイアウトを持たないため、
+   * カードの位置・画面の高さ・スクロール位置をすべて自分で与える必要がある。
+   * 時間の進み方もこちらで握る（アニメーションはrequestAnimationFrameで動く）
+   * @param {number} initialScrollY 最初のスクロール位置
+   * @return {object} スクロールの記録・setBlockのspy・後片付けする関数
+   */
+  const stubMoveAnimation = (
+    initialScrollY: number,
+  ): {
+    scroll: ReturnType<typeof stubScrollableWindow>;
+    setBlockSpy: jest.SpyInstance;
+    restore: () => void;
+  } => {
+    const layoutStub = stubCardLayout();
+    const scroll = stubScrollableWindow(initialScrollY);
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    jest.useFakeTimers();
+    return {
+      scroll: scroll,
+      setBlockSpy: setBlockSpy,
+      restore: (): void => {
+        jest.useRealTimers();
+        scroll.restore();
+        layoutStub.mockRestore();
+        setBlockSpy.mockRestore();
+      },
+    };
+  };
+
+  /**
+   * カードのtransformを現在の一覧の順に並べて返す
+   * @return {string[]} 各カードのtransform（付いていなければ空文字列）
+   */
+  const cardTransforms = (): string[] =>
+    Array.from(container.querySelectorAll<HTMLElement>('.block-root-dom')).map(
+      (card) => card.style.transform,
+    );
+
+  /**
+   * 2枚目のブロックをマウスでお気に入りにする。1枚目と入れ替わる
+   * （HTMLElement.click()はdetailが0でキーボード起動と区別できない）
+   * @return {Promise<void>} 反映を待つPromise
+   */
+  const starSecondBlock = async (): Promise<void> => {
+    await act(async () => {
+      container
+        .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[1]!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    });
+  };
+
+  // カードが瞬間移動すると、どこからどこへ動いたのか分からない。
+  // 位置が変わったカードを元の位置から滑らせて見せる
+  test('並び替えで位置が変わったカードを元の位置から滑らせる', async (): Promise<void> => {
+    twoBlocks();
+    const { restore } = stubMoveAnimation(500);
+
+    try {
+      await mount();
+      // マウント時は比較対象がないので何も動かさない
+      expect(cardTransforms()).toEqual(['', '']);
+
+      await starSecondBlock();
+
+      // 動き始めはそれぞれ元の位置。お気に入りにしたカードは100px下から、
+      // 押しのけられたカードは100px上から始まる（DOMの順は入れ替わっている）
+      expect(cardTransforms()).toEqual([
+        'translateY(100px)',
+        'translateY(-100px)',
+      ]);
+
+      // 画面を動かしている間（300ms）はカードを元の位置に留めておく。
+      // 先に動かしてしまうと、画面が着く前に移動が終わってしまう
+      jest.advanceTimersByTime(250);
+      expect(cardTransforms()).toEqual([
+        'translateY(100px)',
+        'translateY(-100px)',
+      ]);
+
+      // 画面が着いてから滑り出し、途中では元の位置と新しい位置の間にいる
+      jest.advanceTimersByTime(320);
+      const midway = cardTransforms();
+      expect(midway[0]).not.toBe('translateY(100px)');
+      expect(midway[0]).not.toBe('');
+
+      // 滑り終わるとインラインスタイルも残さない
+      jest.advanceTimersByTime(1000);
+      expect(cardTransforms()).toEqual(['', '']);
+    } finally {
+      restore();
+    }
+  });
+
+  // カードと同じだけ画面を動かす（追いかける）と、カードは画面内の同じ場所に
+  // 留まってしまい移動していないように見える。先に画面を移動先へ動かし、
+  // そこへカードを滑らせてくる
+  test('先に画面が移動先へ動き、その後カードが滑ってくる', async (): Promise<void> => {
+    twoBlocks();
+    const { scroll, restore } = stubMoveAnimation(500);
+
+    try {
+      await mount();
+      expect(scroll.tops).toEqual([]);
+
+      await starSecondBlock();
+
+      // 動き出しは押した時点のスクロール位置。ここが移動先になっていると
+      // 「着いた先から始まる」ため移動が見えない
+      expect(scroll.tops[0]).toBe(500);
+
+      // 移動先（先頭・レイアウト上の位置0）が画面の中央に来るよう動かす。
+      // 画面の中央に置けない（上端に届く）ため上端で止まる。
+      // requestAnimationFrameは16ms刻みなので、境界をまたぐ分だけ余分に進める
+      jest.advanceTimersByTime(320);
+      expect(scroll.tops[scroll.tops.length - 1]).toBe(0);
+      // 一気に飛ばず、途中の位置を通る
+      expect(scroll.tops.length).toBeGreaterThan(2);
+      for (const top of scroll.tops) {
+        expect(top).toBeGreaterThanOrEqual(0);
+        expect(top).toBeLessThanOrEqual(500);
+      }
+
+      // カードが滑っている間は画面を動かさない
+      const scrollCalls = scroll.tops.length;
+      jest.advanceTimersByTime(1000);
+      expect(scroll.tops.length).toBe(scrollCalls);
+      expect(cardTransforms()).toEqual(['', '']);
+    } finally {
+      restore();
+    }
+  });
+
+  // 他にお気に入りがある状態で付けると、カードは先頭ではなく途中へ動く。
+  // 画面がカードを追いかけていた頃はこの場合にカードが静止して見えていた
+  test('途中の位置へ動く場合も画面が移動先を見せてから滑ってくる', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-04T03:04:05.678Z'),
+        title: 'title-new',
+        tabs: [{ url: 'https://example.com/a', title: 'tab-a' }],
+      },
+      {
+        indexNum: 1,
+        createdAt: new Date('2021-01-03T03:04:05.678Z'),
+        title: 'title-starred',
+        starred: true,
+        tabs: [{ url: 'https://example.com/b', title: 'tab-b' }],
+      },
+      {
+        indexNum: 2,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        title: 'title-old',
+        tabs: [{ url: 'https://example.com/c', title: 'tab-c' }],
+      },
+    ]);
+    const { scroll, restore } = stubMoveAnimation(1000);
+
+    try {
+      await mount();
+      const blockTitles = (): (string | null)[] =>
+        Array.from(container.querySelectorAll('.block-title')).map(
+          (e) => e.textContent,
+        );
+      // お気に入りが先頭、その後ろが作成日の降順
+      expect(blockTitles()).toEqual([
+        'title-starred',
+        'title-new',
+        'title-old',
+      ]);
+
+      // 一番下（title-old）をお気に入りにする。先頭ではなく2枚目へ動く
+      await act(async () => {
+        container
+          .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[2]!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+      });
+
+      expect(blockTitles()).toEqual([
+        'title-starred',
+        'title-old',
+        'title-new',
+      ]);
+      // 移動先は2枚目（レイアウト上の位置100）。画面の中央には置けないので
+      // 上端で止まるが、移動先が画面に入る位置まで動く
+      jest.advanceTimersByTime(320);
+      expect(scroll.tops[0]).toBe(1000);
+      expect(scroll.tops[scroll.tops.length - 1]).toBe(0);
+
+      // 画面が着いてからカードが滑る。滑っている間に画面は動かない
+      const scrollCalls = scroll.tops.length;
+      jest.advanceTimersByTime(1000);
+      expect(cardTransforms()).toEqual(['', '', '']);
+      expect(scroll.tops.length).toBe(scrollCalls);
+    } finally {
+      restore();
+    }
+  });
+
+  // 移動先がすでに画面に入っているなら、画面を動かす必要がない。
+  // 動かすと見ている位置が理由もなくずれる。
+  // お気に入りが4件あるので、5枚目の移動先は上から400px（画面内だが、
+  // 中央に寄せようとすると画面が動いてしまう位置）になる
+  test('移動先が画面に入っているなら画面を動かさない', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue(
+      [0, 1, 2, 3, 4, 5].map((i) => ({
+        indexNum: i,
+        // 添字が小さいほど新しい。お気に入り同士も作成日の降順に並ぶ
+        createdAt: new Date(Date.UTC(2021, 0, 10 - i)),
+        title: `title-${i}`,
+        ...(i <= 3 ? { starred: true } : {}),
+        tabs: [{ url: `https://example.com/${i}`, title: `tab-${i}` }],
+      })),
+    );
+    // スクロール位置0なら、移動先(400〜500)は画面(0〜768)に収まっている
+    const { scroll, restore } = stubMoveAnimation(0);
+
+    try {
+      await mount();
+      const blockTitles = (): (string | null)[] =>
+        Array.from(container.querySelectorAll('.block-title')).map(
+          (e) => e.textContent,
+        );
+      expect(blockTitles()).toEqual([
+        'title-0',
+        'title-1',
+        'title-2',
+        'title-3',
+        'title-4',
+        'title-5',
+      ]);
+
+      // 一番下（6枚目）をお気に入りにすると、5枚目の位置へ動く
+      await act(async () => {
+        container
+          .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[5]!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+      });
+      expect(blockTitles()[4]).toBe('title-5');
+
+      // 画面は動かさず、カードだけが滑る
+      jest.advanceTimersByTime(1000);
+      expect(cardTransforms()[4]).toBe('');
+      expect(scroll.tops).toEqual([0]);
+    } finally {
+      restore();
+    }
+  });
+
+  // カードが移動すると、ブラウザのスクロールアンカリングが見えている内容を
+  // 保とうとしてスクロール位置を勝手に補正する。追従の起点にその補正後の値を
+  // 使うと、押したときに見えていた景色から始まらない（＝移動が見えない）ため、
+  // 押した時点の位置を覚えておいてそこから動かす
+  test('画面の追従はブラウザの補正を巻き戻して押した時点から始まる', async (): Promise<void> => {
+    twoBlocks();
+    let settleWrite: () => void = () => {};
+    const { scroll, setBlockSpy, restore } = stubMoveAnimation(500);
+    // 書き込みが着地するタイミングをテスト側で握る
+    setBlockSpy.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          settleWrite = resolve;
+        }),
+    );
+
+    try {
+      await mount();
+
+      // 押した時点のスクロール位置は500
+      await starSecondBlock();
+      expect(scroll.tops).toEqual([]);
+
+      // 書き込みが着地する前に、ブラウザが位置を補正した状況を作る
+      scroll.setScrollY(700);
+      await act(async () => {
+        settleWrite();
+      });
+
+      // 補正後の700ではなく、押した時点の500から動き始める
+      expect(scroll.tops[0]).toBe(500);
+      jest.advanceTimersByTime(600);
+      expect(scroll.tops[scroll.tops.length - 1]).toBe(0);
+    } finally {
+      restore();
+    }
+  });
+
+  // お気に入りを解除したカードは作成日順の位置（一覧の下）へ動く。
+  // そこまで画面を追わせると、見ている場所から大きく下へ飛んでしまう
+  test('お気に入りを解除したときは画面を追従させない', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-03T03:04:05.678Z'),
+        title: 'title-new',
+        tabs: [{ url: 'https://example.com/a', title: 'tab-a' }],
+      },
+      {
+        indexNum: 1,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        title: 'title-old',
+        starred: true,
+        tabs: [{ url: 'https://example.com/b', title: 'tab-b' }],
+      },
+    ]);
+    const { scroll, restore } = stubMoveAnimation(500);
+
+    try {
+      await mount();
+      // お気に入りのブロックが先頭
+      expect(
+        Array.from(container.querySelectorAll('.block-title')).map(
+          (e) => e.textContent,
+        ),
+      ).toEqual(['title-old', 'title-new']);
+
+      // 先頭（お気に入り）のカードを解除する
+      await act(async () => {
+        container
+          .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[0]!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+      });
+
+      // 並びは戻り、カードは滑るが、画面は動かさない
+      expect(
+        Array.from(container.querySelectorAll('.block-title')).map(
+          (e) => e.textContent,
+        ),
+      ).toEqual(['title-new', 'title-old']);
+      expect(cardTransforms()).toEqual([
+        'translateY(100px)',
+        'translateY(-100px)',
+      ]);
+      jest.advanceTimersByTime(600);
+      expect(scroll.tops).toEqual([]);
+    } finally {
+      restore();
+    }
+  });
+
+  // 先頭のブロックをお気に入りにしても並びは変わらない。
+  // 位置が変わっていないカードを動かすと、その場で無駄に揺れる
+  test('位置が変わらなければカードも画面も動かさない', async (): Promise<void> => {
+    twoBlocks();
+    const { scroll, setBlockSpy, restore } = stubMoveAnimation(500);
+
+    try {
+      await mount();
+
+      // すでに先頭にいる1枚目（title-new）をお気に入りにする
+      await act(async () => {
+        container
+          .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[0]!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+      });
+
+      expect(setBlockSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ indexNum: 0, starred: true }),
+      );
+      jest.advanceTimersByTime(600);
+      expect(cardTransforms()).toEqual(['', '']);
+      expect(scroll.tops).toEqual([]);
+    } finally {
+      restore();
+    }
+  });
+
+  // アニメーションを控える設定のときは滑らせない。それでも画面は追う。
+  // 追わないとブラウザのスクロール補正だけが残り、カードが画面内で飛ぶ
+  test('アニメーションを控える設定なら滑らせず一度で追従する', async (): Promise<void> => {
+    twoBlocks();
+    const { scroll, restore } = stubMoveAnimation(500);
+    const matchMediaSpy = jest
+      .spyOn(window, 'matchMedia')
+      .mockReturnValue({ matches: true } as MediaQueryList);
+
+    try {
+      await mount();
+      await starSecondBlock();
+
+      // 並びは変わるが、滑らせはしない
+      expect(
+        Array.from(container.querySelectorAll('.block-title')).map(
+          (e) => e.textContent,
+        ),
+      ).toEqual(['title-old', 'title-new']);
+      jest.advanceTimersByTime(600);
+      expect(cardTransforms()).toEqual(['', '']);
+      // 画面は一度で移動先を見せる位置へ
+      expect(scroll.tops).toEqual([0]);
+    } finally {
+      matchMediaSpy.mockRestore();
+      restore();
+    }
+  });
+
+  // storageから読み込んだ並びを固定したままだと、お気に入りにしたブロックが
+  // リロードするまで先頭に来ない
+  test('お気に入りにしたブロックはその場で一覧の先頭へ移る', async (): Promise<void> => {
+    twoBlocks();
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+
+    try {
+      await mount();
+
+      const blockTitles = (): (string | null)[] =>
+        Array.from(container.querySelectorAll('.block-title')).map(
+          (e) => e.textContent,
+        );
+      // 作成日の降順。お気に入りを付ける前は新しいブロックが先頭
+      expect(blockTitles()).toEqual(['title-new', 'title-old']);
+
+      // 古いブロック（2枚目）をお気に入りにする
+      await act(async () => {
+        container
+          .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[1]!
+          .click();
+      });
+
+      expect(setBlockSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ indexNum: 1, starred: true }),
+      );
+      expect(blockTitles()).toEqual(['title-old', 'title-new']);
+      // リボンは先頭に移ったブロックにだけ出る。件数だけでは
+      // 2枚目に出ていても通ってしまうため、位置まで見る
+      const cards = container.querySelectorAll('.block-root-dom');
+      expect(cards[0]!.querySelector('.block-star-ribbon')).not.toBeNull();
+      expect(cards[1]!.querySelector('.block-star-ribbon')).toBeNull();
+
+      // 解除すると作成日順の位置へ戻る
+      await act(async () => {
+        container
+          .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[0]!
+          .click();
+      });
+
+      expect(blockTitles()).toEqual(['title-new', 'title-old']);
+      expect(container.querySelector('.block-star-ribbon')).toBeNull();
+    } finally {
+      setBlockSpy.mockRestore();
+    }
+  });
+
+  // act()は状態更新を同期的にフラッシュするため、本番の順序
+  // （storageへの書き込み→state更新→並び替えのコミット→追従）を再現できない。
+  // 追従を書き込みのPromiseの中で行っていた頃は、Reactが並び替えを
+  // コミットする前に走って何も起きなかった。その回帰を止める
+  test('本番と同じ順序でも並び替えの後に画面が追従する', async (): Promise<void> => {
+    twoBlocks();
+    // このテストだけは本番のスケジューラの順序を見るため、時間を偽らずに動かす
+    // （stubMoveAnimationはfake timersを張るので使えない）
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    const layoutStub = stubCardLayout();
+    const scroll = stubScrollableWindow(500);
+
+    try {
+      await mount();
+
+      const actEnv = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+      const previousActEnv = actEnv.IS_REACT_ACT_ENVIRONMENT;
+      actEnv.IS_REACT_ACT_ENVIRONMENT = false;
+      try {
+        container
+          .querySelectorAll<HTMLButtonElement>('.block-star-toggle')[1]!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        // 書き込み→state更新→並び替えのコミット→追従まで進むのを待つ
+        for (let i = 0; i < 50 && scroll.tops.length <= 0; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      } finally {
+        actEnv.IS_REACT_ACT_ENVIRONMENT = previousActEnv;
+      }
+
+      // 並び替えが済んでいて、かつ追従は押した時点の位置から始まっている
+      expect(
+        Array.from(container.querySelectorAll('.block-title')).map(
+          (e) => e.textContent,
+        ),
+      ).toEqual(['title-old', 'title-new']);
+      expect(scroll.tops[0]).toBe(500);
+    } finally {
+      scroll.restore();
+      layoutStub.mockRestore();
+      setBlockSpy.mockRestore();
+    }
+  });
+
+  test('あるブロックの更新時に他のブロックは再レンダリングされない', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        // 一覧は作成日の降順に並ぶため、先頭に来るブロックAを新しくしておく
+        indexNum: 0,
+        createdAt: new Date('2021-01-03T03:04:05.678Z'),
         tabs: [
           { url: 'https://example.com/a1', title: 'title-a1' },
           { url: 'https://example.com/a2', title: 'title-a2' },
@@ -185,7 +796,7 @@ describe('App', (): void => {
       },
       {
         indexNum: 1,
-        createdAt: new Date('2021-01-03T03:04:05.678Z'),
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
         // ブロックAの更新後のタブ数(1)と重ならない数にして、
         // どちらのブロックのレンダリングかを引数で見分けられるようにする
         tabs: [

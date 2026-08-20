@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { model } from '../types/interface';
+import { blockService } from '../blockService';
 import { chromeService } from '../chromeService';
 import Header from './header';
 import { ErrorDisplay } from './error';
@@ -70,6 +71,15 @@ const App: React.FC = () => {
       });
   }, []);
 
+  // 一覧の並びはstorageから読み込んだ時点でも整えているが、スターの付け外しは
+  // 並び順そのものを変えるため、state側でも同じ規則で並べ直す。
+  // updateBlockは要素を同じ位置に差し替えるだけなので、これがないと
+  // お気に入りにしたブロックがリロードするまで先頭に来ない
+  const sortedBlocks = useMemo(
+    () => blocks?.toSorted(blockService.compareBlockEntry) ?? null,
+    [blocks],
+  );
+
   // 全データ削除をstorageへ反映し、成功時のみ一覧を空にする。
   // 完了通知（alert）はUIを持つSideBar側で行うためPromiseを返す
   const deleteAllBlocks = useCallback(
@@ -103,9 +113,9 @@ const App: React.FC = () => {
           <ErrorBoundary>
             {/* ロード中に「保存済みタブなし」を誤表示しないよう
                 ロード完了までMainをマウントしない */}
-            {blocks != null ? (
+            {sortedBlocks != null ? (
               <Main
-                blocks={blocks}
+                blocks={sortedBlocks}
                 updateBlock={updateBlock}
                 deleteBrokenBlock={deleteBrokenBlock}
               />

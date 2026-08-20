@@ -282,6 +282,124 @@ describe('blockService', (): void => {
     },
   );
 
+  test('blockToJson お気に入りのブロックはstarredを含める', (): void => {
+    const block = {
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      starred: true,
+    };
+
+    expect(blockService.blockToJson(block)).toBe(
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}],"starred":true}',
+    );
+  });
+
+  // lockedと同じ理由で、お気に入りでないブロックにはキーを増やさない
+  test.each([
+    ['お気に入りを解除した', false],
+    ['お気に入りにしたことがない', undefined],
+  ])(
+    'blockToJson %sブロックはstarredを含めない',
+    (_name: string, starred: boolean | undefined): void => {
+      const block = {
+        indexNum: 1,
+        createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+        tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+        starred: starred,
+      };
+
+      expect(blockService.blockToJson(block)).toBe(
+        '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}]}',
+      );
+    },
+  );
+
+  test('jsonToBlock お気に入りを読む', (): void => {
+    const json =
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}],"starred":true}';
+
+    expect(blockService.jsonToBlock(json, 1)).toStrictEqual({
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      starred: true,
+    });
+  });
+
+  // インポートやv1の非圧縮データはjsonObjToBlock経由で読むため別の入口になる
+  test('inflateJson 非圧縮のデータからもお気に入りを読む', async (): Promise<void> => {
+    const json =
+      '{"v":3,"ev":"9.9.9","created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}],"starred":true}';
+
+    await expect(blockService.inflateJson(json, 1)).resolves.toStrictEqual({
+      indexNum: 1,
+      createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+      tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      starred: true,
+    });
+  });
+
+  // lockedと同じく、インポートしたJSONには型の検証がないため何でも入りうる
+  test.each([
+    ['文字列のfalse', '"false"'],
+    ['文字列のtrue', '"true"'],
+    ['数値の1', '1'],
+    ['false', 'false'],
+    ['null', 'null'],
+  ])(
+    'jsonToBlock お気に入りとして扱えないstarred(%s)はお気に入りなしとして読む',
+    (_name: string, starredJson: string): void => {
+      const json = `{"created_at":1609556645678,"tabs":[{"url":"https://example.com/test","title":"title-test"}],"starred":${starredJson}}`;
+
+      expect(blockService.jsonToBlock(json, 1)).toStrictEqual({
+        indexNum: 1,
+        createdAt: new Date(`2021-01-02T03:04:05.678Z`),
+        tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      });
+    },
+  );
+
+  describe('compareBlockEntry', (): void => {
+    const block = (
+      indexNum: number,
+      createdAt: string,
+      starred?: boolean,
+    ): model.Block => ({
+      indexNum: indexNum,
+      createdAt: new Date(createdAt),
+      tabs: [{ url: 'https://example.com/test', title: 'title-test' }],
+      ...(starred == null ? {} : { starred: starred }),
+    });
+
+    // 第一キーがお気に入りの有無、第二キーが作成日の降順
+    test('お気に入りのブロックを作成日より優先して先頭へ寄せる', (): void => {
+      const entries: model.BlockEntry[] = [
+        block(0, '2021-01-04T00:00:00.000Z'),
+        block(1, '2021-01-01T00:00:00.000Z', true),
+        block(2, '2021-01-03T00:00:00.000Z'),
+        block(3, '2021-01-02T00:00:00.000Z', true),
+      ];
+
+      expect(
+        entries.toSorted(blockService.compareBlockEntry).map((e) => e.indexNum),
+      ).toEqual([3, 1, 0, 2]);
+    });
+
+    // 復元できなかったブロックはお気に入りだったかも分からないため末尾のまま
+    test('復元できなかったブロックはお気に入りより後ろに置く', (): void => {
+      const entries: model.BlockEntry[] = [
+        { indexNum: 0, broken: true, unsupported: false },
+        block(1, '2021-01-01T00:00:00.000Z'),
+        block(2, '2021-01-02T00:00:00.000Z', true),
+      ];
+
+      expect(
+        entries.toSorted(blockService.compareBlockEntry).map((e) => e.indexNum),
+      ).toEqual([2, 1, 0]);
+    });
+  });
+
   // 数値になった名前は直せる情報なので、捨てずに文字列として見せる
   test('jsonToBlock 数値のtitleは文字列として読む', (): void => {
     const json =

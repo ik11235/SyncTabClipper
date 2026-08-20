@@ -126,6 +126,18 @@
   "content_msg_locked_action_disabled": {
     "message": "Not available while this block is locked"
   },
+  "content_msg_star_block": {
+    "message": "Add to favorites"
+  },
+  "content_msg_unstar_block": {
+    "message": "Remove from favorites"
+  },
+  "content_msg_star_block_save_failed": {
+    "message": "Failed to change the favorite. Please try again."
+  },
+  "content_msg_starred_ribbon": {
+    "message": "Favorite"
+  },
   "content_msg_locked_block_delete_confirm": {
     "message": "This block was locked, but the lock cannot be released because its data cannot be displayed. Deleting it removes it from all synced devices. Delete it?"
   },

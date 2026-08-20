@@ -1053,3 +1053,340 @@ describe('Block 編集のロック', (): void => {
     ).toBe(true);
   });
 });
+
+describe('Block お気に入り', (): void => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  const mount = async (
+    updateBlock: (newBlock: model.Block) => Promise<void>,
+    block?: Partial<model.Block>,
+  ): Promise<void> => {
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <Block
+          block={{
+            indexNum: 0,
+            createdAt: new Date('2021-01-02T03:04:05.678Z'),
+            tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+            ...block,
+          }}
+          updateBlock={updateBlock}
+        />,
+      );
+    });
+  };
+
+  const clickStarToggle = async (): Promise<void> => {
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.block-star-toggle')!.click();
+    });
+  };
+
+  beforeEach((): void => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      i18n: {
+        getMessage: (key: string): string => key,
+      },
+    };
+  });
+
+  afterEach((): void => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  test('お気に入りにするとタブ・名前・ロックを保ったままupdateBlockを呼ぶ', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock, { title: '調査中のタブ', locked: true });
+
+    await clickStarToggle();
+
+    expect(updateBlock).toHaveBeenCalledWith({
+      indexNum: 0,
+      createdAt: new Date('2021-01-02T03:04:05.678Z'),
+      tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+      title: '調査中のタブ',
+      locked: true,
+      starred: true,
+    });
+  });
+
+  test('お気に入りを解除するとstarredを落としてupdateBlockを呼ぶ', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock, { starred: true });
+
+    await clickStarToggle();
+
+    // objectContainingはキーの有無を区別しないため、値そのものを確かめる
+    // （starredを持ったまま渡すとblockToJsonObjが"starred":trueを書き続ける）
+    expect(updateBlock).toHaveBeenCalledTimes(1);
+    expect(updateBlock.mock.calls[0][0].starred).toBeUndefined();
+  });
+
+  // お気に入りは並び順と装飾しか変えないため、タブを失う操作を止めるための
+  // ロックの対象にしない
+  test('ロック中でもお気に入りは付け外しできる', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock, { locked: true });
+
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('.block-star-toggle')!
+        .hasAttribute('disabled'),
+    ).toBe(false);
+
+    await clickStarToggle();
+
+    expect(updateBlock).toHaveBeenCalledTimes(1);
+    expect(updateBlock.mock.calls[0][0].starred).toBe(true);
+  });
+
+  // 色やアイコンの形だけの強調にならないよう、リボンには文字も入れる
+  test('お気に入りのブロックにはリボンを出す', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock, { starred: true });
+
+    expect(container.querySelector('.block-star-ribbon')!.textContent).toBe(
+      'content_msg_starred_ribbon',
+    );
+    expect(
+      container
+        .querySelector<HTMLElement>('.block-star-toggle')!
+        .getAttribute('data-starred'),
+    ).toBe('true');
+  });
+
+  test('お気に入りでないブロックにはリボンを出さない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    expect(container.querySelector('.block-star-ribbon')).toBeNull();
+    expect(
+      container
+        .querySelector<HTMLElement>('.block-star-toggle')!
+        .getAttribute('data-starred'),
+    ).toBe('false');
+  });
+
+  test('お気に入りの状態を名前で伝える', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock, { starred: true });
+
+    const button =
+      container.querySelector<HTMLButtonElement>('.block-star-toggle')!;
+    expect(button.getAttribute('title')).toBe('content_msg_unstar_block');
+    expect(button.getAttribute('aria-label')).toBe('content_msg_unstar_block');
+  });
+
+  // App側のアラートはページ最上部に出るため、スクロール中は気付けない
+  test('お気に入りの保存に失敗したらカード内でエラーを伝える', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockRejectedValue(new Error('failed'));
+    await mount(updateBlock);
+
+    await clickStarToggle();
+
+    const error = container.querySelector('.block-star-error')!;
+    // 文言のキーまで見る。別の操作のキーを取り違えても件数や属性だけでは通る
+    expect(error.textContent).toBe('content_msg_star_block_save_failed');
+    expect(error.getAttribute('role')).toBe('alert');
+  });
+
+  // 再試行している間も古い赤字が残っていると、まだ失敗しているように見える
+  test('お気に入りを押し直すと前回の失敗の赤字は消える', async (): Promise<void> => {
+    const updateBlock = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('failed'))
+      // 2回目は決着させず、飛行中の状態で赤字が消えていることを見る
+      .mockReturnValue(new Promise<void>(() => {}));
+    await mount(updateBlock);
+
+    await clickStarToggle();
+    expect(container.querySelector('.block-star-error')).not.toBeNull();
+
+    await clickStarToggle();
+
+    expect(updateBlock).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('.block-star-error')).toBeNull();
+  });
+
+  // 別の操作が成功してブロックが書き換わったら、前の失敗の赤字は
+  // 現在の状態を説明していない
+  test('ブロックが書き換わるとお気に入りのエラーは消える', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockRejectedValue(new Error('failed'));
+    await mount(updateBlock);
+
+    await clickStarToggle();
+    expect(container.querySelector('.block-star-error')).not.toBeNull();
+
+    // 別の操作が成功して新しいblockがpropsで降りてきた状況を作る
+    await act(async () => {
+      root.render(
+        <Block
+          block={{
+            indexNum: 0,
+            createdAt: new Date('2021-01-02T03:04:05.678Z'),
+            tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+            title: '名前を付けた',
+          }}
+          updateBlock={updateBlock}
+        />,
+      );
+    });
+
+    expect(container.querySelector('.block-star-error')).toBeNull();
+  });
+
+  // ロックと同じ理由。着地するまでpropsのstarredは古いままで、その間に
+  // 始まったタブ操作はお気に入りを知らないまま書き戻す
+  test('お気に入りの保存中はタブを書き換える導線が止まる', async (): Promise<void> => {
+    // 決着させないPromiseを返して保存中の状態に留める
+    const updateBlock = jest.fn().mockReturnValue(new Promise<void>(() => {}));
+    await mount(updateBlock);
+
+    await clickStarToggle();
+
+    expect(updateBlock).toHaveBeenCalledTimes(1);
+    expect(
+      container
+        .querySelector('.uk-card-header .uk-grid')!
+        .hasAttribute('inert'),
+    ).toBe(true);
+    expect(
+      container.querySelector('.uk-card-body')!.hasAttribute('inert'),
+    ).toBe(true);
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('.block-lock-toggle')!
+        .hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  test('名前を編集している間はお気に入りを切り替えられない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.block-title-edit')!.click();
+    });
+    await clickStarToggle();
+
+    expect(updateBlock).not.toHaveBeenCalled();
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('.block-star-toggle')!
+        .hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  // タブの編集モーダル中はボタンのdisabledではなくヘッダのinertで塞いでいる。
+  // inertはjsdomが実装しておらず、実ブラウザでもDOMの属性でしかないため、
+  // ハンドラ側のガードが唯一の防御になる
+  test('タブの編集モーダルを開いている間はお気に入りを切り替えられない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('.tab_edit')!.click();
+    });
+    expect(container.querySelector('.edit-tab-modal')).not.toBeNull();
+
+    await clickStarToggle();
+
+    expect(updateBlock).not.toHaveBeenCalled();
+  });
+
+  // ロック中バッジとリボンは別のレイヤに置いているため、両方付いたブロックで
+  // 片方が消えたり重なったりしない
+  test('ロック中かつお気に入りのブロックは両方の表示を出す', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock, { locked: true, starred: true });
+
+    expect(container.querySelector('.block-star-ribbon')).not.toBeNull();
+    expect(
+      container.querySelector('.uk-card-title .block-locked-badge'),
+    ).not.toBeNull();
+  });
+
+  // リボンは見た目専用でaria-hiddenにしているため、そのままでは支援技術に
+  // お気に入りだと伝わらない。ロック中バッジと同じく見出しの中で伝える
+  test('お気に入りの状態を見出しの中でも支援技術に伝える', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock, { starred: true });
+
+    expect(
+      container
+        .querySelector<HTMLElement>('.block-star-ribbon')!
+        .getAttribute('aria-hidden'),
+    ).toBe('true');
+    const status = container.querySelector(
+      '.uk-card-title .block-starred-status',
+    )!;
+    expect(status.textContent).toBe('content_msg_starred_ribbon');
+    // 見えている文字が二重にならないよう、視覚的には隠す
+    expect(status.classList.contains('uk-hidden-visually')).toBe(true);
+  });
+
+  // フォーカスに伴うブラウザの瞬間スクロールは、useBlockMoveAnimationが
+  // カードの移動に合わせて見せているスクロールを乱す
+  test('キーボードのフォーカス復帰でスクロールを起こさない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+    const focusSpy = jest.spyOn(
+      container.querySelector<HTMLButtonElement>('.block-star-toggle')!,
+      'focus',
+    );
+
+    await clickStarToggle();
+
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+  });
+
+  /**
+   * スターボタンをクリックする。押した瞬間にボタンがdisabledになると
+   * ブラウザはフォーカスをbodyへ落とすが、jsdomはそれをやらない。
+   * ここではフォーカスを当てずに押すことで、復帰処理が走ったかどうかを
+   * activeElementの変化として観測できる状態を作る
+   * @param {number} detail クリックのdetail（0はキーボードからの起動）
+   * @return {Promise<void>} クリックの反映を待つPromise
+   */
+  const dispatchStarClick = async (detail: number): Promise<void> => {
+    expect(document.activeElement).toBe(document.body);
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.block-star-toggle')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true, detail }));
+    });
+  };
+
+  // ボタンは押した瞬間に自分がdisabledになるため、ブラウザがフォーカスを
+  // bodyへ落とす。キーボードだけの利用者が操作位置を失わないよう戻す
+  test('キーボードから切り替えたら決着後にフォーカスが戻る', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    // キーボードから起動したクリックはdetailが0になる
+    await dispatchStarClick(0);
+
+    expect(updateBlock).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(
+      container.querySelector('.block-star-toggle'),
+    );
+  });
+
+  // マウスで押してから別の場所をクリックした場合もフォーカスはbodyに落ちる。
+  // そこで奪い返すと、見ている位置から勝手にスクロールが戻ってしまう
+  test('マウスから切り替えたときはフォーカスを奪わない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await dispatchStarClick(1);
+
+    expect(updateBlock).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(document.body);
+  });
+});

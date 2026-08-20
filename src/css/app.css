@@ -110,10 +110,11 @@
  * 上位にあることが分かるよう、カードヘッダの右上に置く。
  * 見出しの下へ回り込ませたくないため絶対配置にし、
  * 長い名前がボタンの下へ潜り込まないようヘッダに右余白を確保する。
+ * お気に入りボタン (#196) がロックの左隣に並ぶため、右余白は2つ分を確保する。
  */
 .block-card-header {
   position: relative;
-  padding-right: 44px;
+  padding-right: 76px;
 }
 
 .block-lock-toggle {
@@ -132,8 +133,91 @@
   background: none;
 }
 
-.block-lock-error {
+.block-lock-error,
+.block-star-error {
   margin: 0 0 8px;
+}
+
+/*
+ * お気に入り（スター）機能 (#196)
+ *
+ * 切り替えボタンはロックと粒度の揃った操作なので、その左隣に同じ大きさで並べる。
+ */
+.block-star-toggle {
+  position: absolute;
+  top: 12px;
+  right: 44px;
+  /* ロックボタンと同じく、アイコンだけではクリックの的が小さい */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+/*
+ * UIkitは1200px以上で`.uk-card-header`の縦paddingを15px→20pxに広げる。
+ * ボタンの`top`を固定にすると見出しだけが下がってボタンが上に浮くため、
+ * 同じブレークポイントで差分の5pxを追随させる
+ * （アイコンが2つ横に並ぶようになり、ずれが目に付くようになった）。
+ */
+@media (min-width: 1200px) {
+  .block-lock-toggle,
+  .block-star-toggle {
+    top: 17px;
+  }
+}
+
+/*
+ * お気に入りにしたブロックの見せ方。
+ *
+ * 一覧を眺めたときに目を引くのが役目なので、カード左肩に旗のようなリボンを出す。
+ * アイコンや色だけの強調にならないよう文字を入れる。
+ * カードの外へはみ出させると隣のカードの余白へ食い込んで境目を曖昧にするため、
+ * 左端はカードに揃え、右端をV字に切り欠いてリボンらしさを出す。
+ * `inline-flex`にすると匿名行ボックスのストラット（継承フォント由来）で
+ * カードヘッダとの間に端数の隙間が残るため、フローから外さず`flex`で置く。
+ * UIkitのwarning #faa05a は白背景に対するコントラスト比が約2:1しかなく
+ * 文字色に使えないため、白文字で6.5:1を超える同系の濃い色を専用に定義する。
+ */
+.block-star-ribbon {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 20px 3px 12px;
+  /* 右端のV字はclip-pathで切るため、その幅だけ余分に確保している */
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 50%, 100% 100%, 0 100%);
+  background: #8a5000;
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1.5;
+}
+
+.block-star-toggle[data-starred='true'] {
+  color: #fff;
+  background: #8a5000;
+  border-radius: 50%;
+}
+
+.block-star-toggle[data-starred='true']:hover,
+.block-star-toggle[data-starred='true']:focus {
+  color: #fff;
+  background: #6b3e00;
+}
+
+/*
+ * ブロック間の余白 (#196)
+ *
+ * カードが隙間なく縦に並ぶと境目が分からず、1つのブロックに見えてしまう。
+ * 一覧の縦の長さを増やしすぎない範囲で境目が分かるだけの余白を入れる。
+ */
+.block-root-dom {
+  margin-bottom: 12px;
 }
 
 /*
@@ -182,12 +266,14 @@
  * hoverの色と下線も残るので明示的に打ち消す
  */
 .block-lock-toggle:disabled,
+.block-star-toggle:disabled,
 .block-title-edit:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
 .block-lock-toggle:disabled:hover,
+.block-star-toggle:disabled:hover,
 .block-title-edit:disabled:hover {
   color: inherit;
   text-decoration: none;

@@ -126,6 +126,18 @@
   "content_msg_locked_action_disabled": {
     "message": "ロック中のため操作できません"
   },
+  "content_msg_star_block": {
+    "message": "お気に入りにする"
+  },
+  "content_msg_unstar_block": {
+    "message": "お気に入りを解除する"
+  },
+  "content_msg_star_block_save_failed": {
+    "message": "お気に入りの変更に失敗しました。もう一度お試しください。"
+  },
+  "content_msg_starred_ribbon": {
+    "message": "お気に入り"
+  },
   "content_msg_locked_block_delete_confirm": {
     "message": "このブロックは編集をロックしていましたが、データを表示できないためロックを解除できません。削除するとすべての同期端末から消えます。削除しますか？"
   },

@@ -37,7 +37,11 @@ const BrokenBlock: React.FC<BrokenBlockProps> = (props) => {
   };
 
   return (
-    <div className="tabs uk-card-default block-root-dom">
+    <div
+      className="tabs uk-card-default block-root-dom"
+      // 位置の追跡から漏れると、他のカードが動いたときに取り残される
+      data-block-index={props.indexNum}
+    >
       <div className="uk-card-header">
         <h3 className="uk-card-title uk-margin-remove-bottom">
           {props.unsupported
