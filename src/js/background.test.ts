@@ -132,7 +132,13 @@ describe('background action.onClicked', (): void => {
       }),
     );
     expect(setTabLength).toHaveBeenCalledWith(4);
-    expect(create).toHaveBeenCalledWith({ active: true, url: tabsPageUrl });
+    // クリックしたウィンドウのタブはこれから全部閉じる。tabsページを
+    // 別のウィンドウに開くと、このウィンドウが空になって消える
+    expect(create).toHaveBeenCalledWith({
+      active: true,
+      url: tabsPageUrl,
+      windowId: CURRENT_WINDOW_ID,
+    });
     expect(remove.mock.calls.map((call) => call[0])).toEqual([1, 2]);
   });
 

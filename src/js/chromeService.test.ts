@@ -300,7 +300,11 @@ describe('chromeService.tab.createTabsPageTab', (): void => {
   test('tabsページが開かれていなければ新しいタブで開く', async (): Promise<void> => {
     await chromeService.tab.createTabsPageTab(CLICKED_WINDOW_ID);
 
-    expect(create).toHaveBeenCalledWith({ active: true, url: tabsPageUrl });
+    expect(create).toHaveBeenCalledWith({
+      active: true,
+      url: tabsPageUrl,
+      windowId: CLICKED_WINDOW_ID,
+    });
     expect(update).not.toHaveBeenCalled();
     expect(move).not.toHaveBeenCalled();
   });
@@ -353,6 +357,13 @@ describe('chromeService.tab.createTabsPageTab', (): void => {
     expect(update).toHaveBeenCalledWith(20, { active: true });
     // 引き取った先は既に手元のウィンドウなのでフォーカスは動かさない
     expect(updateWindow).not.toHaveBeenCalled();
+  });
+
+  // 引き取り先を渡さない呼び出し元は、どのウィンドウに開くかを指定しない
+  test('引き取り先を渡さなければウィンドウを指定せず新しいタブで開く', async (): Promise<void> => {
+    await chromeService.tab.createTabsPageTab();
+
+    expect(create).toHaveBeenCalledWith({ active: true, url: tabsPageUrl });
   });
 
   // 何も閉じない呼び出し元（コンテキストメニュー）は引き取り先を渡さない。
@@ -431,7 +442,11 @@ describe('chromeService.tab.createTabsPageTab', (): void => {
     try {
       await chromeService.tab.createTabsPageTab(CLICKED_WINDOW_ID);
 
-      expect(create).toHaveBeenCalledWith({ active: true, url: tabsPageUrl });
+      expect(create).toHaveBeenCalledWith({
+        active: true,
+        url: tabsPageUrl,
+        windowId: CLICKED_WINDOW_ID,
+      });
       expect(updateWindow).not.toHaveBeenCalled();
     } finally {
       consoleErrorSpy.mockRestore();
@@ -444,7 +459,11 @@ describe('chromeService.tab.createTabsPageTab', (): void => {
     await chromeService.tab.createTabsPageTab(CLICKED_WINDOW_ID);
 
     expect(update).not.toHaveBeenCalled();
-    expect(create).toHaveBeenCalledWith({ active: true, url: tabsPageUrl });
+    expect(create).toHaveBeenCalledWith({
+      active: true,
+      url: tabsPageUrl,
+      windowId: CLICKED_WINDOW_ID,
+    });
   });
 });
 

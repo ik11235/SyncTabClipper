@@ -213,6 +213,15 @@ export namespace chromeService {
      */
     export async function createTabsPageTab(adoptInto?: number): Promise<void> {
       const url = tabsPageUrl();
+      // 新しく開く場合も引き取り先のウィンドウに置く。省略するとChromeは
+      // 最後にアクティブだったウィンドウに開くため、storageへの書き込みを
+      // 待つ間にユーザーが別のウィンドウへ移ると、これから全タブを閉じる
+      // ウィンドウにtabsページが残らずウィンドウごと消える
+      const createProperties: chrome.tabs.CreateProperties = {
+        active: true,
+        url: url,
+        ...(adoptInto == null ? {} : { windowId: adoptInto }),
+      };
       const opened = await openedTabsPages();
       // 複数枚開かれている場合は、引き取り先のウィンドウにあるものを優先する。
       // 引き取る必要がなく、ユーザーが見ていた位置もそのまま使える
@@ -221,7 +230,7 @@ export namespace chromeService {
           ? undefined
           : opened.find((tab) => tab.windowId === adoptInto)) ?? opened[0];
       if (target == null) {
-        await chrome.tabs.create({ active: true, url: url });
+        await chrome.tabs.create(createProperties);
         return;
       }
       const targetId = target.id!;
@@ -243,7 +252,7 @@ export namespace chromeService {
         // 探した後に閉じられたタブへ書くと失敗する。一覧を開けないまま
         // 終わると、呼び出し元は保存だけ済んで何も起きていないように見える
         console.error(error);
-        await chrome.tabs.create({ active: true, url: url });
+        await chrome.tabs.create(createProperties);
         return;
       }
       const shownIn = movedInto ?? target.windowId;
