@@ -7,10 +7,11 @@
 
 describe('background action.onClicked', (): void => {
   const tabsPageUrl = 'chrome-extension://abc/tabs.html';
-  // アイコンをクリックしたウィンドウ
+  // アイコンをクリックしたウィンドウ。storageへの書き込みを待つ間に
+  // ユーザーが別のウィンドウへ移っても、保存も終了もこのウィンドウを指す
   const CURRENT_WINDOW_ID = 1;
   let openedTabs: chrome.tabs.Tab[];
-  let clickAction: () => void;
+  let clickAction: (tab: chrome.tabs.Tab) => void;
   const create = jest.fn();
   const update = jest.fn();
   const move = jest.fn();
@@ -48,20 +49,22 @@ describe('background action.onClicked', (): void => {
       contextMenus: { onClicked: { addListener: (): void => undefined } },
       action: {
         onClicked: {
-          addListener: (listener: () => void): void => {
+          addListener: (listener: (tab: chrome.tabs.Tab) => void): void => {
             clickAction = listener;
           },
         },
       },
       i18n: { getMessage: (key: string): string => key },
       tabs: {
+        // 実物のqueryのurl条件はコミット済みのURLにしか当たらないため、
+        // 読み込み中のタブはurlを指定した問い合わせでは返らない
         query: (queryInfo: chrome.tabs.QueryInfo): Promise<chrome.tabs.Tab[]> =>
           Promise.resolve(
             openedTabs.filter(
               (t) =>
                 (queryInfo.url == null || t.url === queryInfo.url) &&
-                (queryInfo.currentWindow !== true ||
-                  t.windowId === CURRENT_WINDOW_ID),
+                (queryInfo.windowId == null ||
+                  t.windowId === queryInfo.windowId),
             ),
           ),
         create: create,
@@ -69,11 +72,7 @@ describe('background action.onClicked', (): void => {
         move: move,
         remove: remove,
       },
-      windows: {
-        getCurrent: (): Promise<chrome.windows.Window> =>
-          Promise.resolve({ id: CURRENT_WINDOW_ID } as chrome.windows.Window),
-        update: jest.fn(),
-      },
+      windows: { update: jest.fn() },
     };
     const { chromeService } = await import('./chromeService');
     jest.spyOn(chromeService.storage, 'getTabLength').mockResolvedValue(3);
@@ -107,7 +106,7 @@ describe('background action.onClicked', (): void => {
    * @return {Promise<void>}
    */
   const click = async (): Promise<void> => {
-    clickAction();
+    clickAction({ windowId: CURRENT_WINDOW_ID } as chrome.tabs.Tab);
     // onClickedのリスナーはPromiseを返さないため、マイクロタスクを消化して待つ
     for (let i = 0; i < 20; i++) {
       await Promise.resolve();
@@ -208,6 +207,9 @@ describe('background action.onClicked', (): void => {
         tabs: [expect.objectContaining({ url: 'https://example.com/a' })],
       }),
     );
+    // 既存として見つけられずに2枚目を開くと、一覧が複数枚になる
+    expect(create).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(9, { active: true });
     expect(remove.mock.calls.map((call) => call[0])).toEqual([1]);
   });
 

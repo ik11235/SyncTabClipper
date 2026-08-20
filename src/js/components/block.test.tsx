@@ -1497,6 +1497,31 @@ describe('Block 編集中に外からタブが変わったとき', (): void => {
     expect(container.querySelector('.edit-tab-modal')).toBeNull();
   });
 
+  // 同じページを2枚開いて保存すると、url・nameが同じタブが並ぶ。
+  // 内容だけで探し直すと、常に先頭の重複を書き換えてしまう
+  test('同じURL・同じ名前のタブが複数あっても押した行を書き換える', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await render(
+      [
+        { url: 'https://example.com/x', title: 'title-x' },
+        { url: 'https://example.com/x', title: 'title-x' },
+        { url: 'https://example.com/c', title: 'title-c' },
+      ],
+      updateBlock,
+    );
+
+    // 2件目の鉛筆を押して編集する
+    await openEditModal(1);
+    await typeEditTitle('title-x-edited');
+    await saveEdit();
+
+    expect(tabsOf(updateBlock)).toEqual([
+      { url: 'https://example.com/x', title: 'title-x' },
+      { url: 'https://example.com/x', title: 'title-x-edited' },
+      { url: 'https://example.com/c', title: 'title-c' },
+    ]);
+  });
+
   test('編集対象が消えたらモーダルは閉じず、保存だけを止める', async (): Promise<void> => {
     const updateBlock = jest.fn().mockResolvedValue(undefined);
     await render(

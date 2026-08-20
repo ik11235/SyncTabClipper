@@ -248,9 +248,9 @@ describe('chromeService.storage.getAllBlock', (): void => {
 
 describe('chromeService.tab.createTabsPageTab', (): void => {
   const tabsPageUrl = 'chrome-extension://abc/tabs.html';
-  // 今使っているウィンドウ。service workerには自分のウィンドウがないため、
-  // Chromeは最後にアクティブだったウィンドウを返す
-  let currentWindow: number | null;
+  // アイコンを押したウィンドウ。ここのタブはこれから閉じられるため、
+  // tabsページはこのウィンドウへ引き取る必要がある
+  const CLICKED_WINDOW_ID = 1;
   let openedTabs: chrome.tabs.Tab[];
   const create = jest.fn();
   const update = jest.fn();
@@ -258,7 +258,6 @@ describe('chromeService.tab.createTabsPageTab', (): void => {
   const updateWindow = jest.fn();
 
   beforeEach((): void => {
-    currentWindow = 1;
     openedTabs = [];
     create.mockClear();
     update.mockClear();
@@ -270,19 +269,19 @@ describe('chromeService.tab.createTabsPageTab', (): void => {
         getURL: (path: string): string => `chrome-extension://abc/${path}`,
       },
       tabs: {
+        // 実物のqueryのurl条件はコミット済みのURLにしか当たらないため、
+        // urlを指定した問い合わせでは読み込み中のタブを返さない
         query: (queryInfo: chrome.tabs.QueryInfo): Promise<chrome.tabs.Tab[]> =>
           Promise.resolve(
-            openedTabs.filter((tab) => tab.url === queryInfo.url),
+            openedTabs.filter(
+              (tab) => queryInfo.url == null || tab.url === queryInfo.url,
+            ),
           ),
         create: create,
         update: update,
         move: move,
       },
       windows: {
-        getCurrent: (): Promise<chrome.windows.Window> =>
-          currentWindow == null
-            ? Promise.reject(new Error('No current window'))
-            : Promise.resolve({ id: currentWindow } as chrome.windows.Window),
         update: updateWindow,
       },
     };
@@ -299,7 +298,7 @@ describe('chromeService.tab.createTabsPageTab', (): void => {
     ({ id: id, windowId: windowId, url: url }) as chrome.tabs.Tab;
 
   test('tabsページが開かれていなければ新しいタブで開く', async (): Promise<void> => {
-    await chromeService.tab.createTabsPageTab();
+    await chromeService.tab.createTabsPageTab(CLICKED_WINDOW_ID);
 
     expect(create).toHaveBeenCalledWith({ active: true, url: tabsPageUrl });
     expect(update).not.toHaveBeenCalled();
@@ -309,34 +308,75 @@ describe('chromeService.tab.createTabsPageTab', (): void => {
   // 一覧を複数枚開くと古い一覧からの書き戻しで変更が失われるため、
   // 開いているtabsページがあれば増やさずそこへ切り替える
   test('同じウィンドウにtabsページがあれば新しく開かずそのタブへ切り替える', async (): Promise<void> => {
-    openedTabs = [tab(10, 1, tabsPageUrl)];
+    openedTabs = [tab(10, CLICKED_WINDOW_ID, tabsPageUrl)];
 
-    await chromeService.tab.createTabsPageTab();
+    await chromeService.tab.createTabsPageTab(CLICKED_WINDOW_ID);
 
     expect(create).not.toHaveBeenCalled();
     expect(update).toHaveBeenCalledWith(10, { active: true });
-    // 同じウィンドウなので引き取る必要はない
+    // 同じウィンドウなので引き取る必要も、フォーカスを移す必要もない
     expect(move).not.toHaveBeenCalled();
+    expect(updateWindow).not.toHaveBeenCalled();
+  });
+
+  // 読み込みが始まったばかりのタブはurlが空でpendingUrlにだけ入る。
+  // queryのurl条件では見つからないため、取りこぼすとアイコンの連打で
+  // tabsページが2枚開く
+  test('読み込み中のtabsページも既存として扱い、2枚目を開かない', async (): Promise<void> => {
+    openedTabs = [
+      {
+        id: 10,
+        windowId: CLICKED_WINDOW_ID,
+        url: '',
+        pendingUrl: tabsPageUrl,
+      } as chrome.tabs.Tab,
+    ];
+
+    await chromeService.tab.createTabsPageTab(CLICKED_WINDOW_ID);
+
+    expect(create).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(10, { active: true });
   });
 
   // フォーカスを別ウィンドウへ移すだけで済ませると、アイコンからの保存では
   // 元のウィンドウが最後のタブまで閉じられてウィンドウごと消える
-  test('別のウィンドウにあるtabsページは今使っているウィンドウへ引き取る', async (): Promise<void> => {
+  test('別のウィンドウにあるtabsページは引き取り先のウィンドウへ移す', async (): Promise<void> => {
+    openedTabs = [tab(20, 2, tabsPageUrl)];
+
+    await chromeService.tab.createTabsPageTab(CLICKED_WINDOW_ID);
+
+    expect(create).not.toHaveBeenCalled();
+    expect(move).toHaveBeenCalledWith(20, {
+      windowId: CLICKED_WINDOW_ID,
+      index: -1,
+    });
+    expect(update).toHaveBeenCalledWith(20, { active: true });
+    // 引き取った先は既に手元のウィンドウなのでフォーカスは動かさない
+    expect(updateWindow).not.toHaveBeenCalled();
+  });
+
+  // 何も閉じない呼び出し元（コンテキストメニュー）は引き取り先を渡さない。
+  // 引き取ると、ユーザーがtabsページ専用に開いているウィンドウを空にする
+  test('引き取り先を渡さなければ移動せずそのウィンドウを前に出す', async (): Promise<void> => {
     openedTabs = [tab(20, 2, tabsPageUrl)];
 
     await chromeService.tab.createTabsPageTab();
 
     expect(create).not.toHaveBeenCalled();
-    expect(move).toHaveBeenCalledWith(20, { windowId: 1, index: -1 });
+    expect(move).not.toHaveBeenCalled();
     expect(update).toHaveBeenCalledWith(20, { active: true });
+    expect(updateWindow).toHaveBeenCalledWith(2, { focused: true });
   });
 
   // ユーザーが自力で複数枚開いている状況は起こりうる。
-  // 勝手に閉じたりせず、今使っているウィンドウのものへ切り替える
-  test('複数枚開かれているときは現在のウィンドウのタブを選び、他は閉じない', async (): Promise<void> => {
-    openedTabs = [tab(20, 2, tabsPageUrl), tab(10, 1, tabsPageUrl)];
+  // 勝手に閉じたりせず、引き取り先にあるものへ切り替える
+  test('複数枚開かれているときは引き取り先のタブを選び、他は閉じない', async (): Promise<void> => {
+    openedTabs = [
+      tab(20, 2, tabsPageUrl),
+      tab(10, CLICKED_WINDOW_ID, tabsPageUrl),
+    ];
 
-    await chromeService.tab.createTabsPageTab();
+    await chromeService.tab.createTabsPageTab(CLICKED_WINDOW_ID);
 
     expect(create).not.toHaveBeenCalled();
     expect(move).not.toHaveBeenCalled();
@@ -347,49 +387,61 @@ describe('chromeService.tab.createTabsPageTab', (): void => {
   test('複数枚が別ウィンドウにしかなければ1枚だけを引き取る', async (): Promise<void> => {
     openedTabs = [tab(20, 2, tabsPageUrl), tab(30, 3, tabsPageUrl)];
 
-    await chromeService.tab.createTabsPageTab();
+    await chromeService.tab.createTabsPageTab(CLICKED_WINDOW_ID);
 
     expect(create).not.toHaveBeenCalled();
     expect(move).toHaveBeenCalledTimes(1);
-    expect(move).toHaveBeenCalledWith(20, { windowId: 1, index: -1 });
+    expect(move).toHaveBeenCalledWith(20, {
+      windowId: CLICKED_WINDOW_ID,
+      index: -1,
+    });
     expect(update).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledWith(20, { active: true });
   });
 
-  // 引き取る先が分からないときは、そのタブのウィンドウを前に出すしかない
-  test('今使っているウィンドウが分からなければタブのウィンドウをフォーカスする', async (): Promise<void> => {
-    currentWindow = null;
+  // ポップアップや別プロファイルのウィンドウへは移動できない。
+  // 移動できないからといって2枚目を開くと、一覧が複数枚になる
+  test('引き取れないウィンドウでも2枚目を開かず、そのタブを前に出す', async (): Promise<void> => {
     openedTabs = [tab(20, 2, tabsPageUrl)];
+    move.mockRejectedValueOnce(new Error('Tabs cannot be edited right now'));
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
 
-    await chromeService.tab.createTabsPageTab();
+    try {
+      await chromeService.tab.createTabsPageTab(CLICKED_WINDOW_ID);
 
-    expect(move).not.toHaveBeenCalled();
-    expect(update).toHaveBeenCalledWith(20, { active: true });
-    expect(updateWindow).toHaveBeenCalledWith(2, { focused: true });
+      expect(create).not.toHaveBeenCalled();
+      expect(update).toHaveBeenCalledWith(20, { active: true });
+      expect(updateWindow).toHaveBeenCalledWith(2, { focused: true });
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   // 探した後に閉じられたタブへ書くと失敗する。一覧を開けないまま終わると
   // 呼び出し元は保存だけ済んで何も起きていないように見える
   test('切り替え先のタブが消えていたら新しいタブで開く', async (): Promise<void> => {
-    openedTabs = [tab(10, 1, tabsPageUrl)];
+    openedTabs = [tab(10, CLICKED_WINDOW_ID, tabsPageUrl)];
     update.mockRejectedValueOnce(new Error('No tab with id: 10'));
     const consoleErrorSpy = jest
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
 
     try {
-      await chromeService.tab.createTabsPageTab();
+      await chromeService.tab.createTabsPageTab(CLICKED_WINDOW_ID);
 
       expect(create).toHaveBeenCalledWith({ active: true, url: tabsPageUrl });
+      expect(updateWindow).not.toHaveBeenCalled();
     } finally {
       consoleErrorSpy.mockRestore();
     }
   });
 
   test('tabsページ以外のタブは切り替え先にしない', async (): Promise<void> => {
-    openedTabs = [tab(10, 1, 'https://example.com/')];
+    openedTabs = [tab(10, CLICKED_WINDOW_ID, 'https://example.com/')];
 
-    await chromeService.tab.createTabsPageTab();
+    await chromeService.tab.createTabsPageTab(CLICKED_WINDOW_ID);
 
     expect(update).not.toHaveBeenCalled();
     expect(create).toHaveBeenCalledWith({ active: true, url: tabsPageUrl });

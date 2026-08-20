@@ -1653,6 +1653,30 @@ describe('App', (): void => {
     expect(container.textContent).not.toContain('tab-b');
   });
 
+  // storage由来の更新のあとに自分で操作したときは、画面の追従が戻っていないと
+  // お気に入りにしたカードの行き先が見えない（#196の演出が黙って効かなくなる）
+  test('storage由来の更新のあとでも自分の操作では画面が動く', async (): Promise<void> => {
+    twoBlocks();
+    const { scroll, restore } = stubMoveAnimation(500);
+
+    try {
+      await mount();
+
+      // 他端末の変更が届いて一覧を読み直す（内容は同じなので並びは変わらない）
+      await act(async () => {
+        notifySync({ td_0: { newValue: 'touched' } });
+      });
+      expect(scroll.tops).toEqual([]);
+
+      await starSecondBlock();
+
+      // 自分の操作なので画面は移動先へ動く
+      expect(scroll.tops.length).toBeGreaterThan(0);
+    } finally {
+      restore();
+    }
+  });
+
   // 他端末でお気に入りが付くと一覧が並び替わる。自分で操作していないのに
   // 画面が動くと、読んでいた位置を理由もなく失う
   test('storage由来の更新では並び替えで画面を動かさない', async (): Promise<void> => {
