@@ -1522,6 +1522,136 @@ describe('App', (): void => {
       consoleErrorSpy.mockRestore();
     }
   });
+  // 境界は位置で固定されており、同じindexNumのブロックが差し替わっても
+  // 再マウントされない。読み直しで直ったのに削除しか導線がないカードが
+  // 残り続けると、直っているデータを消す方向へ誘導してしまう(#256)
+  test('読み直しでデータが直ったブロックはカードから一覧に戻る', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        // createdAtが不正なDateだとblock.tsxのtoISOString()がRangeErrorを投げる
+        createdAt: new Date('invalid'),
+        tabs: [{ url: 'https://example.com/broken', title: 'title-broken' }],
+      },
+      {
+        indexNum: 1,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/valid', title: 'title-valid' }],
+      },
+    ]);
+    // Reactが境界で捕捉した例外をconsole.errorへ出力するため抑止する
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+      expect(container.textContent).toContain('content_msg_broken_block');
+
+      // 他端末が壊れたブロックを正常なデータに書き換えた
+      getAllBlockSpy.mockResolvedValue([
+        {
+          indexNum: 0,
+          createdAt: new Date('2021-01-02T03:04:05.678Z'),
+          tabs: [{ url: 'https://example.com/broken', title: 'title-fixed' }],
+        },
+        {
+          indexNum: 1,
+          createdAt: new Date('2021-01-02T03:04:05.678Z'),
+          tabs: [{ url: 'https://example.com/valid', title: 'title-valid' }],
+        },
+      ]);
+      await act(async () => {
+        notifySync({ td_0: { newValue: 'fixed' } });
+      });
+
+      // リロードを待たずにタブの一覧として表示される
+      expect(container.textContent).not.toContain('content_msg_broken_block');
+      expect(container.textContent).toContain('title-fixed');
+      expect(container.textContent).toContain('title-valid');
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  test('読み直しても直っていないブロックはカードのまま残る', async (): Promise<void> => {
+    const brokenBlocks = () => [
+      {
+        indexNum: 0,
+        createdAt: new Date('invalid'),
+        tabs: [{ url: 'https://example.com/broken', title: 'title-broken' }],
+      },
+      {
+        indexNum: 1,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/valid', title: 'title-valid' }],
+      },
+    ];
+    getAllBlockSpy.mockResolvedValue(brokenBlocks());
+    // Reactが境界で捕捉した例外をconsole.errorへ出力するため抑止する
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      // 読み直しても壊れ方は同じ（再試行してまた落ちる）
+      getAllBlockSpy.mockResolvedValue(brokenBlocks());
+      await act(async () => {
+        notifySync({ td_1: { newValue: 'touched' } });
+      });
+
+      expect(container.textContent).toContain('content_msg_broken_block');
+      expect(container.textContent).not.toContain('title-broken');
+      expect(container.textContent).toContain('title-valid');
+      // 再試行を繰り返して一覧が空になったりしない
+      expect(container.textContent).not.toContain('content_msg_not_tab');
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  // Mainを囲む境界にはfallbackが無く、一度落ちると一覧そのものが失われる。
+  // ここが復帰しないと読み直しても一覧が戻らない(#256)
+  test('Main全体が落ちても読み直しで一覧が戻る', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([]);
+    // 「保存済みタブなし」の表示でMain自体がレンダリング時に落ちる状況を作る
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome.i18n.getMessage = (key: string): string => {
+      if (key === 'content_msg_not_tab') {
+        throw new Error('i18n boom');
+      }
+      return key;
+    };
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      // 一覧は失われるが、ヘッダーとサイドバーは残る
+      expect(container.textContent).not.toContain('content_msg_not_tab');
+      expect(container.textContent).toContain('content_msg_menu');
+
+      getAllBlockSpy.mockResolvedValue([
+        {
+          indexNum: 0,
+          createdAt: new Date('2021-01-02T03:04:05.678Z'),
+          tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+        },
+      ]);
+      await act(async () => {
+        notifySync({ t_len: { newValue: '1' } });
+      });
+
+      expect(container.textContent).toContain('title-a');
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
   // 一覧はマウント時のstorageの内容を持ち続けるため、他のtabsページや
   // 他の端末(sync)での変更に追随できないと、古い一覧からの書き戻しで
   // 相手の変更を消してしまう

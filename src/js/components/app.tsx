@@ -173,7 +173,9 @@ const App: React.FC = () => {
           {/* Mainのレンダリング時例外でHeader/ErrorDisplay/SideBarまで
               アンマウントされないよう境界で隔離する（旧・独立ルート構成が
               持っていたフォールトアイソレーションの維持） */}
-          <ErrorBoundary>
+          {/* 一覧が読み直されたら表示をやり直す。この境界にfallbackは無く、
+              一度落ちると一覧そのものが失われるため復帰の必要が最も大きい */}
+          <ErrorBoundary resetKey={sortedBlocks}>
             {/* ロード中に「保存済みタブなし」を誤表示しないよう
                 ロード完了までMainをマウントしない */}
             {sortedBlocks != null ? (

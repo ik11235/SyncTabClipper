@@ -731,6 +731,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
               // 想定していない壊れ方（titleが文字列でない等）への保険
               <ErrorBoundary
                 key={`${index}-${tab.url}`}
+                // urlが変わればkeyごと変わって再マウントされるが、
+                // 同じurlのままtitleだけ直ったケースはkeyでは拾えない
+                resetKey={tab}
                 fallback={
                   <BrokenTab
                     deleteClick={() => deleteClick(index)}
