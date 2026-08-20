@@ -7,10 +7,13 @@
 
 describe('background action.onClicked', (): void => {
   const tabsPageUrl = 'chrome-extension://abc/tabs.html';
+  // アイコンをクリックしたウィンドウ
+  const CURRENT_WINDOW_ID = 1;
   let openedTabs: chrome.tabs.Tab[];
   let clickAction: () => void;
   const create = jest.fn();
   const update = jest.fn();
+  const move = jest.fn();
   const remove = jest.fn();
   const setBlock = jest.fn();
   const setTabLength = jest.fn();
@@ -21,8 +24,12 @@ describe('background action.onClicked', (): void => {
    * @param {string} url タブのURL
    * @return {chrome.tabs.Tab} 作ったタブ
    */
-  const tab = (id: number, url: string): chrome.tabs.Tab =>
-    ({ id: id, windowId: 1, url: url, title: url }) as chrome.tabs.Tab;
+  const tab = (
+    id: number,
+    url: string,
+    windowId: number = CURRENT_WINDOW_ID,
+  ): chrome.tabs.Tab =>
+    ({ id: id, windowId: windowId, url: url, title: url }) as chrome.tabs.Tab;
 
   /**
    * chromeのAPIを差し替えたうえでbackgroundを読み込み、
@@ -50,15 +57,23 @@ describe('background action.onClicked', (): void => {
       tabs: {
         query: (queryInfo: chrome.tabs.QueryInfo): Promise<chrome.tabs.Tab[]> =>
           Promise.resolve(
-            queryInfo.url == null
-              ? openedTabs
-              : openedTabs.filter((t) => t.url === queryInfo.url),
+            openedTabs.filter(
+              (t) =>
+                (queryInfo.url == null || t.url === queryInfo.url) &&
+                (queryInfo.currentWindow !== true ||
+                  t.windowId === CURRENT_WINDOW_ID),
+            ),
           ),
         create: create,
         update: update,
+        move: move,
         remove: remove,
       },
-      windows: { update: jest.fn() },
+      windows: {
+        getCurrent: (): Promise<chrome.windows.Window> =>
+          Promise.resolve({ id: CURRENT_WINDOW_ID } as chrome.windows.Window),
+        update: jest.fn(),
+      },
     };
     const { chromeService } = await import('./chromeService');
     jest.spyOn(chromeService.storage, 'getTabLength').mockResolvedValue(3);
@@ -81,6 +96,7 @@ describe('background action.onClicked', (): void => {
     openedTabs = [];
     create.mockClear();
     update.mockClear();
+    move.mockClear();
     remove.mockClear();
     setBlock.mockClear();
     setTabLength.mockClear();
@@ -137,6 +153,61 @@ describe('background action.onClicked', (): void => {
     expect(create).not.toHaveBeenCalled();
     expect(update).toHaveBeenCalledWith(9, { active: true });
     // tabsページ自身は閉じない
+    expect(remove.mock.calls.map((call) => call[0])).toEqual([1]);
+  });
+
+  // 別ウィンドウのtabsページへフォーカスを移すだけで済ませると、
+  // 現在のウィンドウは最後のタブまで閉じられてウィンドウごと消えてしまう
+  test('別ウィンドウのtabsページは現在のウィンドウへ引き取ってから閉じる', async (): Promise<void> => {
+    openedTabs = [
+      tab(1, 'https://example.com/a'),
+      tab(2, 'https://example.com/b'),
+      tab(9, tabsPageUrl, 2),
+    ];
+    await loadBackground();
+
+    await click();
+
+    // 現在のウィンドウのタブだけを保存する
+    expect(setBlock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabs: [
+          expect.objectContaining({ url: 'https://example.com/a' }),
+          expect.objectContaining({ url: 'https://example.com/b' }),
+        ],
+      }),
+    );
+    // 2枚目を開かず、既存のtabsページを引き取る
+    expect(create).not.toHaveBeenCalled();
+    expect(move).toHaveBeenCalledWith(9, {
+      windowId: CURRENT_WINDOW_ID,
+      index: -1,
+    });
+    expect(update).toHaveBeenCalledWith(9, { active: true });
+    // 引き取ったtabsページは閉じないので、ウィンドウが空にならない
+    expect(remove.mock.calls.map((call) => call[0])).toEqual([1, 2]);
+  });
+
+  // 開いた直後のタブはurlが空でpendingUrlにだけ入る。判定を漏らすと、
+  // 開きかけのtabsページを保存対象に含めて空のリンクを持つブロックを作り、
+  // 既存として見つけられず2枚目も開いてしまう
+  test('読み込み中のtabsページも保存も終了もしない', async (): Promise<void> => {
+    const loading = {
+      id: 9,
+      windowId: CURRENT_WINDOW_ID,
+      url: '',
+      pendingUrl: tabsPageUrl,
+    } as chrome.tabs.Tab;
+    openedTabs = [tab(1, 'https://example.com/a'), loading];
+    await loadBackground();
+
+    await click();
+
+    expect(setBlock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabs: [expect.objectContaining({ url: 'https://example.com/a' })],
+      }),
+    );
     expect(remove.mock.calls.map((call) => call[0])).toEqual([1]);
   });
 

@@ -1390,3 +1390,192 @@ describe('Block お気に入り', (): void => {
     expect(document.activeElement).toBe(document.body);
   });
 });
+
+// 一覧はstorage.onChangedで読み直されるため(#249)、編集モーダルを開いている
+// 間にこのブロックのタブが外から入れ替わることがある。編集対象はindexで
+// 指しているので、そのまま書き戻すと無関係なタブを上書きする
+describe('Block 編集中に外からタブが変わったとき', (): void => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  /**
+   * 指定したタブでBlockを描画する。2回目以降は同じrootへ描き直して、
+   * 一覧の読み直しでpropsのタブが差し替わる状況を作る
+   * @param {model.Tab[]} tabs 表示するタブ
+   * @param {Function} updateBlock 保存の呼び出し先
+   * @return {Promise<void>}
+   */
+  const render = async (
+    tabs: model.Tab[],
+    updateBlock: (newBlock: model.Block) => Promise<void>,
+  ): Promise<void> => {
+    await act(async () => {
+      root.render(
+        <Block
+          block={{
+            indexNum: 0,
+            createdAt: new Date('2021-01-02T03:04:05.678Z'),
+            tabs: tabs,
+          }}
+          updateBlock={updateBlock}
+        />,
+      );
+    });
+  };
+
+  const openEditModal = async (index: number): Promise<void> => {
+    await act(async () => {
+      container.querySelectorAll<HTMLElement>('.tab_edit')[index]!.click();
+    });
+  };
+
+  const typeEditTitle = async (value: string): Promise<void> => {
+    const input = container.querySelector<HTMLInputElement>('.edit-tab-title')!;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!;
+    await act(async () => {
+      setter.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+
+  const saveEdit = async (): Promise<void> => {
+    await act(async () => {
+      container.querySelector<HTMLElement>('.edit-tab-save')!.click();
+    });
+  };
+
+  const tabsOf = (updateBlock: jest.Mock): model.Tab[] =>
+    (updateBlock.mock.calls[0]![0] as model.Block).tabs;
+
+  beforeEach((): void => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      i18n: {
+        getMessage: (key: string): string => key,
+      },
+    };
+  });
+
+  afterEach((): void => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  // 前のタブが消えるとindexの指す先が1つずれる。indexだけを頼りに書くと
+  // 隣のタブを編集内容で上書きしてしまう
+  test('編集対象の位置がずれても探し直して正しいタブへ保存する', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    const abc = [
+      { url: 'https://example.com/a', title: 'title-a' },
+      { url: 'https://example.com/b', title: 'title-b' },
+      { url: 'https://example.com/c', title: 'title-c' },
+    ];
+    await render(abc, updateBlock);
+    await openEditModal(2);
+    await typeEditTitle('title-c-edited');
+
+    // 他のtabsページ・他端末で先頭のタブが消えた
+    await render(abc.slice(1), updateBlock);
+
+    // モーダルは開いたままで、保存もできる
+    expect(container.querySelector('.edit-tab-modal')).not.toBeNull();
+    expect(container.querySelector('.edit-tab-target-lost')).toBeNull();
+    await saveEdit();
+
+    expect(updateBlock).toHaveBeenCalledTimes(1);
+    expect(tabsOf(updateBlock)).toEqual([
+      { url: 'https://example.com/b', title: 'title-b' },
+      { url: 'https://example.com/c', title: 'title-c-edited' },
+    ]);
+    // 保存できたらモーダルを閉じる
+    expect(container.querySelector('.edit-tab-modal')).toBeNull();
+  });
+
+  test('編集対象が消えたらモーダルは閉じず、保存だけを止める', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await render(
+      [
+        { url: 'https://example.com/a', title: 'title-a' },
+        { url: 'https://example.com/b', title: 'title-b' },
+      ],
+      updateBlock,
+    );
+    await openEditModal(1);
+    await typeEditTitle('title-b-edited');
+
+    // 編集していたタブが外から消された
+    await render(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+    );
+
+    // 黙って消さない。書いていた内容は残したまま、保存だけを止める
+    expect(container.querySelector('.edit-tab-modal')).not.toBeNull();
+    expect(
+      container.querySelector<HTMLInputElement>('.edit-tab-title')!.value,
+    ).toBe('title-b-edited');
+    expect(container.querySelector('.edit-tab-target-lost')).not.toBeNull();
+    expect(
+      container.querySelector<HTMLButtonElement>('.edit-tab-save')!.disabled,
+    ).toBe(true);
+
+    await saveEdit();
+    expect(updateBlock).not.toHaveBeenCalled();
+  });
+
+  test('編集対象が別のタブに入れ替わっても上書きしない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await render(
+      [
+        { url: 'https://example.com/a', title: 'title-a' },
+        { url: 'https://example.com/b', title: 'title-b' },
+      ],
+      updateBlock,
+    );
+    await openEditModal(1);
+    await typeEditTitle('title-b-edited');
+
+    // インポートなどでブロックの中身が丸ごと入れ替わった
+    await render(
+      [
+        { url: 'https://example.com/x', title: 'title-x' },
+        { url: 'https://example.com/y', title: 'title-y' },
+      ],
+      updateBlock,
+    );
+
+    expect(container.querySelector('.edit-tab-target-lost')).not.toBeNull();
+    await saveEdit();
+
+    // title-yがtitle-b-editedで上書きされていない
+    expect(updateBlock).not.toHaveBeenCalled();
+  });
+
+  // 編集中は背後を操作不能にしている。対象を失っても入力を残す以上、
+  // 背後を触れるようにすると打ち消し合う書き込みを始められてしまう
+  test('編集対象を失っても背後は操作不能のまま', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await render(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+    );
+    await openEditModal(0);
+
+    await render(
+      [{ url: 'https://example.com/z', title: 'title-z' }],
+      updateBlock,
+    );
+
+    expect(
+      container
+        .querySelector<HTMLElement>('.block-card-header')!
+        .hasAttribute('inert'),
+    ).toBe(true);
+  });
+});

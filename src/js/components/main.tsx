@@ -8,14 +8,17 @@ import { useBlockMoveAnimation } from './useBlockMoveAnimation';
 
 interface MainProps {
   blocks: model.BlockEntry[];
+  // 直前の更新が他のtabsページ・他端末の変更（storageの読み直し）由来か
+  fromStorage: boolean;
   updateBlock: (newBlock: model.Block) => Promise<void>;
   deleteBrokenBlock: (indexNum: number) => void;
 }
 
 // ブロック一覧のstateはAppが所有し、Mainはpropsの表示に徹する
 const Main: React.FC<MainProps> = (props) => {
-  // 並び替えでカードが動いたことを見せるのはこのフックが担う
-  const listRoot = useBlockMoveAnimation(props.blocks);
+  // 並び替えでカードが動いたことを見せるのはこのフックが担う。
+  // 外から降ってきた変更では画面を動かさない（読んでいた位置が飛ぶ）
+  const listRoot = useBlockMoveAnimation(props.blocks, !props.fromStorage);
 
   if (props.blocks.length > 0) {
     return (

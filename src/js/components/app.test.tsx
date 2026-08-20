@@ -1598,9 +1598,9 @@ describe('App', (): void => {
     },
   );
 
-  // 変更が連続すると読み直しが並行する。先に始まった読み込みが後から着地して
-  // 古い一覧に戻してしまうと、追随したつもりで stale な state に戻る
-  test('読み直しが並行しても後から始めた結果が残る', async (): Promise<void> => {
+  // 変更が連続すると読み直しが重なる。並行して走らせると先に始まった読み込みが
+  // 後から着地して古い一覧に戻すため、飛行中の変更は1回に畳んで待たせる
+  test('読み直しが重なっても1回に畳み、最後の内容が残る', async (): Promise<void> => {
     getAllBlockSpy.mockResolvedValue([
       {
         indexNum: 0,
@@ -1610,34 +1610,35 @@ describe('App', (): void => {
     ]);
 
     await mount();
+    expect(getAllBlockSpy).toHaveBeenCalledTimes(1);
 
-    let resolveStale: (entries: model.BlockEntry[]) => void = () => undefined;
+    // 1回目の読み直しを飛行中のまま止めておく
+    let resolveFirst: (entries: model.BlockEntry[]) => void = () => undefined;
     getAllBlockSpy.mockImplementationOnce(
       () =>
         new Promise<model.BlockEntry[]>((resolve) => {
-          resolveStale = resolve;
+          resolveFirst = resolve;
         }),
     );
-    getAllBlockSpy.mockImplementationOnce(() =>
-      Promise.resolve([
-        {
-          indexNum: 0,
-          createdAt: new Date('2021-01-02T03:04:05.678Z'),
-          tabs: [{ url: 'https://example.com/c', title: 'tab-c' }],
-        },
-      ]),
-    );
 
-    // 1回目(遅い)と2回目(速い)の読み直しを続けて始めさせる
+    // インポートのようにブロック1件ごとにstorageが変わる状況
     await act(async () => {
       notifySync({ td_0: { newValue: 'first' } });
-      notifySync({ td_0: { newValue: 'second' } });
+      notifySync({ td_1: { newValue: 'second' } });
+      notifySync({ td_2: { newValue: 'third' } });
     });
-    expect(container.textContent).toContain('tab-c');
+    // 飛行中は読み直しを増やさない
+    expect(getAllBlockSpy).toHaveBeenCalledTimes(2);
 
-    // 遅れて着地した1回目の結果は捨てる
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/c', title: 'tab-c' }],
+      },
+    ]);
     await act(async () => {
-      resolveStale([
+      resolveFirst([
         {
           indexNum: 0,
           createdAt: new Date('2021-01-02T03:04:05.678Z'),
@@ -1646,7 +1647,59 @@ describe('App', (): void => {
       ]);
     });
 
+    // 待たせていた変更は1回だけ読み直し、その内容が最後に残る
+    expect(getAllBlockSpy).toHaveBeenCalledTimes(3);
     expect(container.textContent).toContain('tab-c');
     expect(container.textContent).not.toContain('tab-b');
+  });
+
+  // 他端末でお気に入りが付くと一覧が並び替わる。自分で操作していないのに
+  // 画面が動くと、読んでいた位置を理由もなく失う
+  test('storage由来の更新では並び替えで画面を動かさない', async (): Promise<void> => {
+    const blockAt = (
+      indexNum: number,
+      day: string,
+      starred: boolean,
+    ): model.BlockEntry => ({
+      indexNum: indexNum,
+      createdAt: new Date(`2021-01-${day}T03:04:05.678Z`),
+      tabs: [
+        { url: `https://example.com/${indexNum}`, title: `tab-${indexNum}` },
+      ],
+      starred: starred,
+    });
+    getAllBlockSpy.mockResolvedValue([
+      blockAt(0, '03', false),
+      blockAt(1, '02', false),
+    ]);
+    const restoreLayout = stubCardLayout();
+    const scrollToSpy = jest
+      .spyOn(window, 'scrollTo')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      // 他端末で2枚目にお気に入りが付き、一覧の先頭へ動く
+      getAllBlockSpy.mockResolvedValue([
+        blockAt(1, '02', true),
+        blockAt(0, '03', false),
+      ]);
+      await act(async () => {
+        notifySync({ td_1: { newValue: 'starred' } });
+      });
+
+      // 並びは追随する
+      expect(
+        Array.from(
+          container.querySelectorAll<HTMLElement>('[data-block-index]'),
+        ).map((card) => card.dataset.blockIndex),
+      ).toEqual(['1', '0']);
+      // 画面は動かさない
+      expect(scrollToSpy).not.toHaveBeenCalled();
+    } finally {
+      scrollToSpy.mockRestore();
+      restoreLayout.mockRestore();
+    }
   });
 });

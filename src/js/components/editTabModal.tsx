@@ -4,6 +4,12 @@ import { util } from '../util';
 
 interface EditTabModalProps {
   tab: model.Tab;
+  /**
+   * 編集を始めたタブが、外からの変更（一覧の読み直し）で入れ替わったか。
+   * trueのときは保存できない。indexで指した先が別のタブになっているため、
+   * そのまま書くと無関係なタブを上書きする
+   */
+  targetLost?: boolean;
   // storageへの永続化が終わるまで待つ。失敗時はrejectされるため、
   // モーダルを開いたまま入力を保持して再試行できる
   onSave: (newTab: model.Tab) => Promise<void>;
@@ -66,6 +72,9 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
 
   const submit = (event: React.FormEvent): void => {
     event.preventDefault();
+    if (props.targetLost === true) {
+      return;
+    }
     const newTitle = title.trim();
     const newUrl = url.trim();
     // titleが空だとリンクの文字が消えてクリックできなくなる
@@ -134,6 +143,13 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
               {error}
             </p>
           ) : null}
+          {/* 編集していたタブが外からの変更で入れ替わった。入力は残したまま
+              保存だけを止め、書いていた内容を自分で拾えるようにする */}
+          {props.targetLost === true ? (
+            <p className="uk-text-danger edit-tab-target-lost" role="alert">
+              {chrome.i18n.getMessage('content_msg_edit_tab_target_lost')}
+            </p>
+          ) : null}
           <div className="uk-text-right">
             <button
               type="button"
@@ -146,7 +162,7 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
             <button
               type="submit"
               className="uk-button uk-button-primary uk-margin-small-left edit-tab-save"
-              disabled={saving}
+              disabled={saving || props.targetLost === true}
             >
               {chrome.i18n.getMessage('content_msg_edit_tab_save')}
             </button>

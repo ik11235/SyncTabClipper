@@ -108,6 +108,9 @@
   "content_msg_edit_tab_save_failed": {
     "message": "Failed to save. Please try again."
   },
+  "content_msg_edit_tab_target_lost": {
+    "message": "The tab you were editing was replaced by a change made on another page or device. This edit cannot be saved. Copy your input, close this dialog, and edit again."
+  },
   "content_msg_edit_block_title": {
     "message": "Edit name"
   },

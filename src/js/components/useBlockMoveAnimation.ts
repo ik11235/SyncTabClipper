@@ -161,8 +161,9 @@ function starredByIndexNum(blocks: model.BlockEntry[]): Map<number, boolean> {
 
 /**
  * お気に入りが付いた瞬間のブロックを探す。
- * storage.onChangedは購読していないので、状態が変わるのはこの画面の操作に
- * よるときだけ。付いたカードは移動先が画面の外になりうるため画面ごと動かす
+ * 付いたカードは移動先が画面の外になりうるため画面ごと動かす。
+ * 他のtabsページ・他端末の変更でも付くため（#249でstorage.onChangedを
+ * 購読した）、画面を動かしてよいかの判断は呼び出し側のcameraEnabledで行う
  * @param {Map<number, boolean>} starred 今回のお気に入りの状態
  * @param {Map<number, boolean>} previous 直前のコミットでのお気に入りの状態
  * @return {number | null} 付いたブロックのindexNum。なければnull
@@ -183,10 +184,14 @@ function findNewlyStarred(
  * 並び替えで移動したカードの動きを見せる。
  * 返したrefをカードの入れ物に渡す
  * @param {model.BlockEntry[]} blocks 表示している一覧
+ * @param {boolean} cameraEnabled お気に入りが付いたカードへ画面を動かしてよいか。
+ *   他のtabsページ・他端末の変更で並び替わったときにfalseにする。自分で操作して
+ *   いないのに画面が動くと、読んでいた位置を理由もなく失う
  * @return {RefObject} カードの入れ物に渡すref
  */
 export function useBlockMoveAnimation(
   blocks: model.BlockEntry[],
+  cameraEnabled: boolean = true,
 ): RefObject<HTMLDivElement | null> {
   const listRoot = useRef<HTMLDivElement>(null);
   // 直前のコミットでの各カードの位置。getBoundingClientRectはスクロールでも
@@ -227,7 +232,7 @@ export function useBlockMoveAnimation(
         continue;
       }
       moves.push({ card: card, startOffset: previousTop - top });
-      if (indexNum === newlyStarred) {
+      if (indexNum === newlyStarred && cameraEnabled) {
         camera = {
           from: scrollYBefore,
           to: cameraTopFor(top, card.offsetHeight, scrollYBefore),

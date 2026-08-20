@@ -248,17 +248,21 @@ describe('chromeService.storage.getAllBlock', (): void => {
 
 describe('chromeService.tab.createTabsPageTab', (): void => {
   const tabsPageUrl = 'chrome-extension://abc/tabs.html';
+  // 今使っているウィンドウ。service workerには自分のウィンドウがないため、
+  // Chromeは最後にアクティブだったウィンドウを返す
+  let currentWindow: number | null;
   let openedTabs: chrome.tabs.Tab[];
-  let queried: chrome.tabs.QueryInfo[];
   const create = jest.fn();
   const update = jest.fn();
+  const move = jest.fn();
   const updateWindow = jest.fn();
 
   beforeEach((): void => {
+    currentWindow = 1;
     openedTabs = [];
-    queried = [];
     create.mockClear();
     update.mockClear();
+    move.mockClear();
     updateWindow.mockClear();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (global as any).chrome = {
@@ -266,22 +270,19 @@ describe('chromeService.tab.createTabsPageTab', (): void => {
         getURL: (path: string): string => `chrome-extension://abc/${path}`,
       },
       tabs: {
-        query: (
-          queryInfo: chrome.tabs.QueryInfo,
-        ): Promise<chrome.tabs.Tab[]> => {
-          queried.push(queryInfo);
-          return Promise.resolve(
-            openedTabs.filter(
-              (tab) =>
-                tab.url === queryInfo.url &&
-                (queryInfo.currentWindow !== true || tab.windowId === 1),
-            ),
-          );
-        },
+        query: (queryInfo: chrome.tabs.QueryInfo): Promise<chrome.tabs.Tab[]> =>
+          Promise.resolve(
+            openedTabs.filter((tab) => tab.url === queryInfo.url),
+          ),
         create: create,
         update: update,
+        move: move,
       },
       windows: {
+        getCurrent: (): Promise<chrome.windows.Window> =>
+          currentWindow == null
+            ? Promise.reject(new Error('No current window'))
+            : Promise.resolve({ id: currentWindow } as chrome.windows.Window),
         update: updateWindow,
       },
     };
@@ -290,7 +291,7 @@ describe('chromeService.tab.createTabsPageTab', (): void => {
   /**
    * 開かれているタブを1件作る
    * @param {number} id タブのid
-   * @param {number} windowId タブが属するウィンドウのid(1を現在のウィンドウとする)
+   * @param {number} windowId タブが属するウィンドウのid
    * @param {string} url タブのURL
    * @return {chrome.tabs.Tab} 作ったタブ
    */
@@ -302,6 +303,7 @@ describe('chromeService.tab.createTabsPageTab', (): void => {
 
     expect(create).toHaveBeenCalledWith({ active: true, url: tabsPageUrl });
     expect(update).not.toHaveBeenCalled();
+    expect(move).not.toHaveBeenCalled();
   });
 
   // 一覧を複数枚開くと古い一覧からの書き戻しで変更が失われるため、
@@ -313,45 +315,75 @@ describe('chromeService.tab.createTabsPageTab', (): void => {
 
     expect(create).not.toHaveBeenCalled();
     expect(update).toHaveBeenCalledWith(10, { active: true });
-    expect(updateWindow).toHaveBeenCalledWith(1, { focused: true });
+    // 同じウィンドウなので引き取る必要はない
+    expect(move).not.toHaveBeenCalled();
   });
 
-  // アクティブにするだけでは背面のウィンドウは前に出てこない
-  test('別のウィンドウにあるtabsページへ切り替えるときはウィンドウもフォーカスする', async (): Promise<void> => {
+  // フォーカスを別ウィンドウへ移すだけで済ませると、アイコンからの保存では
+  // 元のウィンドウが最後のタブまで閉じられてウィンドウごと消える
+  test('別のウィンドウにあるtabsページは今使っているウィンドウへ引き取る', async (): Promise<void> => {
     openedTabs = [tab(20, 2, tabsPageUrl)];
 
     await chromeService.tab.createTabsPageTab();
 
     expect(create).not.toHaveBeenCalled();
+    expect(move).toHaveBeenCalledWith(20, { windowId: 1, index: -1 });
     expect(update).toHaveBeenCalledWith(20, { active: true });
-    expect(updateWindow).toHaveBeenCalledWith(2, { focused: true });
   });
 
   // ユーザーが自力で複数枚開いている状況は起こりうる。
-  // 勝手に閉じたりせず、見えているウィンドウのものへ切り替える
+  // 勝手に閉じたりせず、今使っているウィンドウのものへ切り替える
   test('複数枚開かれているときは現在のウィンドウのタブを選び、他は閉じない', async (): Promise<void> => {
     openedTabs = [tab(20, 2, tabsPageUrl), tab(10, 1, tabsPageUrl)];
 
     await chromeService.tab.createTabsPageTab();
 
     expect(create).not.toHaveBeenCalled();
+    expect(move).not.toHaveBeenCalled();
     expect(update).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledWith(10, { active: true });
   });
 
-  test('現在のウィンドウになければ他のウィンドウのtabsページへ切り替える', async (): Promise<void> => {
+  test('複数枚が別ウィンドウにしかなければ1枚だけを引き取る', async (): Promise<void> => {
     openedTabs = [tab(20, 2, tabsPageUrl), tab(30, 3, tabsPageUrl)];
 
     await chromeService.tab.createTabsPageTab();
 
     expect(create).not.toHaveBeenCalled();
+    expect(move).toHaveBeenCalledTimes(1);
+    expect(move).toHaveBeenCalledWith(20, { windowId: 1, index: -1 });
     expect(update).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledWith(20, { active: true });
-    // 現在のウィンドウを先に探し、見つからなければ全ウィンドウから探す
-    expect(queried).toEqual([
-      { url: tabsPageUrl, currentWindow: true },
-      { url: tabsPageUrl },
-    ]);
+  });
+
+  // 引き取る先が分からないときは、そのタブのウィンドウを前に出すしかない
+  test('今使っているウィンドウが分からなければタブのウィンドウをフォーカスする', async (): Promise<void> => {
+    currentWindow = null;
+    openedTabs = [tab(20, 2, tabsPageUrl)];
+
+    await chromeService.tab.createTabsPageTab();
+
+    expect(move).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(20, { active: true });
+    expect(updateWindow).toHaveBeenCalledWith(2, { focused: true });
+  });
+
+  // 探した後に閉じられたタブへ書くと失敗する。一覧を開けないまま終わると
+  // 呼び出し元は保存だけ済んで何も起きていないように見える
+  test('切り替え先のタブが消えていたら新しいタブで開く', async (): Promise<void> => {
+    openedTabs = [tab(10, 1, tabsPageUrl)];
+    update.mockRejectedValueOnce(new Error('No tab with id: 10'));
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await chromeService.tab.createTabsPageTab();
+
+      expect(create).toHaveBeenCalledWith({ active: true, url: tabsPageUrl });
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   test('tabsページ以外のタブは切り替え先にしない', async (): Promise<void> => {
@@ -361,6 +393,31 @@ describe('chromeService.tab.createTabsPageTab', (): void => {
 
     expect(update).not.toHaveBeenCalled();
     expect(create).toHaveBeenCalledWith({ active: true, url: tabsPageUrl });
+  });
+});
+
+describe('chromeService.tab.isTabsPage', (): void => {
+  beforeEach((): void => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      runtime: {
+        getURL: (path: string): string => `chrome-extension://abc/${path}`,
+      },
+    };
+  });
+
+  test.each([
+    ['urlがtabsページ', { url: 'chrome-extension://abc/tabs.html' }, true],
+    // 読み込みが始まったばかりのタブはurlが空でpendingUrlにだけ入る
+    [
+      '読み込み中のtabsページ',
+      { url: '', pendingUrl: 'chrome-extension://abc/tabs.html' },
+      true,
+    ],
+    ['別のページ', { url: 'https://example.com/' }, false],
+    ['urlを持たないタブ', {}, false],
+  ])('%sの判定は%s', (_name: string, tab: object, expected: boolean): void => {
+    expect(chromeService.tab.isTabsPage(tab as chrome.tabs.Tab)).toBe(expected);
   });
 });
 

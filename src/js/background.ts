@@ -18,7 +18,6 @@ function handleError(error: unknown): void {
  */
 async function saveCurrentWindowTabs(): Promise<void> {
   const tabLength = await chromeService.storage.getTabLength();
-  const tabsPageUrl = chromeService.tab.tabsPageUrl();
   // tabsページ自身は保存も終了もしない。保存対象に含めると一覧の中に
   // 一覧ページへのリンクが並んでしまい、終了対象に含めると
   // 切り替えた直後のtabsページを閉じてしまう
@@ -26,7 +25,7 @@ async function saveCurrentWindowTabs(): Promise<void> {
     await chromeService.tab.queryTabs({
       currentWindow: true,
     })
-  ).filter((tab) => tab.url !== tabsPageUrl);
+  ).filter((tab) => !chromeService.tab.isTabsPage(tab));
   // tabsページしか開いていないウィンドウでは保存するものがない。
   // 空のブロックを書くとindexだけ進んで無駄な欠番が増えるため、
   // tabsページへの切り替えだけを行う
