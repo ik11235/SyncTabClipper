@@ -11,14 +11,16 @@ interface MainProps {
   deleteBrokenBlock: (indexNum: number) => void;
 }
 
-// カードが並び替えで移動するときにかける時間。
-// 瞬間移動させるとどこからどこへ動いたのか分からないため、
-// 元の位置から新しい位置まで滑らせて見せる
-const BLOCK_MOVE_DURATION_MS = 500;
+// カードが並び替えで移動するときの見せ方 (#196)
+//
+// まず画面を移動先へ動かし、そこへカードを滑らせてくる。この順序にするのは、
+// 画面をカードと同じだけ動かす（カードを追いかける）とカードが画面内の同じ
+// 場所に留まってしまい、周囲だけが動いて本人は動いていないように見えるため。
+// 先頭へ動く場合だけはスクロールが上端で打ち止めになり、そのぶんカードが
+// 自力で滑るので見えていたが、途中へ動く場合は完全に追いついてしまう
+const BLOCK_SCROLL_DURATION_MS = 300;
+const BLOCK_SLIDE_DURATION_MS = 500;
 
-// 移動するカードと、それに追従する画面のスクロール。
-// カードのtransformと画面のスクロールを同じ時計・同じイージングで動かす。
-// 別々に動かすと、画面が先に移動先へ着いてしまってカードの移動が見えない
 type BlockMove = {
   card: HTMLElement;
   // 動き始めの位置（新しい位置からの相対値）
@@ -28,9 +30,8 @@ type BlockMove = {
 type CameraMove = {
   // 動き始めのスクロール位置
   from: number;
-  // 追うカードのレイアウト上の移動量。これと同じだけ画面を動かすと、
-  // カードは画面内の同じ場所に留まり、周囲のカードが流れて見える
-  delta: number;
+  // カードが滑ってくる先を見せるスクロール位置
+  to: number;
 };
 
 /**
@@ -53,51 +54,90 @@ function easeInOut(progress: number): number {
 }
 
 /**
- * カードの移動と画面の追従を一定時間かけて動かす。
- * requestAnimationFrameで自前に動かすのは、カードのtransformと画面の
- * スクロールを1つの時計で進めて、ずれないようにするため
+ * カードが滑ってくる先を見せるためのスクロール位置を求める。
+ * 移動先が画面に収まっているなら動かす必要がないので、そのままの位置を返す
+ * @param {HTMLElement} card 動くカード
+ * @param {number} top カードの移動先（レイアウト上の位置）
+ * @param {number} scrollY 動かす前のスクロール位置
+ * @return {number} 動かす先のスクロール位置
+ */
+function cameraTop(card: HTMLElement, top: number, scrollY: number): number {
+  const viewport = window.innerHeight;
+  const height = card.offsetHeight;
+  if (top >= scrollY && top + height <= scrollY + viewport) {
+    return scrollY;
+  }
+  // 画面の中央あたりに移動先を置く。上端や下端に寄せると、そこへ滑ってくる
+  // カードが画面の外から現れて動きの半分が見えない
+  return clampScrollTop(top - Math.max(0, (viewport - height) / 2));
+}
+
+/**
+ * 画面を移動先へ動かしてから、カードをそこへ滑らせる。
+ * 画面を動かしている間はカードを元の位置に留めておき、着いてから滑らせる
  * @param {BlockMove[]} moves 動かすカード
- * @param {CameraMove | null} camera 追従させる画面。追わない場合はnull
- * @param {number} duration かける時間(ms)
+ * @param {CameraMove | null} camera 動かす画面。動かさない場合はnull
+ * @param {number} scrollDuration 画面を動かすのにかける時間(ms)
+ * @param {number} slideDuration カードを滑らせるのにかける時間(ms)
  * @return {() => void} 途中で止める関数
  */
 function animateBlockMoves(
   moves: BlockMove[],
   camera: CameraMove | null,
-  duration: number,
+  scrollDuration: number,
+  slideDuration: number,
 ): () => void {
-  const apply = (eased: number): void => {
+  const slideCards = (eased: number): void => {
     for (const move of moves) {
       // 進み切ったらインラインスタイルを残さない
       move.card.style.transform =
         eased >= 1 ? '' : `translateY(${move.offset * (1 - eased)}px)`;
     }
-    if (camera != null) {
-      window.scrollTo({
-        top: clampScrollTop(camera.from + camera.delta * eased),
-      });
-    }
   };
-  // 最初のフレームを待たずに動き始めの位置へ置く。
-  // レイアウトeffectの中で描画前に効かせ、新しい位置が一瞬見えるのを防ぐ
-  apply(0);
+  // 最初のフレームを待たずに動き始めの状態にする。レイアウトeffectの中で
+  // 描画前に効かせ、新しい位置が一瞬見えるのを防ぐ。
+  // 画面の位置も押した時点へ戻す（カードが動いた瞬間にブラウザの
+  // スクロールアンカリングが位置を補正するため、そのままでは
+  // 押したときに見えていた景色から始まらない）
+  slideCards(0);
+  if (camera != null) {
+    window.scrollTo({ top: camera.from });
+  }
+  // 動かす必要がない画面に時間をかけない
+  const scrollMs =
+    camera == null || camera.to === camera.from ? 0 : scrollDuration;
   let startedAt: number | null = null;
   let frame = 0;
+  // 動かし終えた後も毎フレーム同じ位置を指示し続けないための目印
+  let scrollSettled = camera == null || scrollMs <= 0;
   const step = (now: number): void => {
     if (startedAt == null) {
       startedAt = now;
     }
-    const progress = Math.min((now - startedAt) / duration, 1);
-    apply(progress >= 1 ? 1 : easeInOut(progress));
-    if (progress < 1) {
-      frame = requestAnimationFrame(step);
+    const elapsed = now - startedAt;
+    if (camera != null && !scrollSettled) {
+      const progress = Math.min(elapsed / scrollMs, 1);
+      window.scrollTo({
+        top: camera.from + (camera.to - camera.from) * easeInOut(progress),
+      });
+      scrollSettled = progress >= 1;
     }
+    if (elapsed >= scrollMs) {
+      const progress = Math.min((elapsed - scrollMs) / slideDuration, 1);
+      slideCards(progress >= 1 ? 1 : easeInOut(progress));
+      if (progress >= 1) {
+        return;
+      }
+    }
+    frame = requestAnimationFrame(step);
   };
   frame = requestAnimationFrame(step);
   return (): void => {
     cancelAnimationFrame(frame);
-    // 中断しても新しい位置には着かせる。transformが残ると位置がずれたまま
-    apply(1);
+    // 中断してもカードは新しい位置に着かせる。transformが残ると位置がずれたまま。
+    // 画面はここでは動かさない（次の移動が自分の行き先へ動かすので、
+    // 途中の行き先へ寄せても直後に上書きされるだけ）
+    slideCards(1);
   };
 }
 
@@ -120,10 +160,8 @@ const Main: React.FC<MainProps> = (props) => {
   // 確定させたまま、transformだけを元の位置から戻すことで移動を見せる（FLIP）。
   // 一覧の高さもスクロール量も変えないので、他の操作の邪魔をしない。
   //
-  // お気に入りが付いたカードは、それと同じだけ画面もスクロールさせて追う。
-  // カードは画面内の同じ場所に留まり、周囲のカードが流れて見えるので、
-  // 「どこからどこへ動いたか」が分かる。画面を先に移動先へ動かしてしまうと、
-  // 着いた先でカードが現れるだけになって移動が見えない。
+  // お気に入りが付いたカードは移動先が画面の外になりうるので、先に画面を
+  // その位置まで動かし、着いてからカードを滑らせてくる。
   //
   // 依存配列を持たないのは、カードの高さが変わる操作（名前の編集など）でも
   // 位置がずれるため。記録が古いままだと、次の並び替えで存在しない位置から
@@ -167,9 +205,10 @@ const Main: React.FC<MainProps> = (props) => {
       }
       moves.push({ card: card, offset: previousTop - top });
       if (indexNum === followIndexNum) {
-        // 動き始めは押した時点のスクロール位置。アンカリングによる補正を
-        // ここで巻き戻し、押したときに見えていた景色から動かし始める
-        camera = { from: scrollYBefore, delta: top - previousTop };
+        camera = {
+          from: scrollYBefore,
+          to: cameraTop(card, top, scrollYBefore),
+        };
       }
     }
     previousTops.current = nextTops;
@@ -183,17 +222,18 @@ const Main: React.FC<MainProps> = (props) => {
     cancelRunningMoves.current = null;
 
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      // アニメーションを控える設定では滑らせない。それでも画面は追う。
-      // 追わないとアンカリングの補正だけが残り、カードが画面内で飛ぶ
+      // アニメーションを控える設定では滑らせない。それでも移動先は見せる。
+      // 見せないとアンカリングの補正だけが残り、カードが画面内で飛ぶ
       if (camera != null) {
-        window.scrollTo({ top: clampScrollTop(camera.from + camera.delta) });
+        window.scrollTo({ top: camera.to });
       }
       return;
     }
     cancelRunningMoves.current = animateBlockMoves(
       moves,
       camera,
-      BLOCK_MOVE_DURATION_MS,
+      BLOCK_SCROLL_DURATION_MS,
+      BLOCK_SLIDE_DURATION_MS,
     );
   });
 
