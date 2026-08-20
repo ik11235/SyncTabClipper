@@ -204,8 +204,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
    * ロックを知らないまま書き戻し、ロックごとブロックを消してしまう）
    */
   const toggleLock = (event: React.MouseEvent) => {
-    // ボタンのdisabledで塞いでいるが、保護をDOMの属性だけに預けない
-    if (tabsWriting || titleEditing || editing || lockSaving || starSaving) {
+    if (blockWriteBusy) {
       return;
     }
     // キーボードから起動したクリックはdetailが0になる。
@@ -246,8 +245,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
    * 保存データを変えさせない仕組みではない、という既存の立場のままとする
    */
   const toggleStar = (event: React.MouseEvent) => {
-    // ボタンのdisabledで塞いでいるが、保護をDOMの属性だけに預けない
-    if (tabsWriting || titleEditing || editing || lockSaving || starSaving) {
+    if (blockWriteBusy) {
       return;
     }
     // キーボードから起動したクリックはdetailが0になる（ロックと同じ判定）
@@ -435,6 +433,10 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // 古いままで、その間に始まったタブ操作はロックを知らないまま書き戻す。
   // スターの書き込み中も同じ（着地前のタブ操作はスターごと書き戻してしまう）
   const tabsLocked = editing || titleEditing || lockSaving || starSaving;
+  // カード全体に効く操作（ロック・お気に入り）を始めてよいか。
+  // どれもブロックごと書き戻すため、他の書き込みと並行すると打ち消し合う。
+  // ボタンのdisabledでも塞いでいるが、保護をDOMの属性だけに預けない
+  const blockWriteBusy = tabsWriting || tabsLocked;
 
   return (
     <div

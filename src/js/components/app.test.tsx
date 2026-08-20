@@ -290,6 +290,38 @@ describe('App', (): void => {
   };
 
   /**
+   * 並び替えの見せ方を確かめるための下準備。jsdomはレイアウトを持たないため、
+   * カードの位置・画面の高さ・スクロール位置をすべて自分で与える必要がある。
+   * 時間の進み方もこちらで握る（アニメーションはrequestAnimationFrameで動く）
+   * @param {number} initialScrollY 最初のスクロール位置
+   * @return {object} スクロールの記録・setBlockのspy・後片付けする関数
+   */
+  const stubMoveAnimation = (
+    initialScrollY: number,
+  ): {
+    scroll: ReturnType<typeof stubScrollableWindow>;
+    setBlockSpy: jest.SpyInstance;
+    restore: () => void;
+  } => {
+    const layoutStub = stubCardLayout();
+    const scroll = stubScrollableWindow(initialScrollY);
+    const setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    jest.useFakeTimers();
+    return {
+      scroll: scroll,
+      setBlockSpy: setBlockSpy,
+      restore: (): void => {
+        jest.useRealTimers();
+        scroll.restore();
+        layoutStub.mockRestore();
+        setBlockSpy.mockRestore();
+      },
+    };
+  };
+
+  /**
    * カードのtransformを現在の一覧の順に並べて返す
    * @return {string[]} 各カードのtransform（付いていなければ空文字列）
    */
@@ -315,12 +347,7 @@ describe('App', (): void => {
   // 位置が変わったカードを元の位置から滑らせて見せる
   test('並び替えで位置が変わったカードを元の位置から滑らせる', async (): Promise<void> => {
     twoBlocks();
-    const setBlockSpy = jest
-      .spyOn(chromeService.storage, 'setBlock')
-      .mockResolvedValue(undefined);
-    const layoutStub = stubCardLayout();
-    const scroll = stubScrollableWindow(500);
-    jest.useFakeTimers();
+    const { restore } = stubMoveAnimation(500);
 
     try {
       await mount();
@@ -354,10 +381,7 @@ describe('App', (): void => {
       jest.advanceTimersByTime(1000);
       expect(cardTransforms()).toEqual(['', '']);
     } finally {
-      jest.useRealTimers();
-      scroll.restore();
-      layoutStub.mockRestore();
-      setBlockSpy.mockRestore();
+      restore();
     }
   });
 
@@ -366,12 +390,7 @@ describe('App', (): void => {
   // そこへカードを滑らせてくる
   test('先に画面が移動先へ動き、その後カードが滑ってくる', async (): Promise<void> => {
     twoBlocks();
-    const setBlockSpy = jest
-      .spyOn(chromeService.storage, 'setBlock')
-      .mockResolvedValue(undefined);
-    const layoutStub = stubCardLayout();
-    const scroll = stubScrollableWindow(500);
-    jest.useFakeTimers();
+    const { scroll, restore } = stubMoveAnimation(500);
 
     try {
       await mount();
@@ -401,10 +420,7 @@ describe('App', (): void => {
       expect(scroll.tops.length).toBe(scrollCalls);
       expect(cardTransforms()).toEqual(['', '']);
     } finally {
-      jest.useRealTimers();
-      scroll.restore();
-      layoutStub.mockRestore();
-      setBlockSpy.mockRestore();
+      restore();
     }
   });
 
@@ -432,12 +448,7 @@ describe('App', (): void => {
         tabs: [{ url: 'https://example.com/c', title: 'tab-c' }],
       },
     ]);
-    const setBlockSpy = jest
-      .spyOn(chromeService.storage, 'setBlock')
-      .mockResolvedValue(undefined);
-    const layoutStub = stubCardLayout();
-    const scroll = stubScrollableWindow(1000);
-    jest.useFakeTimers();
+    const { scroll, restore } = stubMoveAnimation(1000);
 
     try {
       await mount();
@@ -476,10 +487,7 @@ describe('App', (): void => {
       expect(cardTransforms()).toEqual(['', '', '']);
       expect(scroll.tops.length).toBe(scrollCalls);
     } finally {
-      jest.useRealTimers();
-      scroll.restore();
-      layoutStub.mockRestore();
-      setBlockSpy.mockRestore();
+      restore();
     }
   });
 
@@ -498,13 +506,8 @@ describe('App', (): void => {
         tabs: [{ url: `https://example.com/${i}`, title: `tab-${i}` }],
       })),
     );
-    const setBlockSpy = jest
-      .spyOn(chromeService.storage, 'setBlock')
-      .mockResolvedValue(undefined);
-    const layoutStub = stubCardLayout();
     // スクロール位置0なら、移動先(400〜500)は画面(0〜768)に収まっている
-    const scroll = stubScrollableWindow(0);
-    jest.useFakeTimers();
+    const { scroll, restore } = stubMoveAnimation(0);
 
     try {
       await mount();
@@ -534,10 +537,7 @@ describe('App', (): void => {
       expect(cardTransforms()[4]).toBe('');
       expect(scroll.tops).toEqual([0]);
     } finally {
-      jest.useRealTimers();
-      scroll.restore();
-      layoutStub.mockRestore();
-      setBlockSpy.mockRestore();
+      restore();
     }
   });
 
@@ -548,17 +548,14 @@ describe('App', (): void => {
   test('画面の追従はブラウザの補正を巻き戻して押した時点から始まる', async (): Promise<void> => {
     twoBlocks();
     let settleWrite: () => void = () => {};
-    const setBlockSpy = jest
-      .spyOn(chromeService.storage, 'setBlock')
-      .mockImplementation(
-        () =>
-          new Promise<void>((resolve) => {
-            settleWrite = resolve;
-          }),
-      );
-    const layoutStub = stubCardLayout();
-    const scroll = stubScrollableWindow(500);
-    jest.useFakeTimers();
+    const { scroll, setBlockSpy, restore } = stubMoveAnimation(500);
+    // 書き込みが着地するタイミングをテスト側で握る
+    setBlockSpy.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          settleWrite = resolve;
+        }),
+    );
 
     try {
       await mount();
@@ -578,10 +575,7 @@ describe('App', (): void => {
       jest.advanceTimersByTime(600);
       expect(scroll.tops[scroll.tops.length - 1]).toBe(0);
     } finally {
-      jest.useRealTimers();
-      scroll.restore();
-      layoutStub.mockRestore();
-      setBlockSpy.mockRestore();
+      restore();
     }
   });
 
@@ -603,12 +597,7 @@ describe('App', (): void => {
         tabs: [{ url: 'https://example.com/b', title: 'tab-b' }],
       },
     ]);
-    const setBlockSpy = jest
-      .spyOn(chromeService.storage, 'setBlock')
-      .mockResolvedValue(undefined);
-    const layoutStub = stubCardLayout();
-    const scroll = stubScrollableWindow(500);
-    jest.useFakeTimers();
+    const { scroll, restore } = stubMoveAnimation(500);
 
     try {
       await mount();
@@ -639,10 +628,7 @@ describe('App', (): void => {
       jest.advanceTimersByTime(600);
       expect(scroll.tops).toEqual([]);
     } finally {
-      jest.useRealTimers();
-      scroll.restore();
-      layoutStub.mockRestore();
-      setBlockSpy.mockRestore();
+      restore();
     }
   });
 
@@ -650,12 +636,7 @@ describe('App', (): void => {
   // 位置が変わっていないカードを動かすと、その場で無駄に揺れる
   test('位置が変わらなければカードも画面も動かさない', async (): Promise<void> => {
     twoBlocks();
-    const setBlockSpy = jest
-      .spyOn(chromeService.storage, 'setBlock')
-      .mockResolvedValue(undefined);
-    const layoutStub = stubCardLayout();
-    const scroll = stubScrollableWindow(500);
-    jest.useFakeTimers();
+    const { scroll, setBlockSpy, restore } = stubMoveAnimation(500);
 
     try {
       await mount();
@@ -674,10 +655,7 @@ describe('App', (): void => {
       expect(cardTransforms()).toEqual(['', '']);
       expect(scroll.tops).toEqual([]);
     } finally {
-      jest.useRealTimers();
-      scroll.restore();
-      layoutStub.mockRestore();
-      setBlockSpy.mockRestore();
+      restore();
     }
   });
 
@@ -685,15 +663,10 @@ describe('App', (): void => {
   // 追わないとブラウザのスクロール補正だけが残り、カードが画面内で飛ぶ
   test('アニメーションを控える設定なら滑らせず一度で追従する', async (): Promise<void> => {
     twoBlocks();
-    const setBlockSpy = jest
-      .spyOn(chromeService.storage, 'setBlock')
-      .mockResolvedValue(undefined);
-    const layoutStub = stubCardLayout();
-    const scroll = stubScrollableWindow(500);
+    const { scroll, restore } = stubMoveAnimation(500);
     const matchMediaSpy = jest
       .spyOn(window, 'matchMedia')
       .mockReturnValue({ matches: true } as MediaQueryList);
-    jest.useFakeTimers();
 
     try {
       await mount();
@@ -710,11 +683,8 @@ describe('App', (): void => {
       // 画面は一度で移動先を見せる位置へ
       expect(scroll.tops).toEqual([0]);
     } finally {
-      jest.useRealTimers();
       matchMediaSpy.mockRestore();
-      scroll.restore();
-      layoutStub.mockRestore();
-      setBlockSpy.mockRestore();
+      restore();
     }
   });
 
@@ -773,6 +743,8 @@ describe('App', (): void => {
   // コミットする前に走って何も起きなかった。その回帰を止める
   test('本番と同じ順序でも並び替えの後に画面が追従する', async (): Promise<void> => {
     twoBlocks();
+    // このテストだけは本番のスケジューラの順序を見るため、時間を偽らずに動かす
+    // （stubMoveAnimationはfake timersを張るので使えない）
     const setBlockSpy = jest
       .spyOn(chromeService.storage, 'setBlock')
       .mockResolvedValue(undefined);
