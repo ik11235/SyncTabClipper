@@ -392,7 +392,8 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // スターは並び順も変えるためカード自体が一覧内を移動するが、
   // ボタンはアンマウントされないのでrefから同じ要素へ戻せる。
   // preventScrollを付けるのは、フォーカスに伴うブラウザの瞬間スクロールが、
-  // Main側がカードの移動に合わせて見せているスクロールを乱すため
+  // useBlockMoveAnimationがカードの移動に合わせて見せているスクロールを
+  // 乱すため
   const starWasSaving = useRef(false);
   useEffect(() => {
     if (starWasSaving.current && !starSaving) {
@@ -441,7 +442,8 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   return (
     <div
       className="tabs uk-card-default block-root-dom"
-      // 並び替えで動いたカードを見分けるための印。Main側が位置を追跡する
+      // 並び替えで動いたカードを見分けるための印。
+      // useBlockMoveAnimationがこれで位置を追跡する
       data-block-index={block.indexNum}
       ref={cardRoot}
     >

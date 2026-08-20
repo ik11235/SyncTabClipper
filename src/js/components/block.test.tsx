@@ -1331,8 +1331,8 @@ describe('Block お気に入り', (): void => {
     expect(status.classList.contains('uk-hidden-visually')).toBe(true);
   });
 
-  // フォーカスに伴うブラウザの瞬間スクロールは、Main側がカードの移動に
-  // 合わせて見せているスクロールを乱す
+  // フォーカスに伴うブラウザの瞬間スクロールは、useBlockMoveAnimationが
+  // カードの移動に合わせて見せているスクロールを乱す
   test('キーボードのフォーカス復帰でスクロールを起こさない', async (): Promise<void> => {
     const updateBlock = jest.fn().mockResolvedValue(undefined);
     await mount(updateBlock);
