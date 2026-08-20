@@ -5,6 +5,7 @@ import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import App from './app';
 import { chromeService } from '../chromeService';
+import { model } from '../types/interface';
 
 // テスティングライブラリを介さず素のactを使うため必要
 (
@@ -29,6 +30,15 @@ describe('App', (): void => {
       root = createRoot(container);
       root.render(<App />);
     });
+  };
+
+  // storage.syncの変更をChromeと同様に購読側へ通知する
+  const notifySync = (changes: {
+    [key: string]: chrome.storage.StorageChange;
+  }): void => {
+    for (const listener of onChangedListeners) {
+      listener(changes, 'sync');
+    }
   };
 
   beforeEach((): void => {
@@ -1511,5 +1521,132 @@ describe('App', (): void => {
     } finally {
       consoleErrorSpy.mockRestore();
     }
+  });
+  // 一覧はマウント時のstorageの内容を持ち続けるため、他のtabsページや
+  // 他の端末(sync)での変更に追随できないと、古い一覧からの書き戻しで
+  // 相手の変更を消してしまう
+  test('ブロックの保存データが変わると一覧を読み直す', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/a', title: 'tab-a' }],
+      },
+    ]);
+
+    await mount();
+    expect(container.textContent).toContain('tab-a');
+
+    // 他のtabsページがブロックに名前を付けた状況
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        title: 'title-from-other-tab',
+        tabs: [{ url: 'https://example.com/a', title: 'tab-a' }],
+      },
+    ]);
+    await act(async () => {
+      notifySync({ td_0: { newValue: 'changed' } });
+    });
+
+    expect(container.textContent).toContain('title-from-other-tab');
+  });
+
+  test('ブロック数が変わると一覧を読み直す', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([]);
+
+    await mount();
+    expect(container.textContent).toContain('content_msg_not_tab');
+
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/a', title: 'tab-a' }],
+      },
+    ]);
+    await act(async () => {
+      notifySync({ t_len: { newValue: '1' } });
+    });
+
+    expect(container.textContent).toContain('tab-a');
+  });
+
+  test.each([
+    ['一覧に関係のないsyncのキー', { other: { newValue: 'x' } }, 'sync'],
+    ['localの変更', { td_0: { newValue: 'x' } }, 'local'],
+  ])(
+    '%sでは一覧を読み直さない',
+    async (
+      _name: string,
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string,
+    ): Promise<void> => {
+      getAllBlockSpy.mockResolvedValue([]);
+
+      await mount();
+      expect(getAllBlockSpy).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        for (const listener of onChangedListeners) {
+          listener(changes, areaName);
+        }
+      });
+
+      expect(getAllBlockSpy).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  // 変更が連続すると読み直しが並行する。先に始まった読み込みが後から着地して
+  // 古い一覧に戻してしまうと、追随したつもりで stale な state に戻る
+  test('読み直しが並行しても後から始めた結果が残る', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [{ url: 'https://example.com/a', title: 'tab-a' }],
+      },
+    ]);
+
+    await mount();
+
+    let resolveStale: (entries: model.BlockEntry[]) => void = () => undefined;
+    getAllBlockSpy.mockImplementationOnce(
+      () =>
+        new Promise<model.BlockEntry[]>((resolve) => {
+          resolveStale = resolve;
+        }),
+    );
+    getAllBlockSpy.mockImplementationOnce(() =>
+      Promise.resolve([
+        {
+          indexNum: 0,
+          createdAt: new Date('2021-01-02T03:04:05.678Z'),
+          tabs: [{ url: 'https://example.com/c', title: 'tab-c' }],
+        },
+      ]),
+    );
+
+    // 1回目(遅い)と2回目(速い)の読み直しを続けて始めさせる
+    await act(async () => {
+      notifySync({ td_0: { newValue: 'first' } });
+      notifySync({ td_0: { newValue: 'second' } });
+    });
+    expect(container.textContent).toContain('tab-c');
+
+    // 遅れて着地した1回目の結果は捨てる
+    await act(async () => {
+      resolveStale([
+        {
+          indexNum: 0,
+          createdAt: new Date('2021-01-02T03:04:05.678Z'),
+          tabs: [{ url: 'https://example.com/b', title: 'tab-b' }],
+        },
+      ]);
+    });
+
+    expect(container.textContent).toContain('tab-c');
+    expect(container.textContent).not.toContain('tab-b');
   });
 });

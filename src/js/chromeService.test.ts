@@ -245,3 +245,136 @@ describe('chromeService.storage.getAllBlock', (): void => {
     ]);
   });
 });
+
+describe('chromeService.tab.createTabsPageTab', (): void => {
+  const tabsPageUrl = 'chrome-extension://abc/tabs.html';
+  let openedTabs: chrome.tabs.Tab[];
+  let queried: chrome.tabs.QueryInfo[];
+  const create = jest.fn();
+  const update = jest.fn();
+  const updateWindow = jest.fn();
+
+  beforeEach((): void => {
+    openedTabs = [];
+    queried = [];
+    create.mockClear();
+    update.mockClear();
+    updateWindow.mockClear();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      runtime: {
+        getURL: (path: string): string => `chrome-extension://abc/${path}`,
+      },
+      tabs: {
+        query: (
+          queryInfo: chrome.tabs.QueryInfo,
+        ): Promise<chrome.tabs.Tab[]> => {
+          queried.push(queryInfo);
+          return Promise.resolve(
+            openedTabs.filter(
+              (tab) =>
+                tab.url === queryInfo.url &&
+                (queryInfo.currentWindow !== true || tab.windowId === 1),
+            ),
+          );
+        },
+        create: create,
+        update: update,
+      },
+      windows: {
+        update: updateWindow,
+      },
+    };
+  });
+
+  /**
+   * 開かれているタブを1件作る
+   * @param {number} id タブのid
+   * @param {number} windowId タブが属するウィンドウのid(1を現在のウィンドウとする)
+   * @param {string} url タブのURL
+   * @return {chrome.tabs.Tab} 作ったタブ
+   */
+  const tab = (id: number, windowId: number, url: string): chrome.tabs.Tab =>
+    ({ id: id, windowId: windowId, url: url }) as chrome.tabs.Tab;
+
+  test('tabsページが開かれていなければ新しいタブで開く', async (): Promise<void> => {
+    await chromeService.tab.createTabsPageTab();
+
+    expect(create).toHaveBeenCalledWith({ active: true, url: tabsPageUrl });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  // 一覧を複数枚開くと古い一覧からの書き戻しで変更が失われるため、
+  // 開いているtabsページがあれば増やさずそこへ切り替える
+  test('同じウィンドウにtabsページがあれば新しく開かずそのタブへ切り替える', async (): Promise<void> => {
+    openedTabs = [tab(10, 1, tabsPageUrl)];
+
+    await chromeService.tab.createTabsPageTab();
+
+    expect(create).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(10, { active: true });
+    expect(updateWindow).toHaveBeenCalledWith(1, { focused: true });
+  });
+
+  // アクティブにするだけでは背面のウィンドウは前に出てこない
+  test('別のウィンドウにあるtabsページへ切り替えるときはウィンドウもフォーカスする', async (): Promise<void> => {
+    openedTabs = [tab(20, 2, tabsPageUrl)];
+
+    await chromeService.tab.createTabsPageTab();
+
+    expect(create).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(20, { active: true });
+    expect(updateWindow).toHaveBeenCalledWith(2, { focused: true });
+  });
+
+  // ユーザーが自力で複数枚開いている状況は起こりうる。
+  // 勝手に閉じたりせず、見えているウィンドウのものへ切り替える
+  test('複数枚開かれているときは現在のウィンドウのタブを選び、他は閉じない', async (): Promise<void> => {
+    openedTabs = [tab(20, 2, tabsPageUrl), tab(10, 1, tabsPageUrl)];
+
+    await chromeService.tab.createTabsPageTab();
+
+    expect(create).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(10, { active: true });
+  });
+
+  test('現在のウィンドウになければ他のウィンドウのtabsページへ切り替える', async (): Promise<void> => {
+    openedTabs = [tab(20, 2, tabsPageUrl), tab(30, 3, tabsPageUrl)];
+
+    await chromeService.tab.createTabsPageTab();
+
+    expect(create).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(20, { active: true });
+    // 現在のウィンドウを先に探し、見つからなければ全ウィンドウから探す
+    expect(queried).toEqual([
+      { url: tabsPageUrl, currentWindow: true },
+      { url: tabsPageUrl },
+    ]);
+  });
+
+  test('tabsページ以外のタブは切り替え先にしない', async (): Promise<void> => {
+    openedTabs = [tab(10, 1, 'https://example.com/')];
+
+    await chromeService.tab.createTabsPageTab();
+
+    expect(update).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledWith({ active: true, url: tabsPageUrl });
+  });
+});
+
+describe('chromeService.storage.isBlockDataKey', (): void => {
+  test.each([
+    ['t_len', true],
+    ['td_0', true],
+    ['td_12', true],
+    ['td_', false],
+    ['td_x', false],
+    ['td_1x', false],
+    ['error', false],
+    ['', false],
+  ])('%sの判定は%s', (key: string, expected: boolean): void => {
+    expect(chromeService.storage.isBlockDataKey(key)).toBe(expected);
+  });
+});

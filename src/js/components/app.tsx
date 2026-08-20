@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { model } from '../types/interface';
 import { blockService } from '../blockService';
 import { chromeService } from '../chromeService';
@@ -13,14 +19,46 @@ const App: React.FC = () => {
   // Main/Blockはpropsの表示に徹する（nullはロード中を表す）
   const [blocks, setBlocks] = useState<model.BlockEntry[] | null>(null);
 
-  useEffect(() => {
+  // 読み込みの世代番号。storageの変更が連続すると再読込が並行し、
+  // 先に始まった読み込みが後から着地して古い一覧に戻すことがあるため、
+  // 最後に始めた読み込みの結果だけをstateへ反映する
+  const loadGeneration = useRef(0);
+
+  const reload = useCallback((): void => {
+    loadGeneration.current += 1;
+    const generation = loadGeneration.current;
     chromeService.storage
       .getAllBlock()
-      .then(setBlocks)
+      .then((entries) => {
+        if (generation === loadGeneration.current) {
+          setBlocks(entries);
+        }
+      })
       .catch((error) => {
         chromeService.errorLog.set(error).catch(console.error);
       });
   }, []);
+
+  useEffect(() => {
+    reload();
+
+    // 一覧はマウント時に読んだstorageの内容を持ち続けるため、他のtabsページや
+    // 他の端末(sync)での変更を知らずに書き戻すと相手の変更を消してしまう。
+    // ブロックの保存データが変わったら読み直して追随する
+    const onChanged = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string,
+    ) => {
+      if (
+        areaName === 'sync' &&
+        Object.keys(changes).some(chromeService.storage.isBlockDataKey)
+      ) {
+        reload();
+      }
+    };
+    chrome.storage.onChanged.addListener(onChanged);
+    return () => chrome.storage.onChanged.removeListener(onChanged);
+  }, [reload]);
 
   // ブロックの変更をstorageへ永続化し、成功時のみstateへ反映する。
   // タブが空になったブロックはstorage側で削除されるため一覧からも除く。

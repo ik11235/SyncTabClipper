@@ -12,17 +12,29 @@ function handleError(error: unknown): void {
 }
 
 /**
- * 現在のウィンドウの全タブを保存してtabsページを開き、元のタブを閉じる
+ * 現在のウィンドウの全タブを保存してtabsページを開き、元のタブを閉じる。
+ * tabsページ自身は保存もタブの終了も対象にしない
  * @return {Promise<void>}
  */
 async function saveCurrentWindowTabs(): Promise<void> {
   const tabLength = await chromeService.storage.getTabLength();
-  const currentTabs = await chromeService.tab.queryTabs({
-    currentWindow: true,
-  });
-  const block = blockService.createBlock(currentTabs, new Date(), tabLength);
-  await chromeService.storage.setBlock(block);
-  await chromeService.storage.setTabLength(tabLength + 1);
+  const tabsPageUrl = chromeService.tab.tabsPageUrl();
+  // tabsページ自身は保存も終了もしない。保存対象に含めると一覧の中に
+  // 一覧ページへのリンクが並んでしまい、終了対象に含めると
+  // 切り替えた直後のtabsページを閉じてしまう
+  const currentTabs = (
+    await chromeService.tab.queryTabs({
+      currentWindow: true,
+    })
+  ).filter((tab) => tab.url !== tabsPageUrl);
+  // tabsページしか開いていないウィンドウでは保存するものがない。
+  // 空のブロックを書くとindexだけ進んで無駄な欠番が増えるため、
+  // tabsページへの切り替えだけを行う
+  if (currentTabs.length > 0) {
+    const block = blockService.createBlock(currentTabs, new Date(), tabLength);
+    await chromeService.storage.setBlock(block);
+    await chromeService.storage.setTabLength(tabLength + 1);
+  }
   await chromeService.tab.createTabsPageTab();
   await chromeService.tab.closeTabs(currentTabs);
 }

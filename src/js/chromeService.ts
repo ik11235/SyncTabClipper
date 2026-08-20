@@ -7,6 +7,17 @@ export namespace chromeService {
     const tabLengthKey: string = 't_len';
     const tabKey = (index: number): string => `td_${index}`;
 
+    /**
+     * storage.syncのキーがブロック一覧の内容に関わるものかを返す。
+     * storage.onChangedの購読側が、一覧に関係のない変更で
+     * 読み直さないための判定に使う
+     * @param {string} key 変更されたstorageのキー
+     * @return {boolean} ブロックの保存データ or ブロック数のキーならtrue
+     */
+    export function isBlockDataKey(key: string): boolean {
+      return key === tabLengthKey || /^td_\d+$/.test(key);
+    }
+
     function deleteSyncStorage(key: string): Promise<void> {
       return chrome.storage.sync.remove(key);
     }
@@ -155,8 +166,37 @@ export namespace chromeService {
       return chrome.tabs.query(queryInfo);
     }
 
+    export function tabsPageUrl(): string {
+      return chrome.runtime.getURL('tabs.html');
+    }
+
+    /**
+     * tabsページを開く。既に開かれているtabsページがあれば新規に開かず
+     * そのタブへ切り替える。一覧はマウント時のstorageの内容を持つため、
+     * 同じ端末で複数枚開かれていると古い一覧からの書き戻しで
+     * 他のタブでの変更が失われる。開く枚数を1枚に寄せて頻度を下げる
+     * （ユーザーが自力で複数枚開いた状態は起こりうるため、
+     * その場合も残りを閉じたりはせず1枚を選んで切り替える）
+     * @return {Promise<void>}
+     */
     export async function createTabsPageTab(): Promise<void> {
-      const url = chrome.runtime.getURL('tabs.html');
+      const url = tabsPageUrl();
+      // ユーザーが複数枚開いている場合は、今見ているウィンドウのものを優先する。
+      // 見えない別ウィンドウのタブへ飛ばされるより驚きが小さい
+      const inCurrentWindow = await queryTabs({
+        url: url,
+        currentWindow: true,
+      });
+      const target = inCurrentWindow[0] ?? (await queryTabs({ url: url }))[0];
+      if (target?.id != null) {
+        await chrome.tabs.update(target.id, { active: true });
+        // 別ウィンドウにあるtabsページはアクティブにしても前面に来ないため、
+        // ウィンドウ自体もフォーカスする
+        if (target.windowId != null) {
+          await chrome.windows.update(target.windowId, { focused: true });
+        }
+        return;
+      }
       await chrome.tabs.create({
         active: true,
         url: url,
