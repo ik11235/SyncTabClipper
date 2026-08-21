@@ -347,11 +347,9 @@ export namespace blockService {
       }
       blockObjs = json.blocks;
     }
-    // 1件でも書き込めないブロックが混ざっていると一部だけ書き込まれた状態になる。
-    // 書き込めた分は一覧に出るようになった（採番も保存済みindexの最大値+1なので
-    // 次回保存で上書きされない）が、途中で例外になると残りが書き込まれないため、
-    // スキーマ由来のものは書き込む前にまとめて弾く。
-    // 書き込み自体の失敗（8KB制限超過など）による部分書き込みは別課題
+    // スキーマ由来の不正は、1件でも混ざっていれば書き込む前にまとめて弾く。
+    // 書き込みを始めてから気付くと、一部だけ書き込まれた状態で
+    // 中断することになる
     if (!Array.isArray(blockObjs)) {
       throw new Error('Invalid data: blocks is not an array');
     }
@@ -360,10 +358,32 @@ export namespace blockService {
     }
     const blocks = blockListForJsonObject(blockObjs, nextIndex);
 
-    await Promise.all(
+    // 8KB制限超過などで書き込めないブロックが混ざっていても、
+    // 書き込めた分は残す。Promise.allで打ち切ると、書き込み済みのブロックを
+    // 残したまま例外だけが上がり、ユーザーには全部失敗したようにしか見えない
+    const results = await Promise.allSettled(
       blocks.map((block) => chromeService.storage.setBlock(block)),
     );
+    const failed = results.filter((result) => result.status === 'rejected');
+    for (const result of failed) {
+      console.error(result.reason);
+    }
     await chromeService.storage.setTabLength(nextIndex + blockObjs.length);
+    if (failed.length > 0) {
+      // このあとページを読み込み直すため、alertでは伝えられない。
+      // errorLogはstorage.localに残り、読み込み直したページの
+      // ErrorDisplayが拾う
+      // 通知に失敗してもrejectさせない。書き込みは済んでいるのに
+      // 呼び出し側の.catchが「インポートに失敗しました」を出してしまう
+      await chromeService.errorLog
+        .set(
+          chrome.i18n.getMessage('content_msg_import_partial_failure', [
+            String(blocks.length),
+            String(failed.length),
+          ]),
+        )
+        .catch(console.error);
+    }
     chrome.tabs.reload({ bypassCache: true });
   }
 }

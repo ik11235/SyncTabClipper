@@ -159,6 +159,17 @@
   "content_msg_edit_block_title_save_failed": {
     "message": "Failed to save. Please try again."
   },
+  "content_msg_import_partial_failure": {
+    "message": "$failed$ of $total$ block(s) could not be written. The blocks that were written are shown in the list.",
+    "placeholders": {
+      "total": {
+        "content": "$1"
+      },
+      "failed": {
+        "content": "$2"
+      }
+    }
+  },
   "content_msg_export_broken_block": {
     "message": "$count$ block(s) could not be loaded and are not included in the exported data. This backup is incomplete. Please check its contents before deleting all data.",
     "placeholders": {

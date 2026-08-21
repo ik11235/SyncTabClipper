@@ -938,6 +938,109 @@ describe('blockService import/export', (): void => {
     expect(setTabLengthSpy).not.toHaveBeenCalled();
   });
 
+  // 1件でも書き込めないとsetTabLengthに到達せず、書き込めたブロックが
+  // t_lenの外側に取り残されていた(#232)。
+  // 書き込めた分は残し、失敗はerrorLog経由で伝える
+  describe('importAllDataJson 書き込みが一部失敗したとき', (): void => {
+    // 3ブロックのうち2件目だけが8KB制限に引っかかる想定
+    const json =
+      '{"v":2,"ev":"0.8.0","blocks":[' +
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a"}]},' +
+      '{"created_at":1609556645679,"tabs":[{"url":"https://example.com/b","title":"b"}]},' +
+      '{"created_at":1609556645680,"tabs":[{"url":"https://example.com/c","title":"c"}]}]}';
+    let errorLogSetSpy: jest.SpyInstance;
+    let consoleErrorSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      setBlockSpy.mockImplementation((block: model.Block) =>
+        block.indexNum === 4
+          ? Promise.reject(new Error('QUOTA_BYTES_PER_ITEM quota exceeded'))
+          : Promise.resolve(undefined),
+      );
+      errorLogSetSpy = jest
+        .spyOn(chromeService.errorLog, 'set')
+        .mockResolvedValue(undefined);
+      // 失敗した書き込みの内容はconsole.errorに出す
+      consoleErrorSpy = jest
+        .spyOn(console, 'error')
+        .mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      errorLogSetSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    });
+
+    test('書き込めたブロックはそのまま残す', async (): Promise<void> => {
+      await blockService.importAllDataJson(json);
+
+      expect(setBlockSpy).toHaveBeenCalledTimes(3);
+      expect(
+        setBlockSpy.mock.calls.map((call) => call[0].indexNum),
+      ).toStrictEqual([3, 4, 5]);
+    });
+
+    // ここに到達しないと、書き込めたブロックがt_lenの外側に取り残される。
+    // 一覧はキーから作るので出はするが、旧バージョンの端末では見えない
+    test('失敗しても互換のt_lenは書き込む', async (): Promise<void> => {
+      await blockService.importAllDataJson(json);
+
+      expect(setTabLengthSpy).toHaveBeenCalledWith(6);
+    });
+
+    test('失敗件数をerrorLogで通知する', async (): Promise<void> => {
+      await blockService.importAllDataJson(json);
+
+      expect(errorLogSetSpy).toHaveBeenCalledWith(
+        'content_msg_import_partial_failure:["3","1"]',
+      );
+    });
+
+    // 呼び出し側の.catchが「インポートに失敗しました」を出すと、
+    // 書き込めたブロックがあることが伝わらない
+    test('rejectせずに完了する', async (): Promise<void> => {
+      await expect(
+        blockService.importAllDataJson(json),
+      ).resolves.toBeUndefined();
+      expect(reload).toHaveBeenCalledTimes(1);
+    });
+
+    test('通知に失敗してもrejectしない', async (): Promise<void> => {
+      errorLogSetSpy.mockRejectedValue(new Error('storage failed'));
+
+      await expect(
+        blockService.importAllDataJson(json),
+      ).resolves.toBeUndefined();
+      expect(setTabLengthSpy).toHaveBeenCalledWith(6);
+    });
+
+    test('全件失敗しても書き込めた件数0として通知する', async (): Promise<void> => {
+      setBlockSpy.mockRejectedValue(new Error('quota exceeded'));
+
+      await blockService.importAllDataJson(json);
+
+      expect(errorLogSetSpy).toHaveBeenCalledWith(
+        'content_msg_import_partial_failure:["3","3"]',
+      );
+    });
+  });
+
+  test('importAllDataJson 全件書き込めたらerrorLogに流さない', async (): Promise<void> => {
+    const errorLogSetSpy = jest
+      .spyOn(chromeService.errorLog, 'set')
+      .mockResolvedValue(undefined);
+
+    try {
+      await blockService.importAllDataJson(
+        '{"v":2,"blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a"}]}]}',
+      );
+
+      expect(errorLogSetSpy).not.toHaveBeenCalled();
+    } finally {
+      errorLogSetSpy.mockRestore();
+    }
+  });
+
   // 途中まで書き込んだ状態でsetTabLengthに到達すると、書き込んだブロックが
   // 一覧に出ないまま次回保存で上書きされるため、書き込む前に弾く
   test.each([
