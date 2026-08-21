@@ -288,6 +288,8 @@ describe('chromeService.storage.getAllBlock', (): void => {
   test.each([
     ['先頭ゼロ', 'td_007'],
     ['安全な整数を超える桁数', 'td_111111111111111111111'],
+    // 文字列としては往復するが、+1しても増えないためindexとして使えない
+    ['安全な整数の直上', 'td_9007199254740992'],
   ])(
     'indexへ往復できないキー(%s)は一覧に含めない',
     async (_name: string, key: string): Promise<void> => {
@@ -299,6 +301,16 @@ describe('chromeService.storage.getAllBlock', (): void => {
       expect(res.map((entry) => entry.indexNum)).toEqual([0]);
     },
   );
+
+  // 弾く側だけを固定すると、正常な大きいindexまで巻き添えにする変更が
+  // テストをすり抜ける
+  test('安全な整数の範囲内なら大きいindexでも一覧に含める', async (): Promise<void> => {
+    syncData['td_9007199254740991'] = validJson(1640000000000, 'valid');
+
+    const res = await chromeService.storage.getAllBlock();
+
+    expect(res.map((entry) => entry.indexNum)).toEqual([9007199254740991]);
+  });
 
   test('td_0とtd_00が両方あってもtd_0だけを返す', async (): Promise<void> => {
     syncData['td_0'] = validJson(1640000000000, 'valid');
@@ -424,6 +436,26 @@ describe('chromeService.storage.getNextBlockIndex', (): void => {
     syncData['td_2'] = 'dummy';
 
     expect(await chromeService.storage.getNextBlockIndex()).toBe(3);
+  });
+
+  // 安全な整数を超えるindexで保存すると、書いたキーを読み戻せなくなり、
+  // 保存したブロックが一覧にも出ず削除もできなくなる。
+  // 単調性を諦めてでも、読み書きできるindexを返す
+  test('indexをこれ以上進められないときは空いている最小のindexを返す', async (): Promise<void> => {
+    syncData['td_9007199254740991'] = 'dummy';
+
+    const res = await chromeService.storage.getNextBlockIndex();
+
+    expect(Number.isSafeInteger(res)).toBe(true);
+    expect(res).toBe(0);
+  });
+
+  test('空いている最小のindexを探すとき使用中のindexは飛ばす', async (): Promise<void> => {
+    syncData['td_9007199254740991'] = 'dummy';
+    syncData['td_0'] = 'dummy';
+    syncData['td_1'] = 'dummy';
+
+    expect(await chromeService.storage.getNextBlockIndex()).toBe(2);
   });
 
   // 削除でindexに穴が空いてもt_lenは減らないため、

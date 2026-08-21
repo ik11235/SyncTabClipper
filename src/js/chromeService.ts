@@ -70,18 +70,20 @@ export namespace chromeService {
      * 「t_lenが壊れると一覧が全滅する」「t_lenの外側のブロックが
      * 一覧に出ないまま次回保存で上書きされる」という取りこぼしが起きる
      * @param {{[key: string]: unknown}} items storage.syncの全アイテム
-     * @return {[number, string][]} [index, 保存データ]の配列。indexの昇順
+     * @return {[number, unknown][]} [index, 保存データ]の配列。indexの昇順
      */
     function blockDataOf(items: {
       [key: string]: unknown;
-    }): [number, string][] {
-      const blockData: [number, string][] = [];
+    }): [number, unknown][] {
+      const blockData: [number, unknown][] = [];
       for (const [key, value] of Object.entries(items)) {
         const indexNum = blockIndexOf(key);
         if (indexNum == null) {
           continue;
         }
-        blockData.push([indexNum, value as string]);
+        // 保存しているのは文字列だが、storageが壊れていれば別の型で返る。
+        // 型を偽らずinflateEntryに判定させる
+        blockData.push([indexNum, value]);
       }
       // キーの列挙順は辞書順(td_10がtd_2より前)なので、そのまま流すと
       // compareBlockEntryが同着と判定するブロックの並びが
@@ -93,9 +95,11 @@ export namespace chromeService {
      * 採番の下限としてt_lenを読む。
      * t_lenは互換のために書き続けている「使用済みかもしれない範囲」の
      * 手がかりでしかなく、一覧の走査範囲には使わない。
-     * これを無視すると全件削除のあとにindexが0から再利用され、
-     * 同期の遅れた端末が持つ古いtd_0の書き戻しとキーが衝突して、
+     * これを無視すると、末尾のブロックを削除したあとに同じindexが
+     * 再利用され、同期の遅れた端末が持つ古い同じキーの書き戻しと衝突して、
      * 保存したばかりのブロックが古いもので上書きされうる。
+     * （storage.syncごと消すallClearではt_lenも消えるため、
+     * 全データ削除のあとのindexは0に戻る。そこはこの手がかりの守備範囲外）
      * 壊れていても採番は止めてはいけないので、
      * 数値にできない値は手がかりなし(0)として扱う
      * @param {{[key: string]: unknown}} items storage.syncの全アイテム
@@ -107,6 +111,22 @@ export namespace chromeService {
         return 0;
       }
       return tabLength;
+    }
+
+    /**
+     * まだ使われていない最小のindexを返す。
+     * indexを単調に進められなくなったときの逃げ道なので、
+     * 空いている番号を埋める形で採番する
+     * @param {[number, unknown][]} blockData 保存されているブロックのデータ
+     * @return {number} 未使用のindex
+     */
+    function smallestUnusedIndex(blockData: [number, unknown][]): number {
+      const used = new Set(blockData.map(([indexNum]) => indexNum));
+      let indexNum = 0;
+      while (used.has(indexNum)) {
+        indexNum += 1;
+      }
+      return indexNum;
     }
 
     export async function setBlock(block: model.Block): Promise<void> {
@@ -160,10 +180,18 @@ export namespace chromeService {
      */
     export async function getNextBlockIndex(): Promise<number> {
       const items = await getAllSyncItems();
-      return blockDataOf(items).reduce(
+      const blockData = blockDataOf(items);
+      const nextIndex = blockData.reduce(
         (next, [indexNum]) => Math.max(next, indexNum + 1),
         tabLengthHintOf(items),
       );
+      if (Number.isSafeInteger(nextIndex)) {
+        return nextIndex;
+      }
+      // 安全な整数を超えるindexで保存すると、書いたキーをblockIndexOfが
+      // 拾えなくなり、保存したブロックが一覧にも出ず削除もできなくなる。
+      // ここまで来たらindexの単調性は諦めて、空いている番号を使う
+      return smallestUnusedIndex(blockData);
     }
 
     export async function getAllBlock(): Promise<model.BlockEntry[]> {
@@ -178,15 +206,20 @@ export namespace chromeService {
     /**
      * 保存データ1件を復元する。復元に失敗した場合は例外を伝播させず
      * BrokenBlockを返す（1件の壊れたデータで一覧全体が失われないようにする）
-     * @param {string} json 保存されていたデータ
+     * @param {unknown} json 保存されていたデータ
      * @param {number} indexNum ブロックのindex
      * @return {Promise<model.BlockEntry>} 復元したBlock or BrokenBlock
      */
     async function inflateEntry(
-      json: string,
+      json: unknown,
       indexNum: number,
     ): Promise<model.BlockEntry> {
       try {
+        if (typeof json !== 'string') {
+          throw new Error(
+            `Invalid block data: not a string, index=${indexNum}`,
+          );
+        }
         if (json.length <= 0) {
           throw new Error(`Empty block data: index=${indexNum}`);
         }
