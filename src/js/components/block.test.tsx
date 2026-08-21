@@ -12,28 +12,38 @@ import { model } from '../types/interface';
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+// Appは「更新内容」ではなく「更新関数」を受け取り、書き込む直前の一覧から
+// 現在のブロックを渡す。テストでは直近にレンダリングしたブロックを
+// そのまま現在の内容として扱う
+type UpdateBlock = (
+  indexNum: number,
+  update: (current: model.Block) => model.Block,
+) => Promise<void>;
+
+let renderedBlock: model.Block;
+
+// updateBlockに渡された更新関数を適用して、storageへ書かれる内容を得る
+const savedBlock = (updateBlock: jest.Mock, callIndex = 0): model.Block =>
+  updateBlock.mock.calls[callIndex]![1](renderedBlock) as model.Block;
+
 describe('Block', (): void => {
   let container: HTMLDivElement;
   let root: Root;
 
   const mount = async (
     tabs: model.Tab[],
-    updateBlock: (newBlock: model.Block) => Promise<void>,
+    updateBlock: UpdateBlock,
     title?: string,
   ): Promise<void> => {
+    renderedBlock = {
+      indexNum: 0,
+      createdAt: new Date('2021-01-02T03:04:05.678Z'),
+      tabs: tabs,
+      title: title,
+    };
     await act(async () => {
       root = createRoot(container);
-      root.render(
-        <Block
-          block={{
-            indexNum: 0,
-            createdAt: new Date('2021-01-02T03:04:05.678Z'),
-            tabs: tabs,
-            title: title,
-          }}
-          updateBlock={updateBlock}
-        />,
-      );
+      root.render(<Block block={renderedBlock} updateBlock={updateBlock} />);
     });
   };
 
@@ -129,7 +139,7 @@ describe('Block', (): void => {
       container.querySelector<HTMLButtonElement>('.edit-tab-save')!.click();
     });
 
-    expect(updateBlock).toHaveBeenCalledWith(
+    expect(savedBlock(updateBlock)).toStrictEqual(
       expect.objectContaining({
         indexNum: 0,
         tabs: [
@@ -156,7 +166,7 @@ describe('Block', (): void => {
       container.querySelector<HTMLButtonElement>('.edit-tab-save')!.click();
     });
 
-    expect(updateBlock).toHaveBeenCalledWith(
+    expect(savedBlock(updateBlock)).toStrictEqual(
       expect.objectContaining({ title: '調査中のタブ' }),
     );
   });
@@ -294,7 +304,7 @@ describe('Block', (): void => {
     await typeTitle('  調査中のタブ  ');
     await saveTitle();
 
-    expect(updateBlock).toHaveBeenCalledWith({
+    expect(savedBlock(updateBlock)).toStrictEqual({
       indexNum: 0,
       createdAt: new Date('2021-01-02T03:04:05.678Z'),
       tabs: [
@@ -320,9 +330,7 @@ describe('Block', (): void => {
     await typeTitle('   ');
     await saveTitle();
 
-    expect(updateBlock).toHaveBeenCalledWith(
-      expect.objectContaining({ title: undefined }),
-    );
+    expect(savedBlock(updateBlock).title).toBeUndefined();
     expect(container.querySelector('.block-title-input')).toBeNull();
   });
 
@@ -425,7 +433,7 @@ describe('Block', (): void => {
       container.querySelectorAll<HTMLElement>('.tab_close')[0]!.click();
     });
 
-    expect(updateBlock).toHaveBeenCalledWith(
+    expect(savedBlock(updateBlock)).toStrictEqual(
       expect.objectContaining({
         tabs: [{ url: 'https://example.com/b', title: 'title-b' }],
         title: '調査中のタブ',
@@ -564,20 +572,16 @@ describe('Block タブ操作と名前の編集の排他', (): void => {
 
   const mount = async (
     tabs: model.Tab[],
-    updateBlock: (newBlock: model.Block) => Promise<void>,
+    updateBlock: UpdateBlock,
   ): Promise<void> => {
+    renderedBlock = {
+      indexNum: 0,
+      createdAt: new Date('2021-01-02T03:04:05.678Z'),
+      tabs: tabs,
+    };
     await act(async () => {
       root = createRoot(container);
-      root.render(
-        <Block
-          block={{
-            indexNum: 0,
-            createdAt: new Date('2021-01-02T03:04:05.678Z'),
-            tabs: tabs,
-          }}
-          updateBlock={updateBlock}
-        />,
-      );
+      root.render(<Block block={renderedBlock} updateBlock={updateBlock} />);
     });
   };
 
@@ -721,24 +725,20 @@ describe('Block 編集のロック', (): void => {
 
   const mount = async (
     tabs: model.Tab[],
-    updateBlock: (newBlock: model.Block) => Promise<void>,
+    updateBlock: UpdateBlock,
     locked?: boolean,
     title?: string,
   ): Promise<void> => {
+    renderedBlock = {
+      indexNum: 0,
+      createdAt: new Date('2021-01-02T03:04:05.678Z'),
+      tabs: tabs,
+      title: title,
+      locked: locked,
+    };
     await act(async () => {
       root = createRoot(container);
-      root.render(
-        <Block
-          block={{
-            indexNum: 0,
-            createdAt: new Date('2021-01-02T03:04:05.678Z'),
-            tabs: tabs,
-            title: title,
-            locked: locked,
-          }}
-          updateBlock={updateBlock}
-        />,
-      );
+      root.render(<Block block={renderedBlock} updateBlock={updateBlock} />);
     });
   };
 
@@ -845,7 +845,7 @@ describe('Block 編集のロック', (): void => {
 
     await clickLockToggle();
 
-    expect(updateBlock).toHaveBeenCalledWith({
+    expect(savedBlock(updateBlock)).toStrictEqual({
       indexNum: 0,
       createdAt: new Date('2021-01-02T03:04:05.678Z'),
       tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
@@ -867,7 +867,7 @@ describe('Block 編集のロック', (): void => {
     // objectContainingはキーの有無を区別しないため、値そのものを確かめる
     // （lockedを持ったまま渡すとblockToJsonObjが"locked":trueを書き続ける）
     expect(updateBlock).toHaveBeenCalledTimes(1);
-    expect(updateBlock.mock.calls[0][0].locked).toBeUndefined();
+    expect(savedBlock(updateBlock).locked).toBeUndefined();
   });
 
   // App側のアラートはページ最上部に出るため、スクロール中は気付けない。
@@ -1059,22 +1059,18 @@ describe('Block お気に入り', (): void => {
   let root: Root;
 
   const mount = async (
-    updateBlock: (newBlock: model.Block) => Promise<void>,
+    updateBlock: UpdateBlock,
     block?: Partial<model.Block>,
   ): Promise<void> => {
+    renderedBlock = {
+      indexNum: 0,
+      createdAt: new Date('2021-01-02T03:04:05.678Z'),
+      tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+      ...block,
+    };
     await act(async () => {
       root = createRoot(container);
-      root.render(
-        <Block
-          block={{
-            indexNum: 0,
-            createdAt: new Date('2021-01-02T03:04:05.678Z'),
-            tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
-            ...block,
-          }}
-          updateBlock={updateBlock}
-        />,
-      );
+      root.render(<Block block={renderedBlock} updateBlock={updateBlock} />);
     });
   };
 
@@ -1106,7 +1102,7 @@ describe('Block お気に入り', (): void => {
 
     await clickStarToggle();
 
-    expect(updateBlock).toHaveBeenCalledWith({
+    expect(savedBlock(updateBlock)).toStrictEqual({
       indexNum: 0,
       createdAt: new Date('2021-01-02T03:04:05.678Z'),
       tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
@@ -1125,7 +1121,7 @@ describe('Block お気に入り', (): void => {
     // objectContainingはキーの有無を区別しないため、値そのものを確かめる
     // （starredを持ったまま渡すとblockToJsonObjが"starred":trueを書き続ける）
     expect(updateBlock).toHaveBeenCalledTimes(1);
-    expect(updateBlock.mock.calls[0][0].starred).toBeUndefined();
+    expect(savedBlock(updateBlock).starred).toBeUndefined();
   });
 
   // お気に入りは並び順と装飾しか変えないため、タブを失う操作を止めるための
@@ -1143,7 +1139,7 @@ describe('Block お気に入り', (): void => {
     await clickStarToggle();
 
     expect(updateBlock).toHaveBeenCalledTimes(1);
-    expect(updateBlock.mock.calls[0][0].starred).toBe(true);
+    expect(savedBlock(updateBlock).starred).toBe(true);
   });
 
   // 色やアイコンの形だけの強調にならないよう、リボンには文字も入れる
@@ -1407,19 +1403,15 @@ describe('Block 編集中に外からタブが変わったとき', (): void => {
    */
   const render = async (
     tabs: model.Tab[],
-    updateBlock: (newBlock: model.Block) => Promise<void>,
+    updateBlock: UpdateBlock,
   ): Promise<void> => {
+    renderedBlock = {
+      indexNum: 0,
+      createdAt: new Date('2021-01-02T03:04:05.678Z'),
+      tabs: tabs,
+    };
     await act(async () => {
-      root.render(
-        <Block
-          block={{
-            indexNum: 0,
-            createdAt: new Date('2021-01-02T03:04:05.678Z'),
-            tabs: tabs,
-          }}
-          updateBlock={updateBlock}
-        />,
-      );
+      root.render(<Block block={renderedBlock} updateBlock={updateBlock} />);
     });
   };
 
@@ -1448,7 +1440,7 @@ describe('Block 編集中に外からタブが変わったとき', (): void => {
   };
 
   const tabsOf = (updateBlock: jest.Mock): model.Tab[] =>
-    (updateBlock.mock.calls[0]![0] as model.Block).tabs;
+    savedBlock(updateBlock).tabs;
 
   beforeEach((): void => {
     container = document.createElement('div');

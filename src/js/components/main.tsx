@@ -10,7 +10,10 @@ interface MainProps {
   blocks: model.BlockEntry[];
   // 直前の更新が他のtabsページ・他端末の変更（storageの読み直し）由来か
   fromStorage: boolean;
-  updateBlock: (newBlock: model.Block) => Promise<void>;
+  updateBlock: (
+    indexNum: number,
+    update: (current: model.Block) => model.Block,
+  ) => Promise<void>;
   deleteBrokenBlock: (indexNum: number) => void;
 }
 
