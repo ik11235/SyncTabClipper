@@ -333,7 +333,22 @@ export namespace blockService {
     return json.map((obj, i) => jsonObjToBlock(obj, startIndex + i));
   }
 
-  export async function importAllDataJson(jsonStr: string): Promise<void> {
+  /**
+   * インポート結果。書き込めなかったブロックがあっても書き込めた分は残すため、
+   * 何件入って何件落ちたかを呼び出し側へ返し、通知の文面と
+   * ページの読み込み直しは呼び出し側に任せる
+   */
+  export type ImportResult = {
+    // storageへ書き込めたブロックの件数
+    importedCount: number;
+    // 書き込めなかったブロックの件数。8KB制限超過や書き込み回数の
+    // クォータ超過で落ちる
+    failedCount: number;
+  };
+
+  export async function importAllDataJson(
+    jsonStr: string,
+  ): Promise<ImportResult> {
     const nextIndex = await chromeService.storage.getNextBlockIndex();
 
     const json = JSON.parse(jsonStr);
@@ -364,26 +379,25 @@ export namespace blockService {
     const results = await Promise.allSettled(
       blocks.map((block) => chromeService.storage.setBlock(block)),
     );
-    const failed = results.filter((result) => result.status === 'rejected');
-    for (const result of failed) {
-      console.error(result.reason);
+    const reasons = results
+      .filter((result) => result.status === 'rejected')
+      .map((result) => result.reason);
+    if (reasons.length > 0) {
+      // クォータ超過では同じ理由が件数ぶん並ぶだけなので、まとめて1回出す
+      console.error(
+        `Failed to import ${reasons.length}/${blocks.length} block(s)`,
+        reasons,
+      );
     }
-    await chromeService.storage.setTabLength(nextIndex + blockObjs.length);
-    if (failed.length > 0) {
-      // このあとページを読み込み直すため、alertでは伝えられない。
-      // errorLogはstorage.localに残り、読み込み直したページの
-      // ErrorDisplayが拾う
-      // 通知に失敗してもrejectさせない。書き込みは済んでいるのに
-      // 呼び出し側の.catchが「インポートに失敗しました」を出してしまう
-      await chromeService.errorLog
-        .set(
-          chrome.i18n.getMessage('content_msg_import_partial_failure', [
-            String(blocks.length),
-            String(failed.length),
-          ]),
-        )
-        .catch(console.error);
-    }
-    chrome.tabs.reload({ bypassCache: true });
+    // t_lenは互換のために書くだけで、一覧はtd_Nキーの集合から作る。
+    // ここで失敗しても書き込めたブロックは見えるので、
+    // 件数を返せなくなるほうが痛い
+    await chromeService.storage
+      .setTabLength(nextIndex + blocks.length)
+      .catch(console.error);
+    return {
+      importedCount: blocks.length - reasons.length,
+      failedCount: reasons.length,
+    };
   }
 }

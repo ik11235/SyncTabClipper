@@ -39,6 +39,25 @@ const SideBar: React.FC<SideBarProps> = (props) => {
   const importJson = () => {
     blockService
       .importAllDataJson(importRef.current!.value)
+      .then((result) => {
+        if (result.failedCount > 0) {
+          // errorLogに流すと、可視ページのErrorDisplayがその場で
+          // 確認済みとして消してしまい、読み込み直した先には残らない。
+          // alertは閉じるまで同期的に止まるので、読み込み直しの前に必ず届く
+          alert(
+            chrome.i18n.getMessage(
+              result.importedCount > 0
+                ? 'content_msg_import_partial_failure'
+                : 'content_msg_import_all_failed',
+              [
+                String(result.importedCount + result.failedCount),
+                String(result.failedCount),
+              ],
+            ),
+          );
+        }
+        chrome.tabs.reload({ bypassCache: true });
+      })
       .catch((error) =>
         notifyError(
           chrome.i18n.getMessage('content_msg_failed_import') +

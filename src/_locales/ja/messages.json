@@ -170,6 +170,14 @@
       }
     }
   },
+  "content_msg_import_all_failed": {
+    "message": "$total$個のブロックをどれも書き込めませんでした。インポートは反映されていません。保存済みの容量に空きがあるか確認してください。",
+    "placeholders": {
+      "total": {
+        "content": "$1"
+      }
+    }
+  },
   "content_msg_export_broken_block": {
     "message": "$count$個のブロックはデータを読み込めなかったため、エクスポートしたデータに含まれていません。このバックアップは不完全です。すべてのデータを削除する前に内容を確認してください。",
     "placeholders": {

@@ -766,7 +766,6 @@ describe('blockService import/export', (): void => {
   let getNextBlockIndexSpy: jest.SpyInstance;
   let setBlockSpy: jest.SpyInstance;
   let setTabLengthSpy: jest.SpyInstance;
-  const reload = jest.fn();
 
   beforeEach(() => {
     getAllBlockSpy = jest.spyOn(chromeService.storage, 'getAllBlock');
@@ -779,10 +778,8 @@ describe('blockService import/export', (): void => {
     setTabLengthSpy = jest
       .spyOn(chromeService.storage, 'setTabLength')
       .mockResolvedValue(undefined);
-    reload.mockClear();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (global as any).chrome = {
-      tabs: { reload: reload },
       // 置換文字列（件数など）まで検証できるよう、substitutionsも文字列に含める
       i18n: {
         getMessage: (key: string, substitutions?: string[]): string =>
@@ -888,7 +885,10 @@ describe('blockService import/export', (): void => {
       ],
     });
     expect(setTabLengthSpy).toHaveBeenCalledWith(4);
-    expect(reload).toHaveBeenCalledTimes(1);
+    await expect(blockService.importAllDataJson(json)).resolves.toStrictEqual({
+      importedCount: 1,
+      failedCount: 0,
+    });
   });
 
   // エクスポートJSONのブロックはjsonToBlockではなくjsonObjToBlock経由で
@@ -948,7 +948,6 @@ describe('blockService import/export', (): void => {
       '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a"}]},' +
       '{"created_at":1609556645679,"tabs":[{"url":"https://example.com/b","title":"b"}]},' +
       '{"created_at":1609556645680,"tabs":[{"url":"https://example.com/c","title":"c"}]}]}';
-    let errorLogSetSpy: jest.SpyInstance;
     let consoleErrorSpy: jest.SpyInstance;
 
     beforeEach(() => {
@@ -957,9 +956,6 @@ describe('blockService import/export', (): void => {
           ? Promise.reject(new Error('QUOTA_BYTES_PER_ITEM quota exceeded'))
           : Promise.resolve(undefined),
       );
-      errorLogSetSpy = jest
-        .spyOn(chromeService.errorLog, 'set')
-        .mockResolvedValue(undefined);
       // 失敗した書き込みの内容はconsole.errorに出す
       consoleErrorSpy = jest
         .spyOn(console, 'error')
@@ -967,7 +963,6 @@ describe('blockService import/export', (): void => {
     });
 
     afterEach(() => {
-      errorLogSetSpy.mockRestore();
       consoleErrorSpy.mockRestore();
     });
 
@@ -988,57 +983,48 @@ describe('blockService import/export', (): void => {
       expect(setTabLengthSpy).toHaveBeenCalledWith(6);
     });
 
-    test('失敗件数をerrorLogで通知する', async (): Promise<void> => {
-      await blockService.importAllDataJson(json);
-
-      expect(errorLogSetSpy).toHaveBeenCalledWith(
-        'content_msg_import_partial_failure:["3","1"]',
+    // 呼び出し側の.catchが「インポートに失敗しました」を出すと、
+    // 書き込めたブロックがあることが伝わらない
+    test('rejectせず成功・失敗の件数を返す', async (): Promise<void> => {
+      await expect(blockService.importAllDataJson(json)).resolves.toStrictEqual(
+        { importedCount: 2, failedCount: 1 },
       );
     });
 
-    // 呼び出し側の.catchが「インポートに失敗しました」を出すと、
-    // 書き込めたブロックがあることが伝わらない
-    test('rejectせずに完了する', async (): Promise<void> => {
-      await expect(
-        blockService.importAllDataJson(json),
-      ).resolves.toBeUndefined();
-      expect(reload).toHaveBeenCalledTimes(1);
-    });
-
-    test('通知に失敗してもrejectしない', async (): Promise<void> => {
-      errorLogSetSpy.mockRejectedValue(new Error('storage failed'));
-
-      await expect(
-        blockService.importAllDataJson(json),
-      ).resolves.toBeUndefined();
-      expect(setTabLengthSpy).toHaveBeenCalledWith(6);
-    });
-
-    test('全件失敗しても書き込めた件数0として通知する', async (): Promise<void> => {
+    test('全件失敗しても件数を返す', async (): Promise<void> => {
       setBlockSpy.mockRejectedValue(new Error('quota exceeded'));
 
+      await expect(blockService.importAllDataJson(json)).resolves.toStrictEqual(
+        { importedCount: 0, failedCount: 3 },
+      );
+    });
+
+    // t_lenは互換のために書くだけなので、ここで失敗しても
+    // 件数を返せなくなるほうが痛い
+    test('t_lenの書き込みに失敗しても件数を返す', async (): Promise<void> => {
+      setTabLengthSpy.mockRejectedValue(new Error('quota exceeded'));
+
+      await expect(blockService.importAllDataJson(json)).resolves.toStrictEqual(
+        { importedCount: 2, failedCount: 1 },
+      );
+    });
+
+    // 同じ理由が件数ぶん並ぶだけなので、まとめて1回だけ出す
+    test('失敗の理由はまとめて1回だけログに出す', async (): Promise<void> => {
       await blockService.importAllDataJson(json);
 
-      expect(errorLogSetSpy).toHaveBeenCalledWith(
-        'content_msg_import_partial_failure:["3","3"]',
+      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+      expect(consoleErrorSpy.mock.calls[0][0]).toBe(
+        'Failed to import 1/3 block(s)',
       );
     });
   });
 
-  test('importAllDataJson 全件書き込めたらerrorLogに流さない', async (): Promise<void> => {
-    const errorLogSetSpy = jest
-      .spyOn(chromeService.errorLog, 'set')
-      .mockResolvedValue(undefined);
-
-    try {
-      await blockService.importAllDataJson(
-        '{"v":2,"blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a"}]}]}',
-      );
-
-      expect(errorLogSetSpy).not.toHaveBeenCalled();
-    } finally {
-      errorLogSetSpy.mockRestore();
-    }
+  test('importAllDataJson ブロックが0件でも失敗扱いにしない', async (): Promise<void> => {
+    await expect(
+      blockService.importAllDataJson('{"v":2,"blocks":[]}'),
+    ).resolves.toStrictEqual({ importedCount: 0, failedCount: 0 });
+    expect(setBlockSpy).not.toHaveBeenCalled();
   });
 
   // 途中まで書き込んだ状態でsetTabLengthに到達すると、書き込んだブロックが
@@ -1061,7 +1047,6 @@ describe('blockService import/export', (): void => {
       );
       expect(setBlockSpy).not.toHaveBeenCalled();
       expect(setTabLengthSpy).not.toHaveBeenCalled();
-      expect(reload).not.toHaveBeenCalled();
     },
   );
 });
