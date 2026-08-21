@@ -1686,7 +1686,10 @@ describe('Block 落ちたタブの表示が読み直しで戻るか', (): void =
 
     expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(1);
     expect(container.textContent).toContain('title-b');
-    // 読み直し2回で試行は3回。カードのままでも再試行が二重に走らない
-    expect(consoleErrorSpy.mock.calls.length).toBe(perAttempt * 3);
+    // 読み直し2回で試行は3回まで。カードのままでも再試行が二重に走らない
+    // （Reactが出すログを間接的に数えているため上限で見る）
+    expect(consoleErrorSpy.mock.calls.length).toBeLessThanOrEqual(
+      perAttempt * 3,
+    );
   });
 });

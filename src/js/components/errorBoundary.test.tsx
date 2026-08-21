@@ -43,6 +43,14 @@ describe('ErrorBoundary', (): void => {
 
   beforeEach((): void => {
     renderCount = 0;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      storage: { local: { set: jest.fn().mockResolvedValue(undefined) } },
+      action: {
+        setBadgeText: jest.fn(),
+        setBadgeBackgroundColor: jest.fn(),
+      },
+    };
     container = document.createElement('div');
     document.body.appendChild(container);
     act(() => {
@@ -190,6 +198,42 @@ describe('ErrorBoundary', (): void => {
       await render({ throws: true, resetKey: 'v3' });
 
       expect(errorLogSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      errorLogSpy.mockRestore();
+    }
+  });
+
+  // 抑制は「落ちている間の同じ壊れ方」に限る。復帰後の障害まで黙ると、
+  // 一覧が失われたのに手掛かりが何も出ない状態になる
+  test('復帰したあとに同じメッセージで落ちたら改めて記録する', async (): Promise<void> => {
+    const errorLogSpy = jest
+      .spyOn(chromeService.errorLog, 'set')
+      .mockResolvedValue(undefined);
+
+    try {
+      await render({ throws: true, resetKey: 'v1' });
+      await render({ throws: false, resetKey: 'v2' });
+      await render({ throws: true, resetKey: 'v3' });
+
+      expect(errorLogSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      errorLogSpy.mockRestore();
+    }
+  });
+
+  // 記録できていなければ通知は出ていないので、抑制の対象にしない
+  test('errorLogへの記録に失敗したら次の試行でやり直す', async (): Promise<void> => {
+    const errorLogSpy = jest
+      .spyOn(chromeService.errorLog, 'set')
+      .mockRejectedValue(new Error('storage full'));
+
+    try {
+      await render({ throws: true, resetKey: 'v1' });
+      // 記録の失敗はPromiseの決着を待つ必要がある
+      await act(async () => {});
+      await render({ throws: true, resetKey: 'v2' });
+
+      expect(errorLogSpy).toHaveBeenCalledTimes(2);
     } finally {
       errorLogSpy.mockRestore();
     }

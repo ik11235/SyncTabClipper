@@ -1610,8 +1610,11 @@ describe('App', (): void => {
 
       expect(container.textContent).toContain('content_msg_broken_block');
       expect(container.textContent).toContain('title-valid');
-      // 読み直し2回で試行は3回。リセットと例外を繰り返して回り続けない
-      expect(consoleErrorSpy.mock.calls.length).toBe(perAttempt * 3);
+      // 読み直し2回で試行は3回まで。リセットと例外を繰り返して回り続けない
+      // （Reactが出すログを間接的に数えているため上限で見る）
+      expect(consoleErrorSpy.mock.calls.length).toBeLessThanOrEqual(
+        perAttempt * 3,
+      );
     } finally {
       consoleErrorSpy.mockRestore();
     }

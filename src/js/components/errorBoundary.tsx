@@ -8,7 +8,9 @@ interface ErrorBoundaryProps {
   // 表示をやり直す契機。この値が変わったら子のレンダリングを再試行する。
   // 一覧の読み直し(#249)は内容が同じでもBlockEntryを作り直すため、
   // 呼び出し側が落ちた原因のデータを渡すと「読み直しごとに1回再試行する」
-  // 意味になる。直っていなければ同じレンダーの中でfallbackへ戻る
+  // 意味になる。直っていなければ同じレンダーの中でfallbackへ戻る。
+  // レンダリングごとに作り直す値（インラインのオブジェクトリテラル等）を
+  // 渡してはいけない。落ちたまま再試行を繰り返して収束しなくなる
   resetKey?: unknown;
 }
 
@@ -30,14 +32,17 @@ export class ErrorBoundary extends React.Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
 > {
+  // getDerivedStateFromPropsは初回レンダリングの前にも走るためresetKeyは
+  // そこで揃うが、リセットの判定がprops基準であることを型と初期値でも示す
   state: ErrorBoundaryState = {
     hasError: false,
     resetKey: this.props.resetKey,
   };
 
-  // 直近にerrorLogへ記録したメッセージ。同じ壊れ方で再試行するたびに
-  // 記録し直すと、利用者が閉じたアラートとバッジが読み直しごとに復活する
-  private loggedMessage: string | null = null;
+  // 落ちている間にerrorLogへ記録したメッセージ。同じ壊れ方で再試行する
+  // たびに記録し直すと、利用者が閉じたアラートとバッジが読み直しごとに
+  // 復活する。復帰したら忘れる（同じメッセージでも別の機会の障害は通知する）
+  private loggedMessages = new Set<string>();
 
   static getDerivedStateFromError(): Partial<ErrorBoundaryState> {
     return { hasError: true };
@@ -58,6 +63,14 @@ export class ErrorBoundary extends React.Component<
     return null;
   }
 
+  componentDidUpdate(): void {
+    if (!this.state.hasError) {
+      // 復帰したので、次に落ちたときは改めて通知する。
+      // setStateしないため、リセットのコミットは分割されない
+      this.loggedMessages.clear();
+    }
+  }
+
   componentDidCatch(error: unknown): void {
     if (this.props.fallback != null) {
       // fallbackが代わりに表示され、何が起きたかはユーザーに見えているため、
@@ -67,13 +80,17 @@ export class ErrorBoundary extends React.Component<
       return;
     }
     const message = error instanceof Error ? error.message : String(error);
-    if (message === this.loggedMessage) {
+    if (this.loggedMessages.has(message)) {
       // 再試行して同じ壊れ方で落ちただけ。通知は既に出している
       console.error(error);
       return;
     }
-    this.loggedMessage = message;
-    chromeService.errorLog.set(error).catch(console.error);
+    this.loggedMessages.add(message);
+    chromeService.errorLog.set(error).catch((e) => {
+      // 記録できていないので覚えない（次の試行で通知をやり直せる）
+      this.loggedMessages.delete(message);
+      console.error(e);
+    });
   }
 
   render(): React.ReactNode {
