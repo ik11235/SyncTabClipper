@@ -33,27 +33,80 @@ export namespace chromeService {
     }
 
     /**
+     * storage.syncに保存されている全アイテムを取得する。
+     * 個別にgetすると保存件数だけ往復するうえ、件数を先に知る必要がある
+     * @return {Promise<{[key: string]: unknown}>} キーと保存されている値
+     */
+    async function getAllSyncItems(): Promise<{ [key: string]: unknown }> {
+      return chrome.storage.sync.get(null);
+    }
+
+    /**
+     * ブロックの保存データのキーならそのindexを、そうでなければnullを返す。
+     * td_007のような先頭ゼロや、安全な整数を超える桁数のキーは、
+     * indexへ数値化するとtabKey()が元のキーに戻せない。これを拾うと
+     * 書き戻しが別のキーへ行って同じブロックが2枚に増え、
+     * 元のキーはUIから削除できないまま残るため、ブロックとして扱わない
+     * @param {string} key storage.syncのキー
+     * @return {number | null} ブロックのindex。ブロックでなければnull
+     */
+    function blockIndexOf(key: string): number | null {
+      const matched = tabKeyPattern.exec(key);
+      if (matched == null) {
+        return null;
+      }
+      const indexNum = Number(matched[1]);
+      if (!Number.isSafeInteger(indexNum) || tabKey(indexNum) !== key) {
+        return null;
+      }
+      return indexNum;
+    }
+
+    /**
      * 保存されているブロックのデータを、キーの一覧から集める。
      * 件数はt_lenではなくtd_Nキーの集合そのものを単一のソースとする。
      * t_lenは採番カウンタでしかなく、削除で減らないうえに書き込み失敗で
      * 実データとずれるため、これを走査範囲にすると
      * 「t_lenが壊れると一覧が全滅する」「t_lenの外側のブロックが
      * 一覧に出ないまま次回保存で上書きされる」という取りこぼしが起きる
-     * @return {Promise<[number, string][]>} [index, 保存データ]の配列
+     * @param {{[key: string]: unknown}} items storage.syncの全アイテム
+     * @return {[number, string][]} [index, 保存データ]の配列。indexの昇順
      */
-    async function getAllBlockData(): Promise<[number, string][]> {
-      // 個別にgetすると保存件数だけ往復するうえ、件数を先に知る必要がある。
-      // nullを渡して全キーを1回で引き、td_Nだけを拾う
-      const items = await chrome.storage.sync.get(null);
+    function blockDataOf(items: {
+      [key: string]: unknown;
+    }): [number, string][] {
       const blockData: [number, string][] = [];
       for (const [key, value] of Object.entries(items)) {
-        const matched = tabKeyPattern.exec(key);
-        if (matched == null) {
+        const indexNum = blockIndexOf(key);
+        if (indexNum == null) {
           continue;
         }
-        blockData.push([Number(matched[1]), value as string]);
+        blockData.push([indexNum, value as string]);
       }
-      return blockData;
+      // キーの列挙順は辞書順(td_10がtd_2より前)なので、そのまま流すと
+      // compareBlockEntryが同着と判定するブロックの並びが
+      // storageの内部順に左右される
+      return blockData.sort((a, b) => a[0] - b[0]);
+    }
+
+    /**
+     * 採番の下限としてt_lenを読む。
+     * t_lenは互換のために書き続けている「使用済みかもしれない範囲」の
+     * 手がかりでしかなく、一覧の走査範囲には使わない。
+     * これを無視すると全件削除のあとにindexが0から再利用され、
+     * 同期の遅れた端末が持つ古いtd_0の書き戻しとキーが衝突して、
+     * 保存したばかりのブロックが古いもので上書きされうる。
+     * 壊れていても採番は止めてはいけないので、
+     * 数値にできない値は手がかりなし(0)として扱う
+     * @param {{[key: string]: unknown}} items storage.syncの全アイテム
+     * @return {number} 採番の下限
+     */
+    function tabLengthHintOf(items: { [key: string]: unknown }): number {
+      const tabLength = Number(items[tabLengthKey]);
+      if (!Number.isSafeInteger(tabLength) || tabLength <= 0) {
+        return 0;
+      }
+      return tabLength;
     }
 
     export async function setBlock(block: model.Block): Promise<void> {
@@ -89,9 +142,9 @@ export namespace chromeService {
 
     /**
      * 次に保存するブロックのindexを書き込む。
-     * この拡張自身はもうt_lenを読まないが、storage.syncは複数の端末で
-     * 共有されるため、まだ更新前のバージョンが動いている端末で
-     * 一覧が欠けないよう書き込みだけは続ける
+     * この拡張自身は一覧の走査にt_lenを使わなくなったが、storage.syncは
+     * 複数の端末で共有されるため、まだ更新前のバージョンが動いている端末で
+     * 一覧が欠けないよう書き込みは続ける（採番の下限としても読む）
      * @param {number} value 次に保存するブロックのindex
      * @return {Promise<void>}
      */
@@ -106,15 +159,15 @@ export namespace chromeService {
      * @return {Promise<number>} 未使用のindex
      */
     export async function getNextBlockIndex(): Promise<number> {
-      const blockData = await getAllBlockData();
-      return blockData.reduce(
+      const items = await getAllSyncItems();
+      return blockDataOf(items).reduce(
         (next, [indexNum]) => Math.max(next, indexNum + 1),
-        0,
+        tabLengthHintOf(items),
       );
     }
 
     export async function getAllBlock(): Promise<model.BlockEntry[]> {
-      const blockData = await getAllBlockData();
+      const blockData = blockDataOf(await getAllSyncItems());
       const entries = await Promise.all(
         // 空文字列は書き込みが壊れた形跡なのでBrokenBlockとして扱う
         blockData.map(([indexNum, json]) => inflateEntry(json, indexNum)),
