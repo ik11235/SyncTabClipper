@@ -39,6 +39,10 @@ const Main: React.FC<MainProps> = (props) => {
             // 復元できなかったブロックと同じ削除できるカードに差し替える
             <ErrorBoundary
               key={entry.indexNum}
+              // 読み直しで同じ位置のブロックが差し替わったら表示をやり直す。
+              // 再試行が起きるのは落ちている境界だけなので、
+              // 落ちていない兄弟の編集中モーダルや入力は巻き込まない
+              resetKey={entry}
               fallback={
                 <BrokenBlock
                   indexNum={entry.indexNum}

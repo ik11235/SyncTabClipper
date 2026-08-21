@@ -5,25 +5,70 @@ interface ErrorBoundaryProps {
   children: React.ReactNode;
   // 例外を捕捉したときに代わりに表示する要素。省略時は何も表示しない
   fallback?: React.ReactNode;
+  // 表示をやり直す契機。この値が変わったら子のレンダリングを再試行する。
+  // 一覧の読み直し(#249)は内容が同じでもBlockEntryを作り直すため、
+  // 呼び出し側が落ちた原因のデータを渡すと「読み直しごとに1回再試行する」
+  // 意味になる。直っていなければ同じレンダーの中でfallbackへ戻る。
+  // レンダリングごとに作り直す値（インラインのオブジェクトリテラル等）を
+  // 渡してはいけない。落ちたまま再試行を繰り返して収束しなくなる
+  resetKey?: unknown;
 }
 
 interface ErrorBoundaryState {
   hasError: boolean;
+  // 直近のレンダリングで見たresetKey。propsとの差分でリセットを判断する
+  resetKey: unknown;
 }
 
 /**
  * 子のレンダリング時例外がページ全体を巻き込んでアンマウントするのを防ぐ。
  * 捕捉した例外はerrorLogへ保存し、表示はErrorDisplayに任せる。
- * fallbackを指定した場合はそれ自体が表示になるためerrorLogへは保存しない
+ * fallbackを指定した場合はそれ自体が表示になるためerrorLogへは保存しない。
+ * 一度捕捉すると表示はfallbackに固定されるため、データが直ったら
+ * resetKeyを変えて再試行させる（境界のkeyは位置の固定に使っており、
+ * 同じ位置のデータが差し替わっても再マウントは起きない）
  */
 export class ErrorBoundary extends React.Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
 > {
-  state: ErrorBoundaryState = { hasError: false };
+  // getDerivedStateFromPropsは初回レンダリングの前にも走るためresetKeyは
+  // そこで揃うが、リセットの判定がprops基準であることを型と初期値でも示す
+  state: ErrorBoundaryState = {
+    hasError: false,
+    resetKey: this.props.resetKey,
+  };
 
-  static getDerivedStateFromError(): ErrorBoundaryState {
+  // 落ちている間にerrorLogへ記録したメッセージ。同じ壊れ方で再試行する
+  // たびに記録し直すと、利用者が閉じたアラートとバッジが読み直しごとに
+  // 復活する。復帰したら忘れる（同じメッセージでも別の機会の障害は通知する）
+  private loggedMessages = new Set<string>();
+
+  static getDerivedStateFromError(): Partial<ErrorBoundaryState> {
     return { hasError: true };
+  }
+
+  // componentDidUpdateでリセットすると、fallbackを描いたコミットの後に
+  // 子を描き直す別のコミットが挟まる。そのコミットでは親は再レンダリング
+  // されないため、親のuseLayoutEffectが古いDOM（fallback）を見たまま
+  // 取り残される（並び替えの演出が誤発火する）。同じレンダーの中で
+  // 決着させるため、propsからstateを導出する形でリセットする
+  static getDerivedStateFromProps(
+    props: ErrorBoundaryProps,
+    state: ErrorBoundaryState,
+  ): Partial<ErrorBoundaryState> | null {
+    if (props.resetKey !== state.resetKey) {
+      return { hasError: false, resetKey: props.resetKey };
+    }
+    return null;
+  }
+
+  componentDidUpdate(): void {
+    if (!this.state.hasError) {
+      // 復帰したので、次に落ちたときは改めて通知する。
+      // setStateしないため、リセットのコミットは分割されない
+      this.loggedMessages.clear();
+    }
   }
 
   componentDidCatch(error: unknown): void {
@@ -34,7 +79,18 @@ export class ErrorBoundary extends React.Component<
       console.error(error);
       return;
     }
-    chromeService.errorLog.set(error).catch(console.error);
+    const message = error instanceof Error ? error.message : String(error);
+    if (this.loggedMessages.has(message)) {
+      // 再試行して同じ壊れ方で落ちただけ。通知は既に出している
+      console.error(error);
+      return;
+    }
+    this.loggedMessages.add(message);
+    chromeService.errorLog.set(error).catch((e) => {
+      // 記録できていないので覚えない（次の試行で通知をやり直せる）
+      this.loggedMessages.delete(message);
+      console.error(e);
+    });
   }
 
   render(): React.ReactNode {

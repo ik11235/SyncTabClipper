@@ -1604,3 +1604,92 @@ describe('Block 編集中に外からタブが変わったとき', (): void => {
     ).toBe(true);
   });
 });
+
+// タブ単位の境界のkeyはurlを含むため、urlが変わったタブは再マウントされる。
+// 同じurlのままtitleだけ直ったケースはkeyでは拾えない(#256)
+describe('Block 落ちたタブの表示が読み直しで戻るか', (): void => {
+  let container: HTMLDivElement;
+  let root: Root;
+  let consoleErrorSpy: jest.SpyInstance;
+
+  const render = async (tabs: model.Tab[]): Promise<void> => {
+    await act(async () => {
+      root.render(
+        <Block
+          block={{
+            indexNum: 0,
+            createdAt: new Date('2021-01-02T03:04:05.678Z'),
+            tabs: tabs,
+          }}
+          updateBlock={jest.fn().mockResolvedValue(undefined)}
+        />,
+      );
+    });
+  };
+
+  // Reactの子として渡せない値。Tabのレンダリングが例外になる
+  const brokenTitle = {} as unknown as string;
+
+  beforeEach((): void => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      i18n: {
+        getMessage: (key: string): string => key,
+      },
+    };
+    // Reactが境界で捕捉した例外をconsole.errorへ出力するため抑止する
+    consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach((): void => {
+    act(() => root.unmount());
+    container.remove();
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('urlが同じままtitleだけ直ったタブも表示が戻る', async (): Promise<void> => {
+    await render([
+      { url: 'https://example.com/a', title: brokenTitle },
+      { url: 'https://example.com/b', title: 'title-b' },
+    ]);
+
+    expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(1);
+
+    // 他端末でtitleだけが直った（urlは変わらないのでkeyは同じ）
+    await render([
+      { url: 'https://example.com/a', title: 'title-a' },
+      { url: 'https://example.com/b', title: 'title-b' },
+    ]);
+
+    expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(0);
+    expect(container.textContent).toContain('title-a');
+  });
+
+  test('直っていないタブは読み直しごとに1回だけ再試行してカードのまま', async (): Promise<void> => {
+    const broken = { url: 'https://example.com/a', title: brokenTitle };
+    await render([broken, { url: 'https://example.com/b', title: 'title-b' }]);
+    // 1回のレンダリング試行でReactがconsole.errorへ出す回数
+    const perAttempt = consoleErrorSpy.mock.calls.length;
+
+    // 壊れたまま読み直された（別のオブジェクトだが中身は同じ）
+    for (let i = 0; i < 2; i += 1) {
+      await render([
+        { ...broken },
+        { url: 'https://example.com/b', title: 'title-b' },
+      ]);
+    }
+
+    expect(container.querySelectorAll('.broken_tab_close')).toHaveLength(1);
+    expect(container.textContent).toContain('title-b');
+    // 読み直し2回で試行は3回まで。カードのままでも再試行が二重に走らない
+    // （Reactが出すログを間接的に数えているため上限で見る）
+    expect(consoleErrorSpy.mock.calls.length).toBeLessThanOrEqual(
+      perAttempt * 3,
+    );
+  });
+});
