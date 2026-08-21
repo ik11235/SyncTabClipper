@@ -160,7 +160,7 @@
     "message": "Failed to save. Please try again."
   },
   "content_msg_import_partial_failure": {
-    "message": "$failed$ of $total$ block(s) could not be written. The blocks that were written are shown in the list.",
+    "message": "$failed$ of $total$ block(s) could not be written. The blocks that were written are shown in the list. Importing the same data again will duplicate the blocks that were written.",
     "placeholders": {
       "total": {
         "content": "$1"
@@ -171,9 +171,9 @@
     }
   },
   "content_msg_import_all_failed": {
-    "message": "None of the $total$ block(s) could be written. Nothing was imported. Please check whether there is free storage space.",
+    "message": "None of the $failed$ block(s) could be written. Nothing was imported. Please try again later or check whether there is free storage space.",
     "placeholders": {
-      "total": {
+      "failed": {
         "content": "$1"
       }
     }

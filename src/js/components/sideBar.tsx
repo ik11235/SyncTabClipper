@@ -39,32 +39,43 @@ const SideBar: React.FC<SideBarProps> = (props) => {
   const importJson = () => {
     blockService
       .importAllDataJson(importRef.current!.value)
+      // catchはインポート自体の失敗だけを受ける。通知や読み込み直しまで
+      // 巻き込むと、書き込みは済んでいるのに
+      // 「インポートに失敗しました」と出て再インポートを促してしまう
+      .catch((error) => {
+        notifyError(
+          chrome.i18n.getMessage('content_msg_failed_import') +
+            ' ' +
+            (error instanceof Error ? error.message : String(error)),
+        );
+        return null;
+      })
       .then((result) => {
+        if (result == null) {
+          return;
+        }
         if (result.failedCount > 0) {
           // errorLogに流すと、可視ページのErrorDisplayがその場で
           // 確認済みとして消してしまい、読み込み直した先には残らない。
           // alertは閉じるまで同期的に止まるので、読み込み直しの前に必ず届く
           alert(
-            chrome.i18n.getMessage(
-              result.importedCount > 0
-                ? 'content_msg_import_partial_failure'
-                : 'content_msg_import_all_failed',
-              [
-                String(result.importedCount + result.failedCount),
-                String(result.failedCount),
-              ],
-            ),
+            result.importedCount > 0
+              ? chrome.i18n.getMessage('content_msg_import_partial_failure', [
+                  String(result.importedCount + result.failedCount),
+                  String(result.failedCount),
+                ])
+              : chrome.i18n.getMessage('content_msg_import_all_failed', [
+                  String(result.failedCount),
+                ]),
           );
         }
-        chrome.tabs.reload({ bypassCache: true });
+        // 1件も書き込めていないならstorageは変わっていない。
+        // 読み込み直しても、貼り付けた内容とエクスポート結果を捨てるだけ
+        if (result.importedCount > 0) {
+          chrome.tabs.reload({ bypassCache: true });
+        }
       })
-      .catch((error) =>
-        notifyError(
-          chrome.i18n.getMessage('content_msg_failed_import') +
-            ' ' +
-            (error instanceof Error ? error.message : String(error)),
-        ),
-      );
+      .catch(console.error);
   };
 
   const deleteAllData = () => {

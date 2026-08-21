@@ -371,6 +371,12 @@ export namespace blockService {
     if (blockObjs.some((obj) => !Array.isArray(obj?.tabs))) {
       throw new Error('Invalid data: block has no tabs array');
     }
+    // タブが1件もないブロックはsetBlockが削除として扱うため、書き込んだ
+    // つもりでstorageには何も入らない。返す件数だけが増えて一覧には出ず、
+    // ユーザーには「入ったはずのブロックが見当たらない」としか見えない
+    if (blockObjs.some((obj) => obj.tabs.length <= 0)) {
+      throw new Error('Invalid data: block has no tabs');
+    }
     const blocks = blockListForJsonObject(blockObjs, nextIndex);
 
     // 8KB制限超過などで書き込めないブロックが混ざっていても、

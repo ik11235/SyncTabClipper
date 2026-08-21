@@ -160,7 +160,7 @@
     "message": "保存に失敗しました。もう一度お試しください。"
   },
   "content_msg_import_partial_failure": {
-    "message": "$total$個のうち$failed$個のブロックを書き込めませんでした。書き込めたブロックは一覧に表示されています。",
+    "message": "$total$個のうち$failed$個のブロックを書き込めませんでした。書き込めたブロックは一覧に表示されています。同じデータをもう一度インポートすると、書き込めた分が重複します。",
     "placeholders": {
       "total": {
         "content": "$1"
@@ -171,9 +171,9 @@
     }
   },
   "content_msg_import_all_failed": {
-    "message": "$total$個のブロックをどれも書き込めませんでした。インポートは反映されていません。保存済みの容量に空きがあるか確認してください。",
+    "message": "$failed$個のブロックをどれも書き込めませんでした。インポートは反映されていません。時間をおいて試すか、保存済みの容量に空きがあるか確認してください。",
     "placeholders": {
-      "total": {
+      "failed": {
         "content": "$1"
       }
     }

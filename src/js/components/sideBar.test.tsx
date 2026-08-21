@@ -103,13 +103,16 @@ describe('SideBar インポート', (): void => {
 
   // 1件も書き込めていないのに「書き込めたブロックは一覧に表示されています」と
   // 出すと、どこかに保存されたものと誤解させる
-  test('1件も書き込めなかったら別の文面で伝える', async (): Promise<void> => {
+  // storageは何も変わっていないので、読み込み直しても貼り付けた内容と
+  // エクスポート結果を捨てるだけになる
+  test('1件も書き込めなかったら別の文面で伝え読み込み直さない', async (): Promise<void> => {
     importSpy.mockResolvedValue({ importedCount: 0, failedCount: 3 });
     await mount();
 
     await importClick('{"v":2,"blocks":[]}');
 
-    expect(alertMock).toHaveBeenCalledWith('content_msg_import_all_failed:3/3');
+    expect(alertMock).toHaveBeenCalledWith('content_msg_import_all_failed:3');
+    expect(reload).not.toHaveBeenCalled();
   });
 
   // alertは閉じるまで同期的に止まるので、この順序なら通知は必ず目に入る
@@ -125,6 +128,28 @@ describe('SideBar インポート', (): void => {
 
     expect(alertedBeforeReload).toBe(true);
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  // 書き込みは済んでいるのに「インポートに失敗しました」と出すと、
+  // ユーザーが再インポートしてブロックを重複させる
+  test('通知や読み込み直しで例外が出てもインポート失敗として通知しない', async (): Promise<void> => {
+    importSpy.mockResolvedValue({ importedCount: 2, failedCount: 1 });
+    alertMock.mockImplementation(() => {
+      throw new Error('Extension context invalidated.');
+    });
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    await mount();
+
+    try {
+      await importClick('{"v":2,"blocks":[]}');
+
+      expect(errorLogSetSpy).not.toHaveBeenCalled();
+      expect(consoleErrorSpy).toHaveBeenCalled();
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   test('インポート自体が失敗したらerrorLogで通知し読み込み直さない', async (): Promise<void> => {

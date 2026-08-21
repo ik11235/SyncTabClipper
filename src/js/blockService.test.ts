@@ -1039,6 +1039,12 @@ describe('blockService import/export', (): void => {
       'tabsが配列でないブロックが混ざっている',
       '{"v":2,"blocks":[{"created_at":1609556645678,"tabs":"oops"}]}',
     ],
+    // setBlockが削除として扱うため、書き込めた件数にだけ数えられて
+    // 一覧には出ないブロックになる
+    [
+      'タブが1件もないブロックが混ざっている',
+      '{"v":2,"blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a"}]},{"created_at":1609556645678,"tabs":[]}]}',
+    ],
   ])(
     'importAllDataJson 書き込めないデータ(%s)は1件も書き込まずエラーにする',
     async (_name: string, json: string): Promise<void> => {
