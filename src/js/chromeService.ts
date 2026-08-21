@@ -1,11 +1,11 @@
 import { model } from './types/interface';
 import { blockService } from './blockService';
-import { util } from './util';
 
 export namespace chromeService {
   export namespace storage {
     const tabLengthKey: string = 't_len';
     const tabKey = (index: number): string => `td_${index}`;
+    const tabKeyPattern = /^td_(\d+)$/;
 
     /**
      * storage.syncのキーがブロック一覧の内容に関わるものかを返す。
@@ -15,7 +15,7 @@ export namespace chromeService {
      * @return {boolean} ブロックの保存データ or ブロック数のキーならtrue
      */
     export function isBlockDataKey(key: string): boolean {
-      return key === tabLengthKey || /^td_\d+$/.test(key);
+      return key === tabLengthKey || tabKeyPattern.test(key);
     }
 
     function deleteSyncStorage(key: string): Promise<void> {
@@ -28,22 +28,32 @@ export namespace chromeService {
       return chrome.storage.sync.set(setObj);
     }
 
-    async function getSyncStorage(key: string): Promise<string> {
-      const item = await chrome.storage.sync.get([key]);
-      return item[key] as string;
-    }
-
     export async function allClear(): Promise<void> {
       return chrome.storage.sync.clear();
     }
 
-    function getSyncStorageReturnIndex(
-      index: number,
-    ): Promise<[number, string]> {
-      const key = tabKey(index);
-      return getSyncStorage(key).then((result) => {
-        return [index, result];
-      });
+    /**
+     * 保存されているブロックのデータを、キーの一覧から集める。
+     * 件数はt_lenではなくtd_Nキーの集合そのものを単一のソースとする。
+     * t_lenは採番カウンタでしかなく、削除で減らないうえに書き込み失敗で
+     * 実データとずれるため、これを走査範囲にすると
+     * 「t_lenが壊れると一覧が全滅する」「t_lenの外側のブロックが
+     * 一覧に出ないまま次回保存で上書きされる」という取りこぼしが起きる
+     * @return {Promise<[number, string][]>} [index, 保存データ]の配列
+     */
+    async function getAllBlockData(): Promise<[number, string][]> {
+      // 個別にgetすると保存件数だけ往復するうえ、件数を先に知る必要がある。
+      // nullを渡して全キーを1回で引き、td_Nだけを拾う
+      const items = await chrome.storage.sync.get(null);
+      const blockData: [number, string][] = [];
+      for (const [key, value] of Object.entries(items)) {
+        const matched = tabKeyPattern.exec(key);
+        if (matched == null) {
+          continue;
+        }
+        blockData.push([Number(matched[1]), value as string]);
+      }
+      return blockData;
     }
 
     export async function setBlock(block: model.Block): Promise<void> {
@@ -77,36 +87,37 @@ export namespace chromeService {
       return setSyncStorage(key, data);
     }
 
+    /**
+     * 次に保存するブロックのindexを書き込む。
+     * この拡張自身はもうt_lenを読まないが、storage.syncは複数の端末で
+     * 共有されるため、まだ更新前のバージョンが動いている端末で
+     * 一覧が欠けないよう書き込みだけは続ける
+     * @param {number} value 次に保存するブロックのindex
+     * @return {Promise<void>}
+     */
     export async function setTabLength(value: number): Promise<void> {
       return setSyncStorage(tabLengthKey, value.toString());
     }
 
-    export async function getTabLength(): Promise<number> {
-      return getSyncStorage(tabLengthKey).then((result) => {
-        if (result == null) {
-          return 0;
-        } else {
-          return util.toNumber(result);
-        }
-      });
+    /**
+     * 次に保存するブロックに割り当てるindexを返す。
+     * 保存済みのindexの最大値+1とすることで、t_lenが実データと
+     * ずれていても既存のブロックを上書きしない
+     * @return {Promise<number>} 未使用のindex
+     */
+    export async function getNextBlockIndex(): Promise<number> {
+      const blockData = await getAllBlockData();
+      return blockData.reduce(
+        (next, [indexNum]) => Math.max(next, indexNum + 1),
+        0,
+      );
     }
 
     export async function getAllBlock(): Promise<model.BlockEntry[]> {
-      const tabLength = await getTabLength();
-
-      const promiseArray: Promise<[number, string]>[] = [];
-
-      for (let i = 0; i < tabLength; i++) {
-        promiseArray.push(getSyncStorageReturnIndex(i));
-      }
-
-      const result = await Promise.all(promiseArray);
+      const blockData = await getAllBlockData();
       const entries = await Promise.all(
-        result
-          // keyが存在しないindexは削除済みのブロックなので一覧に含めない。
-          // 空文字列は書き込みが壊れた形跡なのでBrokenBlockとして扱う
-          .filter((obj) => obj[1] != null)
-          .map((arr) => inflateEntry(arr[1], arr[0])),
+        // 空文字列は書き込みが壊れた形跡なのでBrokenBlockとして扱う
+        blockData.map(([indexNum, json]) => inflateEntry(json, indexNum)),
       );
       return entries.toSorted(blockService.compareBlockEntry);
     }

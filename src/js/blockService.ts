@@ -334,8 +334,7 @@ export namespace blockService {
   }
 
   export async function importAllDataJson(jsonStr: string): Promise<void> {
-    const tabLength = await chromeService.storage.getTabLength();
-    const idx = tabLength;
+    const nextIndex = await chromeService.storage.getNextBlockIndex();
 
     const json = JSON.parse(jsonStr);
     let blockObjs: BlockJson[];
@@ -348,9 +347,10 @@ export namespace blockService {
       }
       blockObjs = json.blocks;
     }
-    // 1件でも書き込めないブロックが混ざっていると、一部だけ書き込まれた状態で
-    // setTabLengthに到達せず、書き込んだブロックが一覧に出ないまま
-    // 次回保存で上書きされる。スキーマ由来のものは書き込む前にまとめて弾く。
+    // 1件でも書き込めないブロックが混ざっていると一部だけ書き込まれた状態になる。
+    // 書き込めた分は一覧に出るようになった（採番も保存済みindexの最大値+1なので
+    // 次回保存で上書きされない）が、途中で例外になると残りが書き込まれないため、
+    // スキーマ由来のものは書き込む前にまとめて弾く。
     // 書き込み自体の失敗（8KB制限超過など）による部分書き込みは別課題
     if (!Array.isArray(blockObjs)) {
       throw new Error('Invalid data: blocks is not an array');
@@ -358,12 +358,12 @@ export namespace blockService {
     if (blockObjs.some((obj) => !Array.isArray(obj?.tabs))) {
       throw new Error('Invalid data: block has no tabs array');
     }
-    const blocks = blockListForJsonObject(blockObjs, idx);
+    const blocks = blockListForJsonObject(blockObjs, nextIndex);
 
     await Promise.all(
       blocks.map((block) => chromeService.storage.setBlock(block)),
     );
-    await chromeService.storage.setTabLength(tabLength + blockObjs.length);
+    await chromeService.storage.setTabLength(nextIndex + blockObjs.length);
     chrome.tabs.reload({ bypassCache: true });
   }
 }

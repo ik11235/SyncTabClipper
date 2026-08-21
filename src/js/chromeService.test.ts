@@ -119,7 +119,11 @@ describe('chromeService.storage.getAllBlock', (): void => {
     (global as any).chrome = {
       storage: {
         sync: {
-          get: (keys: string[]): Promise<{ [key: string]: string }> => {
+          // 実際のchrome.storage.syncと同じく、nullを渡されたら全キーを返す
+          get: (keys: string[] | null): Promise<{ [key: string]: string }> => {
+            if (keys == null) {
+              return Promise.resolve({ ...syncData });
+            }
             const res: { [key: string]: string } = {};
             for (const key of keys) {
               const value = syncData[key];
@@ -243,6 +247,108 @@ describe('chromeService.storage.getAllBlock', (): void => {
         tabs: [{ url: 'https://example.com/valid', title: 'valid' }],
       },
     ]);
+  });
+
+  // t_lenは採番カウンタでしかなく、書き込み失敗や旧形式で壊れうる。
+  // これを走査範囲にしていたころは、getTabLengthの例外がapp.tsxの.catchへ
+  // 落ちて一覧が丸ごと表示されなくなっていた(#229)
+  test.each([
+    ['数値にできない値', 'broken'],
+    ['空文字列', ''],
+    ['負の数', '-3'],
+    ['実データより小さい', '1'],
+    ['実データより大きい', '99'],
+  ])(
+    't_lenが%sでも保存されているブロックは全件返る',
+    async (_name: string, tabLength: string): Promise<void> => {
+      syncData['t_len'] = tabLength;
+      syncData['td_0'] = validJson(1609556645678, 'old');
+      syncData['td_1'] = validJson(1640000000000, 'new');
+
+      const res = await chromeService.storage.getAllBlock();
+
+      expect(res.map((entry) => entry.indexNum)).toEqual([1, 0]);
+    },
+  );
+
+  test('t_lenが保存されていなくてもブロックは全件返る', async (): Promise<void> => {
+    syncData['td_0'] = validJson(1609556645678, 'old');
+    syncData['td_1'] = validJson(1640000000000, 'new');
+
+    const res = await chromeService.storage.getAllBlock();
+
+    expect(res.map((entry) => entry.indexNum)).toEqual([1, 0]);
+  });
+
+  test('ブロック以外のキーは一覧に含めない', async (): Promise<void> => {
+    syncData['t_len'] = '1';
+    syncData['error'] = 'boom';
+    syncData['td_x'] = validJson(1609556645678, 'notablock');
+    syncData['td_0'] = validJson(1640000000000, 'valid');
+
+    const res = await chromeService.storage.getAllBlock();
+
+    expect(res.map((entry) => entry.indexNum)).toEqual([0]);
+  });
+});
+
+describe('chromeService.storage.getNextBlockIndex', (): void => {
+  let syncData: { [key: string]: string };
+
+  beforeEach((): void => {
+    syncData = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      storage: {
+        sync: {
+          get: (keys: string[] | null): Promise<{ [key: string]: string }> => {
+            if (keys == null) {
+              return Promise.resolve({ ...syncData });
+            }
+            const res: { [key: string]: string } = {};
+            for (const key of keys) {
+              const value = syncData[key];
+              if (value != null) {
+                res[key] = value;
+              }
+            }
+            return Promise.resolve(res);
+          },
+        },
+      },
+    };
+  });
+
+  test('1件も保存されていなければ0を返す', async (): Promise<void> => {
+    syncData['t_len'] = '5';
+
+    expect(await chromeService.storage.getNextBlockIndex()).toBe(0);
+  });
+
+  test('保存済みindexの最大値+1を返す', async (): Promise<void> => {
+    syncData['td_0'] = 'dummy';
+    syncData['td_1'] = 'dummy';
+
+    expect(await chromeService.storage.getNextBlockIndex()).toBe(2);
+  });
+
+  // 削除でindexに穴が空いてもt_lenは減らないため、
+  // 欠番をまたいで最大値を見ないと既存ブロックを上書きしてしまう
+  test('欠番があっても既存のindexを再利用しない', async (): Promise<void> => {
+    syncData['td_0'] = 'dummy';
+    syncData['td_3'] = 'dummy';
+
+    expect(await chromeService.storage.getNextBlockIndex()).toBe(4);
+  });
+
+  // t_lenの外側に取り残されたブロックを上書きしないことの回帰テスト(#232)
+  test('t_lenが実データより小さくても上書きしないindexを返す', async (): Promise<void> => {
+    syncData['t_len'] = '1';
+    syncData['td_0'] = 'dummy';
+    syncData['td_1'] = 'dummy';
+    syncData['td_2'] = 'dummy';
+
+    expect(await chromeService.storage.getNextBlockIndex()).toBe(3);
   });
 });
 
