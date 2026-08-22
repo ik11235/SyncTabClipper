@@ -1064,6 +1064,27 @@ describe('Block 編集のロック', (): void => {
         .hasAttribute('disabled'),
     ).toBe(true);
   });
+  // お気に入りと違いカードが動かないため、スクロールを抑えない。
+  // 画面外のボタンへフォーカスが戻ったときは、見えるところまで運んでほしい。
+  // 共通のフックへ寄せたあとも、お気に入りとの違いが残ることを固定する(#254)
+  test('キーボードのフォーカス復帰でスクロールを抑えない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(
+      [{ url: 'https://example.com/a', title: 'title-a' }],
+      updateBlock,
+    );
+    const focusSpy = jest.spyOn(
+      container.querySelector<HTMLButtonElement>('.block-lock-toggle')!,
+      'focus',
+    );
+
+    await clickLockToggle();
+
+    // 引数の形ではなく「抑えていないこと」を見る。
+    // 等価なfocus()に戻す実装でも通ってほしい
+    expect(focusSpy).toHaveBeenCalled();
+    expect(focusSpy.mock.calls[0]?.[0]?.preventScroll).not.toBe(true);
+  });
 });
 
 describe('Block お気に入り', (): void => {
@@ -1340,7 +1361,10 @@ describe('Block お気に入り', (): void => {
   });
 
   // フォーカスに伴うブラウザの瞬間スクロールは、useBlockMoveAnimationが
-  // カードの移動に合わせて見せているスクロールを乱す
+  // カードの移動に合わせて見せているスクロールを乱す。
+  // ロック側は逆に抑えない（カードが動かないので抑える理由がなく、
+  // 画面外のボタンへ戻ったときは見えるところまで運んでほしい）ので、
+  // 共通のフックへ寄せたあとも違いが残っていることを固定する(#254)
   test('キーボードのフォーカス復帰でスクロールを起こさない', async (): Promise<void> => {
     const updateBlock = jest.fn().mockResolvedValue(undefined);
     await mount(updateBlock);
@@ -1351,7 +1375,7 @@ describe('Block お気に入り', (): void => {
 
     await clickStarToggle();
 
-    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    expect(focusSpy.mock.calls[0]?.[0]?.preventScroll).toBe(true);
   });
 
   /**

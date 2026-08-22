@@ -5,6 +5,7 @@ import { openableTab, Tab } from './tab';
 import BrokenTab from './brokenTab';
 import EditTabModal from './editTabModal';
 import { ErrorBoundary } from './errorBoundary';
+import { useBlockFlagToggle } from './useBlockFlagToggle';
 
 // 名前の入力欄に入れられる長さの上限。カードの見出しに収まる長さに抑えることと、
 // storage.syncの8KB/item制限を名前で圧迫しないことが目的。
@@ -70,23 +71,6 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const [titleError, setTitleError] = useState<string | null>(null);
   const titleFieldId = useId();
   const titleHintId = useId();
-  const [lockError, setLockError] = useState<string | null>(null);
-  // ロックの書き込みが飛行中かどうか。着地するまでpropsのlockedは古いままなので、
-  // その間に始まったタブ操作は自分がロック中であることを知らずに書き戻す
-  const [lockSaving, setLockSaving] = useState(false);
-  const [starError, setStarError] = useState<string | null>(null);
-  // スターの書き込みが飛行中かどうか。ロックと同じ理由で、着地するまでは
-  // タブ側の導線を止める
-  const [starSaving, setStarSaving] = useState(false);
-
-  // 誤操作からブロックを守るための状態。ロック中は削除・編集の導線を止め、
-  // リンクを開いてもタブを一覧から消さない
-  const locked = block.locked === true;
-
-  // お気に入りかどうか。一覧での並び順と装飾にしか影響しないため、
-  // ロック中でも付け外しできる（ロックはデータを失う操作を止めるためのもの）
-  const starred = block.starred === true;
-
   // 飛行中のタブ書き換えの本数。propsを見ても決着していない書き込みは
   // 分からないため、名前の編集を始めさせないための判断材料として自前で数える
   const tabWritesInFlight = useRef(0);
@@ -121,6 +105,52 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       },
     );
   };
+
+  /*
+   * カード全体に効く真偽値フラグの切り替え。
+   * ロックとお気に入りは同じ振る舞いなので同じフックへ寄せる(#254)。
+   *
+   * canStartに関数を渡すのは、開始条件（blockWriteBusy）が
+   * 両方のsavingを含むため。フックを呼ぶ時点ではまだ算出できないので、
+   * クリックの時点で評価する。
+   *
+   * ロックの切り替えは、着地するまでpropsのlockedが古いままで、その隙に
+   * 始まったタブ操作がロックを知らないまま書き戻してしまうため、
+   * 名前の保存と同じようにタブ側の導線も止める（tabsLocked）。
+   *
+   * お気に入りはロック中でも押せる。並び順と装飾にしか効かず、タブを失う
+   * 操作ではないため。なおロック中のブロックをstorageへ書き戻せる＝保存は
+   * 常に現在のスキーマ版数で行われる（v1/v2で保存されていたブロックはv3に
+   * なる）。ロックはこの拡張機能のUIでの誤操作を防ぐもので、保存データを
+   * 変えさせない仕組みではない、という既存の立場のままとする
+   */
+  const lock = useBlockFlagToggle({
+    block: block,
+    field: 'locked',
+    updateBlock: props.updateBlock,
+    track: trackTabWrite,
+    canStart: () => !blockWriteBusy,
+    failureMessageKey: 'content_msg_lock_block_save_failed',
+  });
+  const star = useBlockFlagToggle({
+    block: block,
+    field: 'starred',
+    updateBlock: props.updateBlock,
+    track: trackTabWrite,
+    canStart: () => !blockWriteBusy,
+    failureMessageKey: 'content_msg_star_block_save_failed',
+    // お気に入りはカードが一覧内を移動する。フォーカスに伴うブラウザの
+    // 瞬間スクロールが、useBlockMoveAnimationがカードの移動に合わせて
+    // 見せているスクロールを乱すため抑える
+    preventScroll: true,
+  });
+
+  // 誤操作からブロックを守るための状態。ロック中は削除・編集の導線を止め、
+  // リンクを開いてもタブを一覧から消さない
+  const locked = lock.active;
+
+  // お気に入りかどうか。一覧での並び順と装飾にしか影響しない
+  const starred = star.active;
 
   // タブ配列の差し替えをApp経由でstorageへ反映する。
   // updateBlockはブロックごと書き戻すため、タブだけを変える導線でも
@@ -293,87 +323,6 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     updateTabs(() => []).catch(() => {});
   };
 
-  /**
-   * ロックを切り替えてstorageへ反映する。
-   * ロックもブロックごと書き戻すため、名前・タブの書き込みと並行すると
-   * 後から着地した側が相手の変更を打ち消す。名前の保存が名前の編集中として
-   * タブ側を止めているのと同じように、着地するまではタブ側の導線も止める
-   * （propsのlockedは着地するまで古いままなので、その隙に始まったタブ操作は
-   * ロックを知らないまま書き戻し、ロックごとブロックを消してしまう）
-   */
-  const toggleLock = (event: React.MouseEvent) => {
-    if (blockWriteBusy) {
-      return;
-    }
-    // キーボードから起動したクリックはdetailが0になる。
-    // ブラウザはmousedownでもボタンにフォーカスを移すため、
-    // activeElementを見てもマウス操作と区別できない
-    lockKeyboardActivated.current = event.detail === 0;
-    setLockError(null);
-    setLockSaving(true);
-    trackTabWrite(
-      props.updateBlock(block.indexNum, (current) => ({
-        ...current,
-        // ロックしていない状態はキーを持たない形で表す（保存側もそう書く）。
-        // 押したときに見えていた状態の裏返しにする。書き込む直前の内容から
-        // 裏返すと、待っている間に他のページで切り替わっていた場合に
-        // ユーザーが押したのと逆の結果になる
-        locked: locked ? undefined : true,
-      })),
-    ).then(
-      () => {
-        setLockSaving(false);
-      },
-      () => {
-        setLockSaving(false);
-        // App側のアラートはページ最上部に出るためスクロール中は気付けない。
-        // 押しても状態が変わらない理由をカード内でも伝える
-        setLockError(
-          chrome.i18n.getMessage('content_msg_lock_block_save_failed'),
-        );
-      },
-    );
-  };
-
-  /**
-   * スターを切り替えてstorageへ反映する。
-   * ロックと同じくブロックごと書き戻すため、名前・タブ・ロックの書き込みと
-   * 並行させない。ロック中でも押せる点だけがロックの切り替えと異なる
-   * （お気に入りは並び順と装飾にしか効かず、タブを失う操作ではない）。
-   * なおロック中でも押せる＝ロック中のブロックをstorageへ書き戻せるため、
-   * 保存は常に現在のスキーマ版数で行われる（v1/v2で保存されていたブロックは
-   * v3になる）。ロックはこの拡張機能のUIでの誤操作を防ぐもので、
-   * 保存データを変えさせない仕組みではない、という既存の立場のままとする
-   */
-  const toggleStar = (event: React.MouseEvent) => {
-    if (blockWriteBusy) {
-      return;
-    }
-    // キーボードから起動したクリックはdetailが0になる（ロックと同じ判定）
-    starKeyboardActivated.current = event.detail === 0;
-    setStarError(null);
-    setStarSaving(true);
-    trackTabWrite(
-      props.updateBlock(block.indexNum, (current) => ({
-        ...current,
-        // お気に入りでない状態はキーを持たない形で表す（保存側もそう書く）。
-        // ロックと同じく、押したときに見えていた状態の裏返しにする
-        starred: starred ? undefined : true,
-      })),
-    ).then(
-      () => {
-        setStarSaving(false);
-      },
-      () => {
-        setStarSaving(false);
-        // App側のアラートはページ最上部に出るためスクロール中は気付けない
-        setStarError(
-          chrome.i18n.getMessage('content_msg_star_block_save_failed'),
-        );
-      },
-    );
-  };
-
   // Tab側でもロック中は編集アイコンを無効化しているが、モーダルを開く判断は
   // ブロックの状態を持つこちらでも確かめる
   const startTabEdit = (index: number) => {
@@ -456,12 +405,6 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // キーボード操作の現在位置が失われる。開いたときのボタンへ戻す
   const cardRoot = useRef<HTMLDivElement>(null);
   const titleEditButton = useRef<HTMLButtonElement>(null);
-  const lockButton = useRef<HTMLButtonElement>(null);
-  const starButton = useRef<HTMLButtonElement>(null);
-  // ロックの切り替えをキーボードから起動したか
-  const lockKeyboardActivated = useRef(false);
-  // スターの切り替えをキーボードから起動したか
-  const starKeyboardActivated = useRef(false);
   const titleWasEditing = useRef(false);
   useEffect(() => {
     if (titleWasEditing.current && titleDraft == null) {
@@ -479,57 +422,6 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     }
     titleWasEditing.current = titleDraft != null;
   }, [titleDraft]);
-
-  // ロックボタンは押した瞬間に自分がdisabledになるため、ブラウザがフォーカスを
-  // bodyへ落とす。書き込みが決着したらキーボード操作の現在位置を戻す。
-  // 名前の編集と違い、押した後もボタン自体は同じ場所に残るので、
-  // フォーカスが失われている場合だけ戻せば足りる
-  const lockWasSaving = useRef(false);
-  useEffect(() => {
-    if (lockWasSaving.current && !lockSaving) {
-      // キーボードから押したときだけ戻す。マウスで押してから別の場所を
-      // クリックした場合もフォーカスはbodyに落ちるため、bodyかどうかだけで
-      // 判断すると、見ている位置から勝手にスクロールが戻ってしまう
-      const active = document.activeElement;
-      if (
-        lockKeyboardActivated.current &&
-        (active == null || active === document.body)
-      ) {
-        lockButton.current?.focus();
-      }
-    }
-    lockWasSaving.current = lockSaving;
-  }, [lockSaving]);
-
-  // スターボタンもロックボタンと同じ理由でフォーカスを戻す。
-  // スターは並び順も変えるためカード自体が一覧内を移動するが、
-  // ボタンはアンマウントされないのでrefから同じ要素へ戻せる。
-  // preventScrollを付けるのは、フォーカスに伴うブラウザの瞬間スクロールが、
-  // useBlockMoveAnimationがカードの移動に合わせて見せているスクロールを
-  // 乱すため
-  const starWasSaving = useRef(false);
-  useEffect(() => {
-    if (starWasSaving.current && !starSaving) {
-      const active = document.activeElement;
-      if (
-        starKeyboardActivated.current &&
-        (active == null || active === document.body)
-      ) {
-        starButton.current?.focus({ preventScroll: true });
-      }
-    }
-    starWasSaving.current = starSaving;
-  }, [starSaving]);
-
-  // 別の操作が成功してブロックが書き換わったら、前のロック失敗の赤字は
-  // 現在の状態を説明していない。直近の操作が失敗したかのように見えるため消す。
-  // 一覧の読み直し(#249)でも新しいオブジェクトが降りてくるため、他端末の
-  // 変更で赤字が消えることはある。失敗自体はerrorLog経由でページ上部の
-  // アラートに残るので、消える方に倒している
-  useEffect(() => {
-    setLockError(null);
-    setStarError(null);
-  }, [block]);
 
   // 編集対象のいまの位置。開いている間に一覧が読み直されるとindexの指す先が
   // ずれるため、ずれていたときだけ同じ内容のタブを探し直す。
@@ -564,7 +456,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // ロックの書き込み中も同じ理由でタブ側を止める。着地するまでpropsのlockedは
   // 古いままで、その間に始まったタブ操作はロックを知らないまま書き戻す。
   // スターの書き込み中も同じ（着地前のタブ操作はスターごと書き戻してしまう）
-  const tabsLocked = editing || titleEditing || lockSaving || starSaving;
+  const tabsLocked = editing || titleEditing || lock.saving || star.saving;
   // カード全体に効く操作（ロック・お気に入り）を始めてよいか。
   // どれもブロックごと書き戻すため、他の書き込みと並行すると打ち消し合う。
   // ボタンのdisabledでも塞いでいるが、保護をDOMの属性だけに預けない
@@ -597,7 +489,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
             状態はロックと同じ理由でaria-pressedではなく名前で伝える */}
         <button
           type="button"
-          ref={starButton}
+          ref={star.buttonRef}
           className="uk-link block-star-toggle"
           data-starred={starred}
           data-uk-icon="icon: star; ratio: 0.9"
@@ -609,7 +501,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           )}
           // ロックボタンと同じ理由。ブロックごとの書き戻しが打ち消し合う
           disabled={tabsWriting || titleEditing}
-          onClick={toggleStar}
+          onClick={star.toggle}
         />
         {/* ロックの切り替えはカードの右上に置く。名前の編集や個々のタブの
             操作より上位の、カード全体に効く操作であるため。
@@ -621,7 +513,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
             見えているツールチップと名前が食い違って音声操作の的も外れる */}
         <button
           type="button"
-          ref={lockButton}
+          ref={lock.buttonRef}
           className="uk-link block-lock-toggle"
           data-locked={locked}
           data-uk-icon={`icon: ${locked ? 'lock' : 'unlock'}; ratio: 0.9`}
@@ -634,7 +526,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           // 名前の編集中とタブの書き換え中は、ブロックごとの書き戻しが
           // 打ち消し合うため切り替えさせない
           disabled={tabsWriting || titleEditing}
-          onClick={toggleLock}
+          onClick={lock.toggle}
         />
         {titleEditing ? (
           <form
@@ -754,19 +646,19 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
         {/* エラーはロックボタンと同じヘッダ内の、見出しの後に出す。
             見出しより前に差し込むとカードの中身が丸ごとずれて、
             どのブロックの話か分かりにくくなる */}
-        {lockError != null ? (
+        {lock.error != null ? (
           <p className="uk-text-danger block-lock-error" role="alert">
-            {lockError}
+            {lock.error}
           </p>
         ) : null}
-        {starError != null ? (
+        {star.error != null ? (
           <p className="uk-text-danger block-star-error" role="alert">
-            {starError}
+            {star.error}
           </p>
         ) : null}
         <div
           className="uk-grid"
-          inert={titleEditing || lockSaving || starSaving}
+          inert={titleEditing || lock.saving || star.saving}
         >
           <div className="uk-width-auto">
             <span className="all_tab_link uk-link" onClick={openAllTab}>
