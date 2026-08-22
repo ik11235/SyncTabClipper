@@ -318,7 +318,10 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   /**
    * ブロックを削除する。取り消せないうえ、押した先で何が起きるかが
    * アイコンからは分からないため、確認を挟む。
-   * 何件失うのかは押す前に分からないとまずいので、件数も文面に入れる
+   * 何件失うのかは押す前に分からないとまずいので、件数も文面に入れる。
+   * この件数は押した時点のもので、confirmはスレッドを止めるため
+   * 確認中にこの値が変わることはないが、他端末の変更を長く放置したまま
+   * OKすると、見せた件数より多く消えることはある
    */
   const deleteBlock = () => {
     if (locked) {
@@ -497,30 +500,6 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
         </div>
       ) : null}
       <div className="uk-card-header block-card-header" inert={editing}>
-        {/* ブロックの削除はカード全体に効く操作なので、ロック・お気に入りと
-            同じ右上の行に置く。取り消せない操作なので右端に離し、
-            間にボタン1つ分の余白を空けて隣の操作と押し間違えないようにする。
-            ロック中に押せないのはリンクだったときと同じ。
-            disabledではなくaria-disabledにするのは、押せない理由を
-            titleで読ませるためにフォーカスを残す必要があるため */}
-        <button
-          type="button"
-          className="uk-link block-delete"
-          data-uk-icon="icon: trash; ratio: 0.9"
-          title={chrome.i18n.getMessage(
-            locked
-              ? 'content_msg_locked_action_disabled'
-              : 'content_msg_delete_block',
-          )}
-          aria-label={chrome.i18n.getMessage('content_msg_delete_block')}
-          aria-disabled={locked}
-          // 止める条件はリンクだったときの行のinertに揃える。
-          // ロック・お気に入りと違いtabsWritingでは止めない。
-          // リンクを開いている最中にブロックごと消せる導線は元からあり、
-          // 書き込みが打ち消し合わないことはApp側の直列化(#248)が担保する
-          disabled={titleEditing || lock.saving || star.saving}
-          onClick={locked ? undefined : deleteBlock}
-        />
         {/* お気に入りの切り替えはロックと並べてカードの右上に置く。
             どちらもカード全体に効く操作で、粒度が揃っているため。
             ロックと違いロック中でも押せる（並び順と装飾しか変えない）。
@@ -565,6 +544,34 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           // 打ち消し合うため切り替えさせない
           disabled={tabsWriting || titleEditing}
           onClick={lock.toggle}
+        />
+        {/* ブロックの削除はカード全体に効く操作なので、ロック・お気に入りと
+            同じ右上の行に置く。取り消せない操作なので右端に離し、
+            間にボタン1つ分の余白を空けて隣の操作と押し間違えないようにする。
+            絶対配置で右端に出すが、JSXでもボタン群の最後に置く。
+            先頭に書くと、カードへTabで入って最初に止まるのが
+            いちばん右にある破壊的操作になり、見た目の並びと順序が逆転する。
+            ロック中に押せないのはリンクだったときと同じ。
+            disabledではなくaria-disabledにするのは、disabledだと
+            タブ順から外れて、ロックを解除したあとに戻る場所が失われるため
+            （タブの編集・削除リンクも同じ扱いにしている） */}
+        <button
+          type="button"
+          className="uk-link block-delete"
+          data-uk-icon="icon: trash; ratio: 0.9"
+          title={chrome.i18n.getMessage(
+            locked
+              ? 'content_msg_locked_action_disabled'
+              : 'content_msg_delete_block',
+          )}
+          aria-label={chrome.i18n.getMessage('content_msg_delete_block')}
+          aria-disabled={locked}
+          // 止める条件はリンクだったときの行のinertに揃える。
+          // ロック・お気に入りと違いtabsWritingでは止めない。
+          // リンクを開いている最中にブロックごと消せる導線は元からあり、
+          // 書き込みが打ち消し合わないことはApp側の直列化(#248)が担保する
+          disabled={titleEditing || lock.saving || star.saving}
+          onClick={locked ? undefined : deleteBlock}
         />
         {titleEditing ? (
           <form

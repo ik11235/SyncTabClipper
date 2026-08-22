@@ -28,7 +28,7 @@
     "message": "Delete block"
   },
   "content_msg_delete_block_confirm": {
-    "message": "This will delete the block. The $count$ saved link(s) cannot be restored. Continue?",
+    "message": "This will delete the block. Saved links in this block ($count$) cannot be restored. Continue?",
     "placeholders": {
       "count": {
         "content": "$1"

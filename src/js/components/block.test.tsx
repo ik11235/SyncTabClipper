@@ -2013,6 +2013,23 @@ describe('Block ブロックの削除', (): void => {
     ).toBe(true);
   });
 
+  // 絶対配置で右端に出しているので、JSXでも最後に置かないと
+  // カードへTabで入って最初に止まるのがいちばん右の破壊的操作になり、
+  // 見た目の並びとフォーカス順が逆転する
+  test('フォーカス順は見た目の並びと同じで、削除が最後に来る', async (): Promise<void> => {
+    await mount(jest.fn().mockResolvedValue(undefined));
+
+    const buttons = Array.from(
+      container
+        .querySelector('.block-card-header')!
+        .querySelectorAll<HTMLElement>('button'),
+    ).map((element) => element.className);
+
+    expect(buttons[0]).toContain('block-star-toggle');
+    expect(buttons[1]).toContain('block-lock-toggle');
+    expect(buttons[2]).toContain('block-delete');
+  });
+
   test('確認してから削除する', async (): Promise<void> => {
     const updateBlock = jest.fn().mockResolvedValue(undefined);
     await mount(updateBlock);
