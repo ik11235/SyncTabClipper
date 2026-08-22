@@ -315,8 +315,22 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     });
   };
 
+  /**
+   * ブロックを削除する。取り消せないうえ、押した先で何が起きるかが
+   * アイコンからは分からないため、確認を挟む。
+   * 何件失うのかは押す前に分からないとまずいので、件数も文面に入れる
+   */
   const deleteBlock = () => {
     if (locked) {
+      return;
+    }
+    if (
+      !window.confirm(
+        chrome.i18n.getMessage('content_msg_delete_block_confirm', [
+          String(block.tabs.length),
+        ]),
+      )
+    ) {
       return;
     }
     // タブが空になったブロックはstorage側で削除される
@@ -483,6 +497,30 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
         </div>
       ) : null}
       <div className="uk-card-header block-card-header" inert={editing}>
+        {/* ブロックの削除はカード全体に効く操作なので、ロック・お気に入りと
+            同じ右上の行に置く。取り消せない操作なので右端に離し、
+            間にボタン1つ分の余白を空けて隣の操作と押し間違えないようにする。
+            ロック中に押せないのはリンクだったときと同じ。
+            disabledではなくaria-disabledにするのは、押せない理由を
+            titleで読ませるためにフォーカスを残す必要があるため */}
+        <button
+          type="button"
+          className="uk-link block-delete"
+          data-uk-icon="icon: trash; ratio: 0.9"
+          title={chrome.i18n.getMessage(
+            locked
+              ? 'content_msg_locked_action_disabled'
+              : 'content_msg_delete_block',
+          )}
+          aria-label={chrome.i18n.getMessage('content_msg_delete_block')}
+          aria-disabled={locked}
+          // 止める条件はリンクだったときの行のinertに揃える。
+          // ロック・お気に入りと違いtabsWritingでは止めない。
+          // リンクを開いている最中にブロックごと消せる導線は元からあり、
+          // 書き込みが打ち消し合わないことはApp側の直列化(#248)が担保する
+          disabled={titleEditing || lock.saving || star.saving}
+          onClick={locked ? undefined : deleteBlock}
+        />
         {/* お気に入りの切り替えはロックと並べてカードの右上に置く。
             どちらもカード全体に効く操作で、粒度が揃っているため。
             ロックと違いロック中でも押せる（並び順と装飾しか変えない）。
@@ -663,24 +701,6 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           <div className="uk-width-auto">
             <span className="all_tab_link uk-link" onClick={openAllTab}>
               {chrome.i18n.getMessage('content_msg_all_tab_open')}
-            </span>
-          </div>
-          <div className="uk-width-auto">
-            {/* すべてのリンクを閉じるはブロックの削除に等しいため、
-                ロック中は無効化する。開く導線は残す */}
-            <span
-              className="all_tab_delete uk-link"
-              // 淡色になるだけでは押せない理由が伝わらないため補う。
-              // 無効の見た目はaria-disabledを見てCSS側で付ける
-              title={
-                locked
-                  ? chrome.i18n.getMessage('content_msg_locked_action_disabled')
-                  : undefined
-              }
-              aria-disabled={locked}
-              onClick={locked ? undefined : deleteBlock}
-            >
-              {chrome.i18n.getMessage('content_msg_all_tab_close')}
             </span>
           </div>
           <div className="uk-width-expand" />
