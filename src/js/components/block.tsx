@@ -12,11 +12,43 @@ import { ErrorBoundary } from './errorBoundary';
 // 持っていた場合は黙って切り捨てず、そのまま保持する
 const BLOCK_TITLE_MAX_LENGTH = 100;
 
+// タブの同一性はURLと名前で見る。indexは一覧の読み直し(#249)や
+// 同じカードへの別の操作でずれるため、chrome.tabs.createを待っている間に
+// 別のタブを指しうる。indexのまま書き戻すと無関係なタブを消してしまう。
+// 保存データが壊れているとタブ自体がnullのこともあり、その場合は
+// 内容で見分けられないので同じ「壊れたタブ」として扱う
+const sameTab = (a: model.Tab, b: model.Tab): boolean => {
+  if (a == null || b == null) {
+    return a === b;
+  }
+  return a.url === b.url && a.title === b.title;
+};
+
+// クリックした時点のタブを、書き込む直前の一覧で指し直す。
+// 同じURL・名前のタブが並んでいると内容だけでは押した行を特定できないため、
+// まずindexの位置が同じ内容のままかを確かめ、ずれていたら内容で探す
+const findTabIndex = (
+  tabs: model.Tab[],
+  target: model.Tab,
+  index: number,
+): number => {
+  if (index >= 0 && index < tabs.length && sameTab(tabs[index]!, target)) {
+    return index;
+  }
+  return tabs.findIndex((tab) => sameTab(tab, target));
+};
+
 interface BlockProps {
   block: model.Block;
   // storageへの永続化とブロック一覧stateの更新はApp側で行う。
+  // 更新内容ではなく更新関数を渡すのは、書き込む直前の内容の上に
+  // 変更を載せるため（クリック時のpropsを閉じ込めたまま書き戻すと、
+  // その間に消したはずのブロックやタブが復活する）。
   // 永続化に失敗するとrejectされる（失敗の記録はApp側で済んでいる）
-  updateBlock: (newBlock: model.Block) => Promise<void>;
+  updateBlock: (
+    indexNum: number,
+    update: (current: model.Block) => model.Block,
+  ) => Promise<void>;
 }
 
 // ブロックのstateはAppが所有し、Blockはpropsの表示と操作イベントの発火に徹する。
@@ -93,33 +125,77 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // タブ配列の差し替えをApp経由でstorageへ反映する。
   // updateBlockはブロックごと書き戻すため、タブだけを変える導線でも
   // タブ以外のフィールドを引き継がないと保存のたびに消える
-  const updateTabs = (tabs: model.Tab[]): Promise<void> => {
+  const updateTabs = (
+    nextTabs: (current: model.Block) => model.Tab[],
+  ): Promise<void> => {
     // storageへ書く唯一の入口でロックを見る。各導線側のガードだけに預けると、
     // 導線が増えたときに保護が黙って漏れる
     if (locked) {
       return Promise.reject(new Error('This block is locked'));
     }
     return trackTabWrite(
-      props.updateBlock({
-        ...block,
-        tabs: tabs,
+      props.updateBlock(block.indexNum, (current) => {
+        // 書き込む直前の内容でもロックを見る。押した時点で解除されていても、
+        // 待っている間にロックされたブロックへ書き戻すと、
+        // ロックが守るはずだったタブを消してしまう
+        if (current.locked === true) {
+          throw new Error('This block is locked');
+        }
+        return {
+          ...current,
+          tabs: nextTabs(current),
+        };
       }),
     );
   };
 
+  // 押した行のタブを取り除く。書き込む直前の一覧で指し直すため、
+  // 待っている間に並びが変わっていても無関係なタブを巻き込まない
+  const removeTabAt = (index: number): Promise<void> => {
+    const target = block.tabs[index]!;
+    return updateTabs((current) => {
+      const at = findTabIndex(current.tabs, target, index);
+      if (at < 0) {
+        // 待っている間に他の操作で消えていた。書き戻す必要がないので、
+        // storage.syncの書き込みクォータを無駄に使わずここで降りる
+        throw new Error('tab already removed');
+      }
+      return current.tabs.filter((_, i) => i != at);
+    });
+  };
+
+  // 指定したタブをまとめて取り除く。同じURL・名前のタブが複数あっても
+  // 指定した本数だけを消すため、まとめてfilterせず1件ずつ引く
+  const removeTabs = (targets: model.Tab[]): Promise<void> =>
+    updateTabs((current) => {
+      const remaining = [...current.tabs];
+      for (const target of targets) {
+        const at = remaining.findIndex((tab) => sameTab(tab, target));
+        if (at >= 0) {
+          remaining.splice(at, 1);
+        }
+      }
+      if (remaining.length === current.tabs.length) {
+        // 待っている間に他の操作で消えていた。書き戻す必要がないので、
+        // storage.syncの書き込みクォータを無駄に使わずここで降りる
+        throw new Error('tabs already removed');
+      }
+      return remaining;
+    });
+
   // 結果を待たない導線用。失敗はApp側でerrorLogに記録済みなので、
   // ここで受けないとunhandled rejectionになるだけ
-  const updateTabsIgnoringFailure = (tabs: model.Tab[]): void => {
-    updateTabs(tabs).catch(() => {});
+  const removeTabAtIgnoringFailure = (index: number): void => {
+    removeTabAt(index).catch(() => {});
   };
 
   const openLink = (index: number) => {
-    const url = block.tabs[index]!.url;
+    const target = block.tabs[index]!;
     if (locked) {
       // ロック中は開くだけで一覧から消さない。書き戻しが要らないため
       // 飛行中としても数えない
       chromeService.tab
-        .createTabs({ url: url, active: false })
+        .createTabs({ url: target.url, active: false })
         .catch((error) => {
           chromeService.errorLog.set(error).catch(console.error);
         });
@@ -129,8 +205,10 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     // chrome.tabs.createを待つ間も飛行中として数える
     trackTabWrite(
       chromeService.tab
-        .createTabs({ url: url, active: false })
-        .then(() => deleteClick(index)),
+        .createTabs({ url: target.url, active: false })
+        // 開いたタブそのものを消す。書き込む直前の一覧で指し直すので、
+        // 待っている間に並びが変わっていても無関係なタブを巻き込まない
+        .then(() => removeTabAtIgnoringFailure(index)),
     ).catch((error) => {
       chromeService.errorLog.set(error).catch(console.error);
     });
@@ -142,7 +220,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     if (locked) {
       return;
     }
-    updateTabsIgnoringFailure(block.tabs.filter((_, i) => i != index));
+    removeTabAtIgnoringFailure(index);
   };
 
   // 保存できたときだけモーダルを閉じる。失敗時はrejectをモーダル側へ返し、
@@ -154,9 +232,15 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     if (editTargetIndex < 0) {
       return Promise.reject(new Error('edit target lost'));
     }
-    return updateTabs(
-      block.tabs.map((tab, i) => (i == editTargetIndex ? newTab : tab)),
-    ).then(() => {
+    return updateTabs((current) => {
+      // 書き込む直前の一覧で指し直す。propsのindexは待っている間に
+      // ずれうるので、そのまま使うと別のタブを上書きする
+      const at = findEditTargetIn(current.tabs);
+      if (at < 0) {
+        throw new Error('edit target lost');
+      }
+      return current.tabs.map((tab, i) => (i == at ? newTab : tab));
+    }).then(() => {
       closeTabEdit();
     });
   };
@@ -182,7 +266,10 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       return;
     }
     // 開き終わってから書き戻すまでを1つの操作としてまとめて数える。
-    // 途中で飛行中でなくなると、その隙に名前の編集を始められてしまう
+    // 途中で飛行中でなくなると、その隙に名前の編集を始められてしまう。
+    // 1件でも開けなかったら1本も消さない（Promise.all）。
+    // 開けた分だけ消すと、失敗したタブだけが残ったのか
+    // 全部残ったのかをユーザーが見分けられない
     trackTabWrite(
       Promise.all(
         openTabs.map((tab) =>
@@ -191,9 +278,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       ).then(() => {
         // 開いたタブだけを消す。開けなかったタブまでブロックごと消すと、
         // 一覧に見えていたタブが開かれもせず失われる
-        updateTabsIgnoringFailure(
-          block.tabs.filter((tab) => !openableTab(tab)),
-        );
+        removeTabs(openTabs).catch(() => {});
       }),
     ).catch((error) => {
       chromeService.errorLog.set(error).catch(console.error);
@@ -204,7 +289,8 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     if (locked) {
       return;
     }
-    updateTabsIgnoringFailure([]);
+    // タブが空になったブロックはstorage側で削除される
+    updateTabs(() => []).catch(() => {});
   };
 
   /**
@@ -226,11 +312,14 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     setLockError(null);
     setLockSaving(true);
     trackTabWrite(
-      props.updateBlock({
-        ...block,
-        // ロックしていない状態はキーを持たない形で表す（保存側もそう書く）
+      props.updateBlock(block.indexNum, (current) => ({
+        ...current,
+        // ロックしていない状態はキーを持たない形で表す（保存側もそう書く）。
+        // 押したときに見えていた状態の裏返しにする。書き込む直前の内容から
+        // 裏返すと、待っている間に他のページで切り替わっていた場合に
+        // ユーザーが押したのと逆の結果になる
         locked: locked ? undefined : true,
-      }),
+      })),
     ).then(
       () => {
         setLockSaving(false);
@@ -265,11 +354,12 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     setStarError(null);
     setStarSaving(true);
     trackTabWrite(
-      props.updateBlock({
-        ...block,
-        // お気に入りでない状態はキーを持たない形で表す（保存側もそう書く）
+      props.updateBlock(block.indexNum, (current) => ({
+        ...current,
+        // お気に入りでない状態はキーを持たない形で表す（保存側もそう書く）。
+        // ロックと同じく、押したときに見えていた状態の裏返しにする
         starred: starred ? undefined : true,
-      }),
+      })),
     ).then(
       () => {
         setStarSaving(false);
@@ -332,13 +422,13 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     setTitleError(null);
     setTitleSaving(true);
     props
-      .updateBlock({
+      .updateBlock(block.indexNum, (current) => ({
         // 編集している間はタブ側の導線を止めてあるので、このページの操作では
-        // タブ配列は変わらない。一覧の読み直し(#249)で変わることはあるため、
-        // 編集を始めた時点ではなく最新のpropsを書き戻す
-        ...block,
+        // タブ配列は変わらない。一覧の読み直し(#249)や他端末の変更で
+        // 変わることはあるため、書き込む直前の内容に名前だけを載せる
+        ...current,
         title: newTitle.length <= 0 ? undefined : newTitle,
-      })
+      }))
       .then(() => {
         setTitleDraft(null);
         setTitleSaving(false);
@@ -446,20 +536,13 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // 最初からindexを捨てて内容で探すと、同じURL・同じ名前のタブを複数持つ
   // ブロック（同じページを2枚開いて保存した場合など）で、常に先頭の重複を
   // 書き換えてしまう
-  const sameAsEditTarget = (tab: model.Tab): boolean =>
-    editTarget != null &&
-    tab.url === editTarget.url &&
-    tab.title === editTarget.title;
-  const editTargetIndex = ((): number => {
+  const findEditTargetIn = (tabs: model.Tab[]): number => {
     if (editTarget == null || editIndex == null) {
       return -1;
     }
-    const atEditIndex = block.tabs[editIndex];
-    if (atEditIndex != null && sameAsEditTarget(atEditIndex)) {
-      return editIndex;
-    }
-    return block.tabs.findIndex(sameAsEditTarget);
-  })();
+    return findTabIndex(tabs, editTarget, editIndex);
+  };
+  const editTargetIndex = findEditTargetIn(block.tabs);
   // 編集していたタブが失われたか。この場合もモーダルは閉じず、入力を見せた
   // まま保存だけを止める（黙って消すと、書いていた内容が理由も分からず
   // 失われる）。ブロックごと消えた場合はカードがアンマウントされるため、
