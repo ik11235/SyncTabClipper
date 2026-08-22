@@ -28,9 +28,24 @@ import { model } from '../types/interface';
  *    違いを違いのまま残す
  */
 
-// 切り替えの対象にできるフィールド。値を持たない状態をキーなしで表すため、
-// 型もundefinedを許す形にそろえる
-export type BlockFlagField = 'locked' | 'starred';
+/*
+ * 切り替えの対象にできるフィールド。
+ * 立っていない状態をキーなしで表すため、undefinedを許す真偽値のキーだけを拾う。
+ * 計算プロパティ（[field]: ...）は書き込む値の型を検査せず、
+ * 'locked' | 'starred' と手で書くと将来キーを足すときに
+ * 真偽値でないフィールド（titleなど）を混ぜても通ってしまう。
+ * その状態で押すと{...current, title: true}がstorageまで届き、
+ * 名前がtrueとして保存される
+ */
+type BooleanFlagKeys<T> = {
+  [K in keyof T]-?: undefined extends T[K]
+    ? NonNullable<T[K]> extends boolean
+      ? K
+      : never
+    : never;
+}[keyof T];
+
+export type BlockFlagField = BooleanFlagKeys<model.Block>;
 
 export type BlockFlagToggleOptions = {
   // 対象のブロック。indexNumの取得と、書き換わったら失敗表示を消すのに使う
@@ -45,8 +60,11 @@ export type BlockFlagToggleOptions = {
   track: <T>(work: Promise<T>) => Promise<T>;
   // 切り替えを始めてよいか。クリックの時点で評価する
   canStart: () => boolean;
-  // 失敗したときにカード内へ出す文言のキー
-  failureMessageKey: string;
+  // 失敗したときにカード内へ出す文言のキー。
+  // getMessageは知らないキーに空文字を返し、中身のない赤字と
+  // 空のrole="alert"を出してしまうので、実在するキーだけに絞る
+  failureMessageKey:
+    'content_msg_lock_block_save_failed' | 'content_msg_star_block_save_failed';
   // フォーカスを戻すときにブラウザの瞬間スクロールを抑えるか
   preventScroll?: boolean;
 };

@@ -1080,7 +1080,10 @@ describe('Block 編集のロック', (): void => {
 
     await clickLockToggle();
 
-    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: false });
+    // 引数の形ではなく「抑えていないこと」を見る。
+    // 等価なfocus()に戻す実装でも通ってほしい
+    expect(focusSpy).toHaveBeenCalled();
+    expect(focusSpy.mock.calls[0]?.[0]?.preventScroll).not.toBe(true);
   });
 });
 
@@ -1372,7 +1375,7 @@ describe('Block お気に入り', (): void => {
 
     await clickStarToggle();
 
-    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    expect(focusSpy.mock.calls[0]?.[0]?.preventScroll).toBe(true);
   });
 
   /**
