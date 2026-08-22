@@ -940,7 +940,8 @@ describe('blockService import/export', (): void => {
 
   // 1件でも書き込めないとsetTabLengthに到達せず、書き込めたブロックが
   // t_lenの外側に取り残されていた(#232)。
-  // 書き込めた分は残し、失敗はerrorLog経由で伝える
+  // 書き込めた分は残し、失敗は件数で呼び出し側に返す
+  // (通知の出し方はsideBar側の判断。sideBar.test.tsx参照)
   describe('importAllDataJson 書き込みが一部失敗したとき', (): void => {
     // 3ブロックのうち2件目だけが8KB制限に引っかかる想定
     const json =
@@ -976,7 +977,9 @@ describe('blockService import/export', (): void => {
     });
 
     // ここに到達しないと、書き込めたブロックがt_lenの外側に取り残される。
-    // 一覧はキーから作るので出はするが、旧バージョンの端末では見えない
+    // 一覧はキーから作るので出はするが、旧バージョンの端末では見えない。
+    // 書き込めた2件ではなく採番した3件ぶん進めないと、次のブロックが
+    // 書き込み済みのキーを上書きする
     test('失敗しても互換のt_lenは書き込む', async (): Promise<void> => {
       await blockService.importAllDataJson(json);
 
@@ -997,6 +1000,16 @@ describe('blockService import/export', (): void => {
       await expect(blockService.importAllDataJson(json)).resolves.toStrictEqual(
         { importedCount: 0, failedCount: 3 },
       );
+    });
+
+    // 対応するブロックがないままt_lenだけ進めると、呼び出し側が
+    // 「storageは何も変わっていない」として扱えなくなる
+    test('全件失敗したらt_lenは書き込まない', async (): Promise<void> => {
+      setBlockSpy.mockRejectedValue(new Error('quota exceeded'));
+
+      await blockService.importAllDataJson(json);
+
+      expect(setTabLengthSpy).not.toHaveBeenCalled();
     });
 
     // t_lenは互換のために書くだけなので、ここで失敗しても
@@ -1020,11 +1033,66 @@ describe('blockService import/export', (): void => {
     });
   });
 
+  // 0タブのブロックはsetBlockが削除として扱うので書き込めない。
+  // ただし壊れたデータではない(#197)ため、混ざっていても他のブロックの
+  // インポートは止めず、その1件だけ失敗として数える
+  describe('importAllDataJson タブが1件もないブロックが混ざったとき', (): void => {
+    const json =
+      '{"v":2,"blocks":[' +
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a"}]},' +
+      '{"created_at":1609556645679,"tabs":[]},' +
+      '{"created_at":1609556645680,"tabs":[{"url":"https://example.com/c","title":"c"}]}]}';
+    let consoleErrorSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      consoleErrorSpy = jest
+        .spyOn(console, 'error')
+        .mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      consoleErrorSpy.mockRestore();
+    });
+
+    // インポート全体を弾くと、0タブ1件のために残り全部が捨てられる
+    test('残りのブロックはインポートする', async (): Promise<void> => {
+      await blockService.importAllDataJson(json);
+
+      expect(setBlockSpy).toHaveBeenCalledTimes(2);
+      expect(
+        setBlockSpy.mock.calls.map((call) => call[0].indexNum),
+      ).toStrictEqual([3, 4]);
+    });
+
+    // 成功に数えると、一覧に出ないブロックを「入った」と伝えてしまう
+    test('書き込めなかった件数に数える', async (): Promise<void> => {
+      await expect(blockService.importAllDataJson(json)).resolves.toStrictEqual(
+        { importedCount: 2, failedCount: 1 },
+      );
+    });
+
+    // 書き込んだ分しかt_lenに数えない
+    test('t_lenは書き込んだ件数ぶんだけ進める', async (): Promise<void> => {
+      await blockService.importAllDataJson(json);
+
+      expect(setTabLengthSpy).toHaveBeenCalledWith(5);
+    });
+
+    test('スキップした件数はログに出す', async (): Promise<void> => {
+      await blockService.importAllDataJson(json);
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Skipped 1/3 block(s) with no tabs',
+      );
+    });
+  });
+
   test('importAllDataJson ブロックが0件でも失敗扱いにしない', async (): Promise<void> => {
     await expect(
       blockService.importAllDataJson('{"v":2,"blocks":[]}'),
     ).resolves.toStrictEqual({ importedCount: 0, failedCount: 0 });
     expect(setBlockSpy).not.toHaveBeenCalled();
+    expect(setTabLengthSpy).not.toHaveBeenCalled();
   });
 
   // 途中まで書き込んだ状態でsetTabLengthに到達すると、書き込んだブロックが
@@ -1038,12 +1106,6 @@ describe('blockService import/export', (): void => {
     [
       'tabsが配列でないブロックが混ざっている',
       '{"v":2,"blocks":[{"created_at":1609556645678,"tabs":"oops"}]}',
-    ],
-    // setBlockが削除として扱うため、書き込めた件数にだけ数えられて
-    // 一覧には出ないブロックになる
-    [
-      'タブが1件もないブロックが混ざっている',
-      '{"v":2,"blocks":[{"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a"}]},{"created_at":1609556645678,"tabs":[]}]}',
     ],
   ])(
     'importAllDataJson 書き込めないデータ(%s)は1件も書き込まずエラーにする',

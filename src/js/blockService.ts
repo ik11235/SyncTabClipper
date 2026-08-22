@@ -372,12 +372,17 @@ export namespace blockService {
       throw new Error('Invalid data: block has no tabs array');
     }
     // タブが1件もないブロックはsetBlockが削除として扱うため、書き込んだ
-    // つもりでstorageには何も入らない。返す件数だけが増えて一覧には出ず、
-    // ユーザーには「入ったはずのブロックが見当たらない」としか見えない
-    if (blockObjs.some((obj) => obj.tabs.length <= 0)) {
-      throw new Error('Invalid data: block has no tabs');
+    // つもりでstorageには何も入らない。ただし0タブ自体は壊れたデータでは
+    // なく一覧に「0件」のカードとして出せる扱い(#197)なので、インポート
+    // 全体を止めずにこの1件だけ書き込めなかったものとして数える
+    const writableObjs = blockObjs.filter((obj) => obj.tabs.length > 0);
+    const emptyCount = blockObjs.length - writableObjs.length;
+    if (emptyCount > 0) {
+      console.error(
+        `Skipped ${emptyCount}/${blockObjs.length} block(s) with no tabs`,
+      );
     }
-    const blocks = blockListForJsonObject(blockObjs, nextIndex);
+    const blocks = blockListForJsonObject(writableObjs, nextIndex);
 
     // 8KB制限超過などで書き込めないブロックが混ざっていても、
     // 書き込めた分は残す。Promise.allで打ち切ると、書き込み済みのブロックを
@@ -395,15 +400,24 @@ export namespace blockService {
         reasons,
       );
     }
-    // t_lenは互換のために書くだけで、一覧はtd_Nキーの集合から作る。
-    // ここで失敗しても書き込めたブロックは見えるので、
-    // 件数を返せなくなるほうが痛い
-    await chromeService.storage
-      .setTabLength(nextIndex + blocks.length)
-      .catch(console.error);
+    const importedCount = blocks.length - reasons.length;
+    if (importedCount > 0) {
+      // t_lenは互換のために書くだけで、一覧はtd_Nキーの集合から作る。
+      // ここで失敗しても書き込めたブロックは見えるので、
+      // 件数を返せなくなるほうが痛い。
+      // 進める先はnextIndex+blocks.lengthで、書き込めた件数ではない。
+      // 途中の1件が失敗しても採番済みの最大indexは変わらないため、
+      // ここを詰めると次のブロックが書き込み済みのキーを上書きする
+      await chromeService.storage
+        .setTabLength(nextIndex + blocks.length)
+        .catch(console.error);
+    }
+    // 1件も書き込めていないならt_lenも触らない。採番を進めても
+    // 対応するブロックがなく、呼び出し側が「storageは何も変わっていない」
+    // として読み込み直しを省けなくなるだけ
     return {
-      importedCount: blocks.length - reasons.length,
-      failedCount: reasons.length,
+      importedCount,
+      failedCount: reasons.length + emptyCount,
     };
   }
 }

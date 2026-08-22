@@ -102,16 +102,22 @@ describe('SideBar インポート', (): void => {
   });
 
   // 1件も書き込めていないのに「書き込めたブロックは一覧に表示されています」と
-  // 出すと、どこかに保存されたものと誤解させる
-  // storageは何も変わっていないので、読み込み直しても貼り付けた内容と
-  // エクスポート結果を捨てるだけになる
-  test('1件も書き込めなかったら別の文面で伝え読み込み直さない', async (): Promise<void> => {
+  // 出すと、どこかに保存されたものと誤解させる。
+  // 読み込み直しても貼り付けた内容とエクスポート結果を捨てるだけなので
+  // 読み込み直さない
+  //
+  // 読み込み直さないならerrorLogが読み込み直しで消えることもないので、
+  // インポート自体が失敗したときと同じく赤バッジが残るerrorLogで伝える
+  test('1件も書き込めなかったらerrorLogで伝え読み込み直さない', async (): Promise<void> => {
     importSpy.mockResolvedValue({ importedCount: 0, failedCount: 3 });
     await mount();
 
     await importClick('{"v":2,"blocks":[]}');
 
-    expect(alertMock).toHaveBeenCalledWith('content_msg_import_all_failed:3');
+    expect(errorLogSetSpy).toHaveBeenCalledWith(
+      'content_msg_import_all_failed:3',
+    );
+    expect(alertMock).not.toHaveBeenCalled();
     expect(reload).not.toHaveBeenCalled();
   });
 

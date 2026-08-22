@@ -54,26 +54,33 @@ const SideBar: React.FC<SideBarProps> = (props) => {
         if (result == null) {
           return;
         }
+        if (result.importedCount === 0) {
+          // 1件も書き込めていないならstorageは何も変わっていないので、
+          // 読み込み直しても貼り付けた内容とエクスポート結果を捨てるだけ。
+          // 読み込み直さないならerrorLogが読み込み直しで消えることもなく、
+          // インポート自体が失敗したとき(上のcatch)と結末は同じなので、
+          // 赤バッジが残るerrorLogに通知を揃える
+          if (result.failedCount > 0) {
+            notifyError(
+              chrome.i18n.getMessage('content_msg_import_all_failed', [
+                String(result.failedCount),
+              ]),
+            );
+          }
+          return;
+        }
         if (result.failedCount > 0) {
           // errorLogに流すと、可視ページのErrorDisplayがその場で
           // 確認済みとして消してしまい、読み込み直した先には残らない。
           // alertは閉じるまで同期的に止まるので、読み込み直しの前に必ず届く
           alert(
-            result.importedCount > 0
-              ? chrome.i18n.getMessage('content_msg_import_partial_failure', [
-                  String(result.importedCount + result.failedCount),
-                  String(result.failedCount),
-                ])
-              : chrome.i18n.getMessage('content_msg_import_all_failed', [
-                  String(result.failedCount),
-                ]),
+            chrome.i18n.getMessage('content_msg_import_partial_failure', [
+              String(result.importedCount + result.failedCount),
+              String(result.failedCount),
+            ]),
           );
         }
-        // 1件も書き込めていないならstorageは変わっていない。
-        // 読み込み直しても、貼り付けた内容とエクスポート結果を捨てるだけ
-        if (result.importedCount > 0) {
-          chrome.tabs.reload({ bypassCache: true });
-        }
+        chrome.tabs.reload({ bypassCache: true });
       })
       .catch(console.error);
   };
