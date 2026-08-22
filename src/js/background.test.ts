@@ -75,7 +75,7 @@ describe('background action.onClicked', (): void => {
       windows: { update: jest.fn() },
     };
     const { chromeService } = await import('./chromeService');
-    jest.spyOn(chromeService.storage, 'getTabLength').mockResolvedValue(3);
+    jest.spyOn(chromeService.storage, 'getNextBlockIndex').mockResolvedValue(3);
     jest
       .spyOn(chromeService.storage, 'setBlock')
       .mockImplementation((block) => {

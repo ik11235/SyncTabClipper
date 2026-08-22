@@ -18,7 +18,7 @@ function handleError(error: unknown): void {
  * @return {Promise<void>}
  */
 async function saveWindowTabs(windowId: number): Promise<void> {
-  const tabLength = await chromeService.storage.getTabLength();
+  const nextIndex = await chromeService.storage.getNextBlockIndex();
   // tabsページ自身は保存も終了もしない。保存対象に含めると一覧の中に
   // 一覧ページへのリンクが並んでしまい、終了対象に含めると
   // 切り替えた直後のtabsページを閉じてしまう。
@@ -34,9 +34,9 @@ async function saveWindowTabs(windowId: number): Promise<void> {
   // 空のブロックを書くとindexだけ進んで無駄な欠番が増えるため、
   // tabsページへの切り替えだけを行う
   if (currentTabs.length > 0) {
-    const block = blockService.createBlock(currentTabs, new Date(), tabLength);
+    const block = blockService.createBlock(currentTabs, new Date(), nextIndex);
     await chromeService.storage.setBlock(block);
-    await chromeService.storage.setTabLength(tabLength + 1);
+    await chromeService.storage.setTabLength(nextIndex + 1);
   }
   // このウィンドウのタブはこれから閉じる。別ウィンドウのtabsページを
   // フォーカスするだけで済ませると、最後のタブまで閉じてウィンドウごと消える

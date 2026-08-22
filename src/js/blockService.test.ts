@@ -763,15 +763,15 @@ describe('blockService 旧形式ゴールデンフィクスチャ(実データ�
 
 describe('blockService import/export', (): void => {
   let getAllBlockSpy: jest.SpyInstance;
-  let getTabLengthSpy: jest.SpyInstance;
+  let getNextBlockIndexSpy: jest.SpyInstance;
   let setBlockSpy: jest.SpyInstance;
   let setTabLengthSpy: jest.SpyInstance;
   const reload = jest.fn();
 
   beforeEach(() => {
     getAllBlockSpy = jest.spyOn(chromeService.storage, 'getAllBlock');
-    getTabLengthSpy = jest
-      .spyOn(chromeService.storage, 'getTabLength')
+    getNextBlockIndexSpy = jest
+      .spyOn(chromeService.storage, 'getNextBlockIndex')
       .mockResolvedValue(3);
     setBlockSpy = jest
       .spyOn(chromeService.storage, 'setBlock')
@@ -795,7 +795,7 @@ describe('blockService import/export', (): void => {
 
   afterEach(() => {
     getAllBlockSpy.mockRestore();
-    getTabLengthSpy.mockRestore();
+    getNextBlockIndexSpy.mockRestore();
     setBlockSpy.mockRestore();
     setTabLengthSpy.mockRestore();
   });

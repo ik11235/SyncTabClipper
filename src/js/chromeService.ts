@@ -1,11 +1,11 @@
 import { model } from './types/interface';
 import { blockService } from './blockService';
-import { util } from './util';
 
 export namespace chromeService {
   export namespace storage {
     const tabLengthKey: string = 't_len';
     const tabKey = (index: number): string => `td_${index}`;
+    const tabKeyPattern = /^td_(\d+)$/;
 
     /**
      * storage.syncのキーがブロック一覧の内容に関わるものかを返す。
@@ -15,7 +15,7 @@ export namespace chromeService {
      * @return {boolean} ブロックの保存データ or ブロック数のキーならtrue
      */
     export function isBlockDataKey(key: string): boolean {
-      return key === tabLengthKey || /^td_\d+$/.test(key);
+      return key === tabLengthKey || tabKeyPattern.test(key);
     }
 
     function deleteSyncStorage(key: string): Promise<void> {
@@ -28,22 +28,105 @@ export namespace chromeService {
       return chrome.storage.sync.set(setObj);
     }
 
-    async function getSyncStorage(key: string): Promise<string> {
-      const item = await chrome.storage.sync.get([key]);
-      return item[key] as string;
-    }
-
     export async function allClear(): Promise<void> {
       return chrome.storage.sync.clear();
     }
 
-    function getSyncStorageReturnIndex(
-      index: number,
-    ): Promise<[number, string]> {
-      const key = tabKey(index);
-      return getSyncStorage(key).then((result) => {
-        return [index, result];
-      });
+    /**
+     * storage.syncに保存されている全アイテムを取得する。
+     * 個別にgetすると保存件数だけ往復するうえ、件数を先に知る必要がある
+     * @return {Promise<{[key: string]: unknown}>} キーと保存されている値
+     */
+    async function getAllSyncItems(): Promise<{ [key: string]: unknown }> {
+      return chrome.storage.sync.get(null);
+    }
+
+    /**
+     * ブロックの保存データのキーならそのindexを、そうでなければnullを返す。
+     * td_007のような先頭ゼロや、安全な整数を超える桁数のキーは、
+     * indexへ数値化するとtabKey()が元のキーに戻せない。これを拾うと
+     * 書き戻しが別のキーへ行って同じブロックが2枚に増え、
+     * 元のキーはUIから削除できないまま残るため、ブロックとして扱わない
+     * @param {string} key storage.syncのキー
+     * @return {number | null} ブロックのindex。ブロックでなければnull
+     */
+    function blockIndexOf(key: string): number | null {
+      const matched = tabKeyPattern.exec(key);
+      if (matched == null) {
+        return null;
+      }
+      const indexNum = Number(matched[1]);
+      if (!Number.isSafeInteger(indexNum) || tabKey(indexNum) !== key) {
+        return null;
+      }
+      return indexNum;
+    }
+
+    /**
+     * 保存されているブロックのデータを、キーの一覧から集める。
+     * 件数はt_lenではなくtd_Nキーの集合そのものを単一のソースとする。
+     * t_lenは採番カウンタでしかなく、削除で減らないうえに書き込み失敗で
+     * 実データとずれるため、これを走査範囲にすると
+     * 「t_lenが壊れると一覧が全滅する」「t_lenの外側のブロックが
+     * 一覧に出ないまま次回保存で上書きされる」という取りこぼしが起きる
+     * @param {{[key: string]: unknown}} items storage.syncの全アイテム
+     * @return {[number, unknown][]} [index, 保存データ]の配列。indexの昇順
+     */
+    function blockDataOf(items: {
+      [key: string]: unknown;
+    }): [number, unknown][] {
+      const blockData: [number, unknown][] = [];
+      for (const [key, value] of Object.entries(items)) {
+        const indexNum = blockIndexOf(key);
+        if (indexNum == null) {
+          continue;
+        }
+        // 保存しているのは文字列だが、storageが壊れていれば別の型で返る。
+        // 型を偽らずinflateEntryに判定させる
+        blockData.push([indexNum, value]);
+      }
+      // キーの列挙順は辞書順(td_10がtd_2より前)なので、そのまま流すと
+      // compareBlockEntryが同着と判定するブロックの並びが
+      // storageの内部順に左右される
+      return blockData.sort((a, b) => a[0] - b[0]);
+    }
+
+    /**
+     * 採番の下限としてt_lenを読む。
+     * t_lenは互換のために書き続けている「使用済みかもしれない範囲」の
+     * 手がかりでしかなく、一覧の走査範囲には使わない。
+     * これを無視すると、末尾のブロックを削除したあとに同じindexが
+     * 再利用され、同期の遅れた端末が持つ古い同じキーの書き戻しと衝突して、
+     * 保存したばかりのブロックが古いもので上書きされうる。
+     * （storage.syncごと消すallClearではt_lenも消えるため、
+     * 全データ削除のあとのindexは0に戻る。そこはこの手がかりの守備範囲外）
+     * 壊れていても採番は止めてはいけないので、
+     * 数値にできない値は手がかりなし(0)として扱う
+     * @param {{[key: string]: unknown}} items storage.syncの全アイテム
+     * @return {number} 採番の下限
+     */
+    function tabLengthHintOf(items: { [key: string]: unknown }): number {
+      const tabLength = Number(items[tabLengthKey]);
+      if (!Number.isSafeInteger(tabLength) || tabLength <= 0) {
+        return 0;
+      }
+      return tabLength;
+    }
+
+    /**
+     * まだ使われていない最小のindexを返す。
+     * indexを単調に進められなくなったときの逃げ道なので、
+     * 空いている番号を埋める形で採番する
+     * @param {[number, unknown][]} blockData 保存されているブロックのデータ
+     * @return {number} 未使用のindex
+     */
+    function smallestUnusedIndex(blockData: [number, unknown][]): number {
+      const used = new Set(blockData.map(([indexNum]) => indexNum));
+      let indexNum = 0;
+      while (used.has(indexNum)) {
+        indexNum += 1;
+      }
+      return indexNum;
     }
 
     export async function setBlock(block: model.Block): Promise<void> {
@@ -77,36 +160,45 @@ export namespace chromeService {
       return setSyncStorage(key, data);
     }
 
+    /**
+     * 次に保存するブロックのindexを書き込む。
+     * この拡張自身は一覧の走査にt_lenを使わなくなったが、storage.syncは
+     * 複数の端末で共有されるため、まだ更新前のバージョンが動いている端末で
+     * 一覧が欠けないよう書き込みは続ける（採番の下限としても読む）
+     * @param {number} value 次に保存するブロックのindex
+     * @return {Promise<void>}
+     */
     export async function setTabLength(value: number): Promise<void> {
       return setSyncStorage(tabLengthKey, value.toString());
     }
 
-    export async function getTabLength(): Promise<number> {
-      return getSyncStorage(tabLengthKey).then((result) => {
-        if (result == null) {
-          return 0;
-        } else {
-          return util.toNumber(result);
-        }
-      });
+    /**
+     * 次に保存するブロックに割り当てるindexを返す。
+     * 保存済みのindexの最大値+1とすることで、t_lenが実データと
+     * ずれていても既存のブロックを上書きしない
+     * @return {Promise<number>} 未使用のindex
+     */
+    export async function getNextBlockIndex(): Promise<number> {
+      const items = await getAllSyncItems();
+      const blockData = blockDataOf(items);
+      const nextIndex = blockData.reduce(
+        (next, [indexNum]) => Math.max(next, indexNum + 1),
+        tabLengthHintOf(items),
+      );
+      if (Number.isSafeInteger(nextIndex)) {
+        return nextIndex;
+      }
+      // 安全な整数を超えるindexで保存すると、書いたキーをblockIndexOfが
+      // 拾えなくなり、保存したブロックが一覧にも出ず削除もできなくなる。
+      // ここまで来たらindexの単調性は諦めて、空いている番号を使う
+      return smallestUnusedIndex(blockData);
     }
 
     export async function getAllBlock(): Promise<model.BlockEntry[]> {
-      const tabLength = await getTabLength();
-
-      const promiseArray: Promise<[number, string]>[] = [];
-
-      for (let i = 0; i < tabLength; i++) {
-        promiseArray.push(getSyncStorageReturnIndex(i));
-      }
-
-      const result = await Promise.all(promiseArray);
+      const blockData = blockDataOf(await getAllSyncItems());
       const entries = await Promise.all(
-        result
-          // keyが存在しないindexは削除済みのブロックなので一覧に含めない。
-          // 空文字列は書き込みが壊れた形跡なのでBrokenBlockとして扱う
-          .filter((obj) => obj[1] != null)
-          .map((arr) => inflateEntry(arr[1], arr[0])),
+        // 空文字列は書き込みが壊れた形跡なのでBrokenBlockとして扱う
+        blockData.map(([indexNum, json]) => inflateEntry(json, indexNum)),
       );
       return entries.toSorted(blockService.compareBlockEntry);
     }
@@ -114,15 +206,20 @@ export namespace chromeService {
     /**
      * 保存データ1件を復元する。復元に失敗した場合は例外を伝播させず
      * BrokenBlockを返す（1件の壊れたデータで一覧全体が失われないようにする）
-     * @param {string} json 保存されていたデータ
+     * @param {unknown} json 保存されていたデータ
      * @param {number} indexNum ブロックのindex
      * @return {Promise<model.BlockEntry>} 復元したBlock or BrokenBlock
      */
     async function inflateEntry(
-      json: string,
+      json: unknown,
       indexNum: number,
     ): Promise<model.BlockEntry> {
       try {
+        if (typeof json !== 'string') {
+          throw new Error(
+            `Invalid block data: not a string, index=${indexNum}`,
+          );
+        }
         if (json.length <= 0) {
           throw new Error(`Empty block data: index=${indexNum}`);
         }

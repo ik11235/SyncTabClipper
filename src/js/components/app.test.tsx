@@ -89,7 +89,11 @@ describe('App', (): void => {
         sync: {
           QUOTA_BYTES: 102400,
           getBytesInUse: (): Promise<number> => Promise.resolve(0),
-          get: (keys: string[]): Promise<{ [key: string]: string }> => {
+          // 実際のchrome.storage.syncと同じく、nullを渡されたら全キーを返す
+          get: (keys: string[] | null): Promise<{ [key: string]: string }> => {
+            if (keys == null) {
+              return Promise.resolve({ ...syncData });
+            }
             const res: { [key: string]: string } = {};
             for (const key of keys) {
               const value = syncData[key];
@@ -1057,6 +1061,37 @@ describe('App', (): void => {
     } finally {
       consoleErrorSpy.mockRestore();
     }
+  });
+
+  // t_lenが壊れているとgetTabLengthの例外がreloadの.catchへ落ち、
+  // blocksがnullのままMainがマウントされず一覧が丸ごと消えていた(#229)
+  test('t_lenが壊れていても一覧が表示される', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = 'broken';
+    syncData['td_0'] =
+      '{"v":2,"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"title-a"}]}';
+    syncData['td_1'] =
+      '{"v":2,"created_at":1640000000000,"tabs":[{"url":"https://example.com/b","title":"title-b"}]}';
+
+    await mount();
+
+    expect(container.textContent).toContain('title-a');
+    expect(container.textContent).toContain('title-b');
+  });
+
+  // 書き込み失敗でt_lenの外側に取り残されたブロックも一覧に出す(#232の事後回収)
+  test('t_lenの外側に保存されたブロックも一覧に表示される', async (): Promise<void> => {
+    getAllBlockSpy.mockRestore();
+    syncData['t_len'] = '1';
+    syncData['td_0'] =
+      '{"v":2,"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"title-a"}]}';
+    syncData['td_5'] =
+      '{"v":2,"created_at":1640000000000,"tabs":[{"url":"https://example.com/orphan","title":"title-orphan"}]}';
+
+    await mount();
+
+    expect(container.textContent).toContain('title-a');
+    expect(container.textContent).toContain('title-orphan');
   });
 
   test('壊れたタブを削除しても同じブロックの正常なタブは残る', async (): Promise<void> => {
