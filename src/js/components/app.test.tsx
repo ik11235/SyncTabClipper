@@ -1912,6 +1912,12 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
   let createTabsSpy: jest.SpyInstance;
   // タブが開き終わるタイミングを操作するため、解決を手元に持つ
   let resolveCreateTabs: () => void;
+  let onChangedListeners: Array<
+    (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string,
+    ) => void
+  >;
 
   const mount = async (): Promise<void> => {
     await act(async () => {
@@ -1932,9 +1938,21 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
       (call[0] as model.Block).tabs.map((tab) => tab?.title),
     );
 
+  // storage.syncの変更をChromeと同様に購読側へ通知する
+  const notifySync = async (changes: {
+    [key: string]: chrome.storage.StorageChange;
+  }): Promise<void> => {
+    await act(async () => {
+      for (const listener of onChangedListeners) {
+        listener(changes, 'sync');
+      }
+    });
+  };
+
   beforeEach((): void => {
     container = document.createElement('div');
     document.body.appendChild(container);
+    onChangedListeners = [];
     getAllBlockSpy = jest
       .spyOn(chromeService.storage, 'getAllBlock')
       .mockResolvedValue([
@@ -1973,7 +1991,17 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
           getBytesInUse: (): Promise<number> => Promise.resolve(0),
           get: (): Promise<{ [key: string]: unknown }> => Promise.resolve({}),
         },
-        onChanged: { addListener: jest.fn(), removeListener: jest.fn() },
+        onChanged: {
+          addListener: (
+            listener: (
+              changes: { [key: string]: chrome.storage.StorageChange },
+              areaName: string,
+            ) => void,
+          ): void => {
+            onChangedListeners.push(listener);
+          },
+          removeListener: jest.fn(),
+        },
       },
       action: { setBadgeText: jest.fn(), setBadgeBackgroundColor: jest.fn() },
     };
@@ -2192,6 +2220,114 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
       allClearSpy.mockRestore();
       confirmSpy.mockRestore();
       alertSpy.mockRestore();
+    }
+  });
+
+  // allClearが着地するまでblocksRefは削除前のままなので、この間に始まった
+  // 書き込みは「消えたブロックには書き戻さない」ガードをすり抜ける
+  test('全データ削除の最中に始まった書き込みは書き戻さない', async (): Promise<void> => {
+    createTabsSpy.mockResolvedValue(undefined);
+    let resolveAllClear: () => void = () => {};
+    const allClearSpy = jest
+      .spyOn(chromeService.storage, 'allClear')
+      .mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveAllClear = () => resolve();
+        }),
+      );
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    const alertSpy = jest
+      .spyOn(window, 'alert')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      // 飛行中の書き込みはないのでallClearはすぐ始まる
+      await click('#all_clear');
+      expect(allClearSpy).toHaveBeenCalledTimes(1);
+
+      // allClearの着地前にカード内のタブを消す
+      await click('.tab_close', 0);
+      expect(setBlockSpy).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveAllClear();
+      });
+
+      expect(setBlockSpy).not.toHaveBeenCalled();
+    } finally {
+      allClearSpy.mockRestore();
+      confirmSpy.mockRestore();
+      alertSpy.mockRestore();
+    }
+  });
+
+  // 開いたタブが待っている間に全部消えていたら、書き戻す内容が変わらない。
+  // storage.syncの書き込みクォータを空振りで消費するだけになる
+  test('開いたタブが先に消えていたら書き戻さない', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        // 壊れたタブは開けないので、ブロックごと消えずに残る
+        tabs: [
+          { url: 'https://example.com/a', title: 'title-a' },
+          null as unknown as model.Tab,
+        ],
+      },
+    ]);
+    await mount();
+
+    // 「すべてのリンクを開く」の書き戻しを待たせている間にtitle-aを消す
+    await click('.all_tab_link');
+    createTabsSpy.mockResolvedValue(undefined);
+    await click('.tab_close', 0);
+    await act(async () => {
+      resolveCreateTabs();
+    });
+
+    // 消えるのはtitle-aの1回だけ。開いた分の書き戻しは行わない
+    expect(writtenTabs()).toStrictEqual([[undefined]]);
+  });
+
+  // 壊れたブロックの削除も同じキューに乗せないと、飛行中の書き込みが
+  // あとから着地して、消したブロックがstorageに戻る
+  test('壊れたブロックの削除は飛行中の書き込みの後に行う', async (): Promise<void> => {
+    createTabsSpy.mockResolvedValue(undefined);
+    let resolveWrite: () => void = () => {};
+    setBlockSpy.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWrite = () => resolve();
+        }),
+    );
+    const removeBlockSpy = jest
+      .spyOn(chromeService.storage, 'removeBlock')
+      .mockResolvedValue(undefined);
+
+    try {
+      await mount();
+
+      // タブの削除が飛行中のまま、読み直しで同じブロックが
+      // 復元できないものに変わる（他端末が壊れたデータを書いた場合など）
+      await click('.tab_close', 0);
+      getAllBlockSpy.mockResolvedValue([
+        { indexNum: 0, broken: true, unsupported: false },
+      ]);
+      await notifySync({ td_0: { newValue: 'broken' } });
+
+      await click('.broken_block_delete');
+      // 飛行中の書き込みが着地するまで消さない
+      expect(removeBlockSpy).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveWrite();
+      });
+
+      expect(removeBlockSpy).toHaveBeenCalledWith(0);
+    } finally {
+      removeBlockSpy.mockRestore();
     }
   });
 

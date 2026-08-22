@@ -96,6 +96,12 @@ const App: React.FC = () => {
   // 打ち消す。indexNumごとに直列化して、必ず直前の結果の上に積む
   const writeQueues = useRef(new Map<number, Promise<void>>());
 
+  // 全データ削除の最中かどうか。allClearが着地するまでblocksRefは削除前の
+  // ままなので、この間に始まった書き込みはupdateBlockの
+  // 「消えたブロックには書き戻さない」ガードをすり抜けて、
+  // 消したはずのブロックをstorageへ戻してしまう
+  const clearingAll = useRef(false);
+
   // ブロックの変更をstorageへ永続化し、成功時のみstateへ反映する。
   // 更新内容ではなく更新関数を受け取るのは、chrome.tabs.createを待つ間に
   // 一覧が変わっていても、書き込む直前の内容の上に変更を載せるため。
@@ -108,6 +114,10 @@ const App: React.FC = () => {
   const enqueueWrite = useCallback(
     (indexNum: number, job: () => Promise<void>): Promise<void> => {
       const start = (): Promise<void> => {
+        // これから消える一覧へ書いても意味がないので、書かずに解決する
+        if (clearingAll.current) {
+          return Promise.resolve();
+        }
         try {
           return job();
         } catch (error) {
@@ -139,16 +149,6 @@ const App: React.FC = () => {
     },
     [],
   );
-
-  // 飛行中の書き込みがすべて着地するまで待つ。storageを丸ごと消す前に
-  // 待たないと、あとから着地した書き込みが消したはずのブロックを書き戻す
-  // （updateBlockのガードは書き込みを始める前にしか効かない）。
-  // 待っている間に積まれた書き込みも待つ
-  const waitForWrites = useCallback(async (): Promise<void> => {
-    while (writeQueues.current.size > 0) {
-      await Promise.allSettled([...writeQueues.current.values()]);
-    }
-  }, []);
 
   const updateBlock = useCallback(
     (
@@ -238,16 +238,21 @@ const App: React.FC = () => {
 
   // 全データ削除をstorageへ反映し、成功時のみ一覧を空にする。
   // 完了通知（alert）はUIを持つSideBar側で行うためPromiseを返す
-  const deleteAllBlocks = useCallback(
-    (): Promise<void> =>
-      waitForWrites().then(() =>
-        chromeService.storage.allClear().then(() => {
-          setFromStorage(false);
-          applyBlocks([]);
-        }),
-      ),
-    [applyBlocks, waitForWrites],
-  );
+  const deleteAllBlocks = useCallback((): Promise<void> => {
+    // これ以降に積まれる書き込みはclearingAllで止まるので、
+    // いま飛行中のものだけを待てばよい。待たずに消すと、あとから着地した
+    // 書き込みが消したはずのブロックをstorageへ戻す
+    clearingAll.current = true;
+    return Promise.allSettled([...writeQueues.current.values()])
+      .then(() => chromeService.storage.allClear())
+      .then(() => {
+        setFromStorage(false);
+        applyBlocks([]);
+      })
+      .finally(() => {
+        clearingAll.current = false;
+      });
+  }, [applyBlocks]);
 
   return (
     <div className="uk-container">
