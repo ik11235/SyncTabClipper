@@ -22,9 +22,21 @@ type UpdateBlock = (
 
 let renderedBlock: model.Block;
 
-// updateBlockに渡された更新関数を適用して、storageへ書かれる内容を得る
-const savedBlock = (updateBlock: jest.Mock, callIndex = 0): model.Block =>
-  updateBlock.mock.calls[callIndex]![1](renderedBlock) as model.Block;
+// updateBlockに渡された更新関数を適用して、storageへ書かれる内容を得る。
+// currentを省いたときはレンダリングしたブロックを現在の内容として扱う。
+// 「クリック時のpropsではなく書き込む直前の内容に載せる」ことを確かめる
+// テストでは、propsとは別の内容をcurrentとして渡す
+const savedBlock = (
+  updateBlock: jest.Mock,
+  options: { current?: model.Block; callIndex?: number } = {},
+): model.Block =>
+  updateBlock.mock.calls[options.callIndex ?? 0]![1](
+    options.current ?? renderedBlock,
+  ) as model.Block;
+
+// updateBlockに渡されたindexNum
+const savedIndexNum = (updateBlock: jest.Mock, callIndex = 0): number =>
+  updateBlock.mock.calls[callIndex]![0] as number;
 
 describe('Block', (): void => {
   let container: HTMLDivElement;
@@ -1683,5 +1695,228 @@ describe('Block 落ちたタブの表示が読み直しで戻るか', (): void =
     expect(consoleErrorSpy.mock.calls.length).toBeLessThanOrEqual(
       perAttempt * 3,
     );
+  });
+});
+
+// この PR の核心は「クリック時のpropsではなく、書き込む直前の内容(current)に
+// 変更を載せる」こと。propsと同じcurrentを渡すテストでは両者を区別できないので、
+// ここではpropsとずれたcurrentを渡して確かめる(#248)
+describe('Block 書き込む直前に内容が変わっていたとき', (): void => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  // 画面に見えている内容
+  const shownBlock: model.Block = {
+    indexNum: 3,
+    createdAt: new Date('2021-01-02T03:04:05.678Z'),
+    tabs: [
+      { url: 'https://example.com/a', title: 'title-a' },
+      { url: 'https://example.com/b', title: 'title-b' },
+    ],
+    title: '見えている名前',
+  };
+
+  const mount = async (updateBlock: UpdateBlock): Promise<void> => {
+    renderedBlock = shownBlock;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<Block block={renderedBlock} updateBlock={updateBlock} />);
+    });
+  };
+
+  const click = async (selector: string, index = 0): Promise<void> => {
+    await act(async () => {
+      container.querySelectorAll<HTMLElement>(selector)[index]!.click();
+    });
+  };
+
+  beforeEach((): void => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      i18n: { getMessage: (key: string): string => key },
+    };
+  });
+
+  afterEach((): void => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  test('どのブロックへの書き込みかをindexNumで伝える', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await click('.tab_close', 0);
+
+    expect(savedIndexNum(updateBlock)).toBe(3);
+  });
+
+  // タブを消すだけの導線でも、待っている間に他端末で変わった名前を
+  // クリック時のものへ巻き戻してはいけない
+  test('タブの削除は書き込む直前の名前を引き継ぐ', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await click('.tab_close', 0);
+
+    expect(
+      savedBlock(updateBlock, {
+        current: { ...shownBlock, title: '書き込む直前の名前' },
+      }),
+    ).toStrictEqual({
+      ...shownBlock,
+      tabs: [{ url: 'https://example.com/b', title: 'title-b' }],
+      title: '書き込む直前の名前',
+    });
+  });
+
+  test('名前の保存は書き込む直前のタブを引き継ぐ', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('.block-title-edit')!.click();
+    });
+    const input =
+      container.querySelector<HTMLInputElement>('.block-title-input')!;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!;
+    await act(async () => {
+      setter.call(input, '新しい名前');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      container.querySelector<HTMLElement>('.block-title-save')!.click();
+    });
+
+    const currentTabs = [{ url: 'https://example.com/c', title: 'title-c' }];
+    expect(
+      savedBlock(updateBlock, {
+        current: { ...shownBlock, tabs: currentTabs },
+      }),
+    ).toStrictEqual({
+      ...shownBlock,
+      tabs: currentTabs,
+      title: '新しい名前',
+    });
+  });
+
+  test('ロックの切り替えは書き込む直前のタブを引き継ぐ', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await click('.block-lock-toggle');
+
+    const currentTabs = [{ url: 'https://example.com/c', title: 'title-c' }];
+    expect(
+      savedBlock(updateBlock, {
+        current: { ...shownBlock, tabs: currentTabs },
+      }),
+    ).toStrictEqual({ ...shownBlock, tabs: currentTabs, locked: true });
+  });
+
+  test('お気に入りの切り替えは書き込む直前のタブを引き継ぐ', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await click('.block-star-toggle');
+
+    const currentTabs = [{ url: 'https://example.com/c', title: 'title-c' }];
+    expect(
+      savedBlock(updateBlock, {
+        current: { ...shownBlock, tabs: currentTabs },
+      }),
+    ).toStrictEqual({ ...shownBlock, tabs: currentTabs, starred: true });
+  });
+
+  // 押した時点で解除されていても、待っている間にロックされたブロックへ
+  // 書き戻すと、ロックが守るはずだったタブを消してしまう
+  test('書き込む直前にロックされていたらタブを書き換えない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await click('.tab_close', 0);
+
+    expect(() =>
+      savedBlock(updateBlock, {
+        current: { ...shownBlock, locked: true },
+      }),
+    ).toThrow('This block is locked');
+  });
+
+  // 待っている間に他の操作で消えていたタブを消しにいくと、
+  // 同じ位置の別のタブを巻き込む
+  test('書き込む直前に対象のタブが消えていたら書き換えない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    // 1件目（title-a）の削除を押す
+    await click('.tab_close', 0);
+
+    expect(() =>
+      savedBlock(updateBlock, {
+        current: {
+          ...shownBlock,
+          tabs: [{ url: 'https://example.com/z', title: 'title-z' }],
+        },
+      }),
+    ).toThrow('tab already removed');
+  });
+
+  // 編集対象はindexで持っているため、書き込む直前の一覧で指し直さないと
+  // 別のタブを上書きする
+  test('タブの編集は書き込む直前の一覧で対象を指し直す', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    // 2件目（title-b）を編集する
+    await click('.tab_edit', 1);
+    const input = container.querySelector<HTMLInputElement>('.edit-tab-title')!;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!;
+    await act(async () => {
+      setter.call(input, 'renamed-b');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      container.querySelector<HTMLElement>('.edit-tab-save')!.click();
+    });
+
+    // 書き込む直前には先頭にタブが増え、title-bの位置がずれている
+    const inserted = { url: 'https://example.com/new', title: 'title-new' };
+    expect(
+      savedBlock(updateBlock, {
+        current: { ...shownBlock, tabs: [inserted, ...shownBlock.tabs] },
+      }).tabs,
+    ).toStrictEqual([
+      inserted,
+      { url: 'https://example.com/a', title: 'title-a' },
+      { url: 'https://example.com/b', title: 'renamed-b' },
+    ]);
+  });
+
+  test('書き込む直前に編集対象が消えていたら書き換えない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await click('.tab_edit', 1);
+    await act(async () => {
+      container.querySelector<HTMLElement>('.edit-tab-save')!.click();
+    });
+
+    expect(() =>
+      savedBlock(updateBlock, {
+        current: {
+          ...shownBlock,
+          tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+        },
+      }),
+    ).toThrow('edit target lost');
   });
 });

@@ -105,6 +105,51 @@ const App: React.FC = () => {
   // React.memo化したBlockの再レンダリングを防ぐため参照を安定させる。
   // 失敗はerrorLogに記録したうえで、呼び出し側が結果に応じてUIを制御できる
   // （編集モーダルを閉じない等）よう再throwする
+  const enqueueWrite = useCallback(
+    (indexNum: number, job: () => Promise<void>): Promise<void> => {
+      const start = (): Promise<void> => {
+        try {
+          return job();
+        } catch (error) {
+          // 同期の例外のまま抜けると、キューの繋ぎ方によって
+          // 呼び出し側の受け方が変わる
+          return Promise.reject(error);
+        }
+      };
+      const inFlight = writeQueues.current.get(indexNum);
+      // 飛行中の書き込みがなければその場で始める。待たせるだけの
+      // マイクロタスクを挟むと、書き込み中の表示（tabsWriting）が
+      // 独立したレンダリングとして一瞬見えてしまう。
+      // 直前の書き込みの成否に関わらず次を走らせるのは、失敗した書き込みで
+      // キューを止めると以降そのブロックを操作できなくなるため
+      const queued =
+        inFlight == null
+          ? start()
+          : inFlight.catch(() => undefined).then(start);
+      // 自分が最後尾のときだけ後始末する。あとから積まれていたら
+      // そちらが末尾なので消さない
+      const cleanup = (): void => {
+        if (writeQueues.current.get(indexNum) === queued) {
+          writeQueues.current.delete(indexNum);
+        }
+      };
+      writeQueues.current.set(indexNum, queued);
+      queued.then(cleanup, cleanup);
+      return queued;
+    },
+    [],
+  );
+
+  // 飛行中の書き込みがすべて着地するまで待つ。storageを丸ごと消す前に
+  // 待たないと、あとから着地した書き込みが消したはずのブロックを書き戻す
+  // （updateBlockのガードは書き込みを始める前にしか効かない）。
+  // 待っている間に積まれた書き込みも待つ
+  const waitForWrites = useCallback(async (): Promise<void> => {
+    while (writeQueues.current.size > 0) {
+      await Promise.allSettled([...writeQueues.current.values()]);
+    }
+  }, []);
+
   const updateBlock = useCallback(
     (
       indexNum: number,
@@ -116,6 +161,8 @@ const App: React.FC = () => {
         );
         // 待っている間に消えた／壊れたと分かったブロックには書き戻さない。
         // ここで書くと、削除済みのブロックがstorageに戻って復活する
+        // 呼び出し側からは成功として見える。書けなかったことを伝えても、
+        // 対象のカードはすでに一覧から外れていて見せる先がない
         if (current == null || blockService.isBrokenBlock(current)) {
           return Promise.resolve();
         }
@@ -153,47 +200,31 @@ const App: React.FC = () => {
           });
       };
 
-      const inFlight = writeQueues.current.get(indexNum);
-      // 飛行中の書き込みがなければその場で始める。待たせるだけの
-      // マイクロタスクを挟むと、書き込み中の表示（tabsWriting）が
-      // 独立したレンダリングとして一瞬見えてしまう。
-      // 直前の書き込みの成否に関わらず次を走らせるのは、失敗した書き込みで
-      // キューを止めると以降そのブロックを操作できなくなるため
-      const queued =
-        inFlight == null ? run() : inFlight.catch(() => undefined).then(run);
-      // 自分が最後尾のときだけ後始末する。あとから積まれていたら
-      // そちらが末尾なので消さない
-      const cleanup = (): void => {
-        if (writeQueues.current.get(indexNum) === queued) {
-          writeQueues.current.delete(indexNum);
-        }
-      };
-      writeQueues.current.set(indexNum, queued);
-      queued.then(cleanup, cleanup);
-      return queued;
+      return enqueueWrite(indexNum, run);
     },
-    [applyBlocks],
+    [applyBlocks, enqueueWrite],
   );
 
   // 復元・描画できなかったブロックはmodel.Blockを作れないため、
   // indexNumだけを渡してstorageから削除する
   const deleteBrokenBlock = useCallback(
     (indexNum: number) => {
-      chromeService.storage
-        .removeBlock(indexNum)
-        .then(() => {
+      // 同じブロックへの書き込みと並行させない。飛行中の書き込みが
+      // あとから着地すると、削除したブロックがstorageに戻る
+      enqueueWrite(indexNum, () =>
+        chromeService.storage.removeBlock(indexNum).then(() => {
           setFromStorage(false);
           const prevBlocks = blocksRef.current;
           if (prevBlocks == null) {
             return;
           }
           applyBlocks(prevBlocks.filter((block) => block.indexNum != indexNum));
-        })
-        .catch((error) => {
-          chromeService.errorLog.set(error).catch(console.error);
-        });
+        }),
+      ).catch((error) => {
+        chromeService.errorLog.set(error).catch(console.error);
+      });
     },
-    [applyBlocks],
+    [applyBlocks, enqueueWrite],
   );
 
   // 一覧の並びはstorageから読み込んだ時点でも整えているが、スターの付け外しは
@@ -209,11 +240,13 @@ const App: React.FC = () => {
   // 完了通知（alert）はUIを持つSideBar側で行うためPromiseを返す
   const deleteAllBlocks = useCallback(
     (): Promise<void> =>
-      chromeService.storage.allClear().then(() => {
-        setFromStorage(false);
-        applyBlocks([]);
-      }),
-    [applyBlocks],
+      waitForWrites().then(() =>
+        chromeService.storage.allClear().then(() => {
+          setFromStorage(false);
+          applyBlocks([]);
+        }),
+      ),
+    [applyBlocks, waitForWrites],
   );
 
   return (

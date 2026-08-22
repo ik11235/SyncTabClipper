@@ -175,6 +175,11 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           remaining.splice(at, 1);
         }
       }
+      if (remaining.length === current.tabs.length) {
+        // 待っている間に他の操作で消えていた。書き戻す必要がないので、
+        // storage.syncの書き込みクォータを無駄に使わずここで降りる
+        throw new Error('tabs already removed');
+      }
       return remaining;
     });
 
@@ -261,7 +266,10 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       return;
     }
     // 開き終わってから書き戻すまでを1つの操作としてまとめて数える。
-    // 途中で飛行中でなくなると、その隙に名前の編集を始められてしまう
+    // 途中で飛行中でなくなると、その隙に名前の編集を始められてしまう。
+    // 1件でも開けなかったら1本も消さない（Promise.all）。
+    // 開けた分だけ消すと、失敗したタブだけが残ったのか
+    // 全部残ったのかをユーザーが見分けられない
     trackTabWrite(
       Promise.all(
         openTabs.map((tab) =>
