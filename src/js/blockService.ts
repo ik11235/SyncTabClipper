@@ -20,20 +20,57 @@ export namespace blockService {
   // （v1のエクスポートはブロックの素の配列で版数を持たないため、ここには含めない）
   export const SUPPORTED_EXPORT_VERSIONS: readonly number[] = [2];
 
+  /**
+   * 保存するブロックを組み立てる。
+   * タブグループ(#191)は、渡されたグループのうち実際にタブが属しているものだけを
+   * ブロック側にまとめ、タブからは添字で参照する。名前と色をタブごとに複製するより
+   * 小さく、同じグループの実体が1つに定まる
+   * @param {chrome.tabs.Tab[]} tabs 保存するタブ
+   * @param {Date} createdAt 保存時刻
+   * @param {number} index ブロックのindex
+   * @param {chrome.tabGroups.TabGroup[]} tabGroups 保存時のタブグループ
+   * @return {model.Block} 保存するブロック
+   */
   export function createBlock(
     tabs: chrome.tabs.Tab[],
     createdAt: Date,
     index: number,
+    tabGroups: chrome.tabGroups.TabGroup[] = [],
   ): model.Block {
-    const blockTabs: model.Tab[] = tabs.map((tab) => ({
-      url: tab.url!,
-      title: tab.title!,
-    }));
+    // 実際にタブが属しているグループだけを、タブの並び順に拾う。
+    // 空のグループまで持つと、復元しても中身のないグループができる
+    const groupIndexes = new Map<number, number>();
+    const groups: model.TabGroup[] = [];
+    for (const tab of tabs) {
+      const tabGroup = tabGroups.find((group) => group.id === tab.groupId);
+      if (tabGroup == null || groupIndexes.has(tabGroup.id)) {
+        continue;
+      }
+      groupIndexes.set(tabGroup.id, groups.length);
+      groups.push({
+        // Chromeでは名前を付けずに色だけのグループを作れる
+        ...(tabGroup.title == null || tabGroup.title.length <= 0
+          ? {}
+          : { title: tabGroup.title }),
+        color: tabGroup.color,
+      });
+    }
+
+    const blockTabs: model.Tab[] = tabs.map((tab) => {
+      const groupIndex = groupIndexes.get(tab.groupId);
+      return {
+        url: tab.url!,
+        title: tab.title!,
+        // グループに属していないタブにキーを増やさない
+        ...(groupIndex == null ? {} : { group: groupIndex }),
+      };
+    });
 
     return {
       indexNum: index,
       createdAt: createdAt,
       tabs: blockTabs,
+      ...(groups.length <= 0 ? {} : { groups: groups }),
     };
   }
 
@@ -67,6 +104,10 @@ export namespace blockService {
       ...(block.locked === true ? { locked: true } : {}),
       // スターも同じ。付けていないブロックにキーを作らない
       ...(block.starred === true ? { starred: true } : {}),
+      // タブグループも同じ。グループを使っていないブロックにキーを作らない
+      ...(block.groups == null || block.groups.length <= 0
+        ? {}
+        : { groups: block.groups }),
     };
   }
 
@@ -118,6 +159,7 @@ export namespace blockService {
     title?: string;
     locked?: boolean;
     starred?: boolean;
+    groups?: model.TabGroup[];
     v?: number;
     d?: string;
   };
@@ -201,14 +243,101 @@ export namespace blockService {
     return starred === true ? { starred: true } : {};
   }
 
+  // chrome.tabGroups.Colorが取りうる値。知らない色をそのまま
+  // chrome.tabGroups.updateへ渡すと復元ごと失敗するため、読み込み時に弾く
+  const TAB_GROUP_COLORS: readonly string[] = [
+    'grey',
+    'blue',
+    'red',
+    'yellow',
+    'green',
+    'pink',
+    'purple',
+    'cyan',
+    'orange',
+  ];
+
+  // 色が壊れていたときの寄せ先。Chromeがグループ作成時に使う無彩色
+  const DEFAULT_TAB_GROUP_COLOR = 'grey';
+
+  /**
+   * 保存データのgroupsをタブグループの配列に変換する。
+   * titleやlockedと同じくインポートしたJSONには型の検証がないため、
+   * 配列でない・要素がオブジェクトでない場合はグループなしとして扱う
+   * @param {unknown} groups 保存データが持っていたgroups
+   * @return {object} groupsを持つオブジェクト。使っていなければ空オブジェクト
+   */
+  function blockGroupsField(groups: unknown): { groups?: model.TabGroup[] } {
+    if (!Array.isArray(groups) || groups.length <= 0) {
+      return {};
+    }
+    // 添字で参照する以上、途中の要素だけを捨てると後続の参照がずれる。
+    // 壊れた要素は既定値へ寄せて、配列の長さと並びは保つ
+    return {
+      groups: groups.map((group) => {
+        const title: unknown = (group as model.TabGroup | null)?.title;
+        const color: unknown = (group as model.TabGroup | null)?.color;
+        return {
+          ...(typeof title === 'string' && title.trim().length > 0
+            ? { title: title.trim() }
+            : {}),
+          color:
+            typeof color === 'string' && TAB_GROUP_COLORS.includes(color)
+              ? color
+              : DEFAULT_TAB_GROUP_COLOR,
+        };
+      }),
+    };
+  }
+
+  /**
+   * 保存データのタブを読む。jsonObjToBlockとjsonToBlockの両方から通す。
+   * かつてjsonToBlock側がタブを{url,title}に組み立て直しており、
+   * Tabにフィールドを足すと読み込みで消える形になっていた
+   * @param {model.Tab[]} tabs 保存データが持っていたtabs
+   * @param {model.TabGroup[] | undefined} groups 正規化済みのグループ
+   * @return {model.Tab[]} 復元したタブ
+   */
+  function toBlockTabs(
+    tabs: model.Tab[],
+    groups: model.TabGroup[] | undefined,
+  ): model.Tab[] {
+    const groupCount = groups?.length ?? 0;
+    return tabs.map((tab) => {
+      // 壊れたタブ（nullなど）はそのまま通す。作り直すと保存データの形が
+      // 変わってしまい、書き戻したときに別のデータになる
+      if (tab == null || typeof tab !== 'object') {
+        return tab;
+      }
+      const group: unknown = tab.group;
+      if (group === undefined) {
+        return tab;
+      }
+      if (
+        typeof group === 'number' &&
+        Number.isInteger(group) &&
+        group >= 0 &&
+        group < groupCount
+      ) {
+        return tab;
+      }
+      // 参照先のないグループを残すと、復元のときに存在しないグループを引く
+      const rest = { ...tab };
+      delete rest.group;
+      return rest;
+    });
+  }
+
   function jsonObjToBlock(object: BlockJson, index: number): model.Block {
+    const groupsField = blockGroupsField(object.groups);
     return {
       indexNum: index,
       createdAt: toCreatedAt(object.created_at),
-      tabs: object.tabs,
+      tabs: toBlockTabs(object.tabs, groupsField.groups),
       ...blockTitleField(object.title),
       ...blockLockedField(object.locked),
       ...blockStarredField(object.starred),
+      ...groupsField,
     };
   }
 
@@ -218,19 +347,16 @@ export namespace blockService {
 
   export function jsonToBlock(json: string, indexNum: number): model.Block {
     const js = JSON.parse(json) as BlockJson;
-
-    const tabs: model.Tab[] = js.tabs.map((jsonArr) => ({
-      url: jsonArr.url,
-      title: jsonArr.title,
-    }));
+    const groupsField = blockGroupsField(js.groups);
 
     return {
       indexNum: indexNum,
       createdAt: toCreatedAt(js.created_at),
-      tabs: tabs,
+      tabs: toBlockTabs(js.tabs, groupsField.groups),
       ...blockTitleField(js.title),
       ...blockLockedField(js.locked),
       ...blockStarredField(js.starred),
+      ...groupsField,
     };
   }
 
