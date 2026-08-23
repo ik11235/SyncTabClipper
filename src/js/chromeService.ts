@@ -271,7 +271,10 @@ export namespace chromeService {
         return;
       }
       // tabIdsの型は空でないタプル。空配列を渡すとChromeも例外にするため、
-      // 上で弾いたうえでタプルとして渡す
+      // 上で弾いたうえでタプルとして渡す。
+      // createPropertiesを省くとタブのあるウィンドウにグループができる。
+      // 開く側(createTabs)もwindowIdを指定していないので現在のウィンドウで
+      // 揃う。片方だけウィンドウを指すようにすると食い違う
       const groupId = await chrome.tabs.group({
         tabIds: tabIds as [number, ...number[]],
       });

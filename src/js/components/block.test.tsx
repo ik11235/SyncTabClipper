@@ -2245,6 +2245,64 @@ describe('Block タブグループの復元', (): void => {
     expect(errorLogSetSpy).toHaveBeenCalledTimes(1);
   });
 
+  // モーダルは{title,url}しか知らない。差し替えにすると、名前を直しただけで
+  // タブがグループから外れる
+  test('タブを編集してもグループから外れない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    renderedBlock = grouped;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<Block block={renderedBlock} updateBlock={updateBlock} />);
+    });
+
+    await click('.tab_edit');
+    const input = container.querySelector<HTMLInputElement>('.edit-tab-title')!;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!;
+    await act(async () => {
+      setter.call(input, 'renamed-a');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      container.querySelector<HTMLElement>('.edit-tab-save')!.click();
+    });
+
+    expect(savedBlock(updateBlock).tabs[0]).toStrictEqual({
+      url: 'https://example.com/a',
+      title: 'renamed-a',
+      group: 0,
+    });
+  });
+
+  // 開けたタブが素のまま残ることまで巻き添えにする理由はない
+  test('1件開けなくても開けた分はグループ化する', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    let nextTabId = 100;
+    createTabsSpy.mockImplementation((properties: { url: string }) =>
+      properties.url === 'https://example.com/d'
+        ? Promise.reject(new Error('cannot open'))
+        : Promise.resolve({ id: nextTabId++ } as chrome.tabs.Tab),
+    );
+    renderedBlock = grouped;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<Block block={renderedBlock} updateBlock={updateBlock} />);
+    });
+
+    await click('.all_tab_link');
+
+    // 開けたタブだけでグループを作る
+    expect(groupTabsSpy).toHaveBeenCalledWith([100], {
+      title: '調査中',
+      color: 'blue',
+    });
+    // 1件でも開けなかったら1本も消さない（土台からの方針）
+    expect(updateBlock).not.toHaveBeenCalled();
+    expect(errorLogSetSpy).toHaveBeenCalled();
+  });
+
   // ロック中は開くだけで一覧から消さないが、グループは戻す
   test('ロック中でもグループを再構成する', async (): Promise<void> => {
     await mount({ ...grouped, locked: true });

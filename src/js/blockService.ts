@@ -47,11 +47,12 @@ export namespace blockService {
         continue;
       }
       groupIndexes.set(tabGroup.id, groups.length);
+      // Chromeでは名前を付けずに色だけのグループを作れる。
+      // 名前の正規化は読み込み側と同じ規則に揃える（揃えないと、
+      // 保存直後の表示と読み直したあとの表示が食い違う）
+      const groupTitle = toDisplayTitle(tabGroup.title);
       groups.push({
-        // Chromeでは名前を付けずに色だけのグループを作れる
-        ...(tabGroup.title == null || tabGroup.title.length <= 0
-          ? {}
-          : { title: tabGroup.title }),
+        ...(groupTitle == null ? {} : { title: groupTitle }),
         color: tabGroup.color,
       });
     }
@@ -104,7 +105,10 @@ export namespace blockService {
       ...(block.locked === true ? { locked: true } : {}),
       // スターも同じ。付けていないブロックにキーを作らない
       ...(block.starred === true ? { starred: true } : {}),
-      // タブグループも同じ。グループを使っていないブロックにキーを作らない
+      // タブグループも同じ。グループを使っていないブロックにキーを作らない。
+      // タブを消してどのタブからも参照されなくなったグループは、あえて
+      // 残したまま書く。詰めると後続の添字がずれ、残ったタブが別のグループを
+      // 指してしまう（使われないグループのぶん保存データは大きいままになる）
       ...(block.groups == null || block.groups.length <= 0
         ? {}
         : { groups: block.groups }),
@@ -181,7 +185,8 @@ export namespace blockService {
   }
 
   /**
-   * 保存データのtitleをブロックの名前に変換する。
+   * 保存データのtitleを表示できる名前に変換する。ブロックの名前と
+   * タブグループの名前(#191)の両方から使う。
    * 型では文字列だが、インポートしたJSONには型の検証がないため実際には
    * 何でも入りうる。文字列以外をそのままblock.titleに持たせると
    * レンダリングで例外になりブロックごと破損カードに落ちるため、
@@ -191,7 +196,7 @@ export namespace blockService {
    * @param {unknown} title 保存データが持っていたtitle
    * @return {string | undefined} ブロックの名前。名前として扱えない値ならundefined
    */
-  function toBlockTitle(title: unknown): string | undefined {
+  function toDisplayTitle(title: unknown): string | undefined {
     if (typeof title === 'string') {
       // 空文字列と空白だけの文字列は名前なしと同じ扱いにして、デフォルトの
       // タブ数表示に戻す。空白だけの名前を通すと見出しが空のカードになり、
@@ -216,7 +221,7 @@ export namespace blockService {
    * @return {object} titleを持つオブジェクト。名前がなければ空オブジェクト
    */
   function blockTitleField(title: unknown): { title?: string } {
-    const blockTitle = toBlockTitle(title);
+    const blockTitle = toDisplayTitle(title);
     return blockTitle == null ? {} : { title: blockTitle };
   }
 
@@ -277,10 +282,11 @@ export namespace blockService {
       groups: groups.map((group) => {
         const title: unknown = (group as model.TabGroup | null)?.title;
         const color: unknown = (group as model.TabGroup | null)?.color;
+        // 名前の正規化はブロック名と同じ規則に揃える。同じ復元可能な情報を
+        // フィールドによって残したり捨てたりしない
+        const groupTitle = toDisplayTitle(title);
         return {
-          ...(typeof title === 'string' && title.trim().length > 0
-            ? { title: title.trim() }
-            : {}),
+          ...(groupTitle == null ? {} : { title: groupTitle }),
           color:
             typeof color === 'string' && TAB_GROUP_COLORS.includes(color)
               ? color

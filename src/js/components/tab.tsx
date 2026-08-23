@@ -44,8 +44,10 @@ export const Tab: React.FC<TabProps> = (props) => {
           }
         >
           <span className="tab-group-dot" aria-hidden={true} />
-          {props.group.title ??
-            chrome.i18n.getMessage('content_msg_tab_group_unnamed')}
+          <span className="tab-group-name">
+            {props.group.title ??
+              chrome.i18n.getMessage('content_msg_tab_group_unnamed')}
+          </span>
         </span>
       )}
       <img
