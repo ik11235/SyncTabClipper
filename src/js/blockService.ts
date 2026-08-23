@@ -44,6 +44,13 @@ export namespace blockService {
   export class UnsupportedVersionError extends Error {}
 
   /**
+   * v1/v2の解凍器（zlib）を読み込めなかったときの例外。
+   * 保存データは壊れていないので、壊れたデータと区別できるようにする
+   * （区別しないと、確認なしで削除できるカードとして出てしまう）
+   */
+  export class LegacyInflateUnavailableError extends Error {}
+
+  /**
    * v1/v2の圧縮データを解凍する。zlibは必要になったときだけ読み込む(#237)。
    *
    * zlib.js + zlib-inflate.jsは生ソースで約92KBあり、静的にimportすると
@@ -61,15 +68,26 @@ export namespace blockService {
    * @return {Promise<string>} 解凍した文字列
    */
   async function inflateLegacy(compressed: string): Promise<string> {
-    if (typeof document === 'undefined') {
-      throw new Error(
-        'Legacy zlib data cannot be read here: the chunk loader needs a document (see #237)',
+    let inflate: (val: string) => string;
+    try {
+      if (typeof document === 'undefined') {
+        throw new Error('the chunk loader needs a document');
+      }
+      inflate = (
+        await import(/* webpackChunkName: "zlib-inflate" */ './zlib-wrapper')
+      ).zlibWrapper.inflate;
+    } catch (e) {
+      // 解凍器を用意できなかっただけで、保存データ自体は壊れていない。
+      // 壊れたデータと同じ扱いにすると、確認なしで削除できるカードになり、
+      // 読めたはずのブロックを全同期端末から消せてしまう
+      throw new LegacyInflateUnavailableError(
+        `Legacy zlib data cannot be read here (see #237): ${
+          e instanceof Error ? e.message : String(e)
+        }`,
       );
     }
-    const { zlibWrapper } = await import(
-      /* webpackChunkName: "zlib-inflate" */ './zlib-wrapper'
-    );
-    return zlibWrapper.inflate(compressed);
+    // 解凍そのものの失敗はデータ側の問題なので、ここは包まない
+    return inflate(compressed);
   }
 
   /**

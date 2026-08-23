@@ -4,6 +4,9 @@ interface BrokenBlockProps {
   indexNum: number;
   // この拡張機能が知らないスキーマ版数のデータか（削除前に警告する）
   unsupported: boolean;
+  // 解凍器を用意できなかっただけで、保存データは読めるはずか(#237)。
+  // 実データが生きているのでunsupportedと同じく削除前に警告する
+  unreadable: boolean;
   // 編集をロックしていたブロックか。描画に失敗するとロックを解除する導線ごと
   // 失われるため、削除させないのではなく警告して委ねる
   locked: boolean;
@@ -21,7 +24,9 @@ const BrokenBlock: React.FC<BrokenBlockProps> = (props) => {
     ? 'content_msg_locked_block_delete_confirm'
     : props.unsupported
       ? 'content_msg_unsupported_block_delete_confirm'
-      : null;
+      : props.unreadable
+        ? 'content_msg_unreadable_block_delete_confirm'
+        : null;
 
   const deleteBlock = () => {
     // 新しいバージョンで保存されただけのデータは実データが生きている可能性があり、
@@ -46,7 +51,9 @@ const BrokenBlock: React.FC<BrokenBlockProps> = (props) => {
         <h3 className="uk-card-title uk-margin-remove-bottom">
           {props.unsupported
             ? chrome.i18n.getMessage('content_msg_unsupported_block')
-            : chrome.i18n.getMessage('content_msg_broken_block')}
+            : props.unreadable
+              ? chrome.i18n.getMessage('content_msg_unreadable_block')
+              : chrome.i18n.getMessage('content_msg_broken_block')}
         </h3>
         <div className="uk-grid">
           <div className="uk-width-auto">

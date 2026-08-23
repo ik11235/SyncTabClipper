@@ -43,6 +43,20 @@ describe('blockService service worker環境', (): void => {
     },
   );
 
+  // 壊れたデータと同じ扱いにすると、確認なしで削除できるカードになり、
+  // 読めたはずのブロックを全同期端末から消せてしまう
+  test.each([
+    ['v1圧縮', legacyCompressed],
+    ['v2圧縮', JSON.stringify({ v: 2, ev: '0.3.0', d: legacyCompressed })],
+  ])(
+    '%sの失敗は壊れたデータと区別できる例外にする',
+    async (_name: string, input: string): Promise<void> => {
+      await expect(blockService.inflateJson(input, 1)).rejects.toBeInstanceOf(
+        blockService.LegacyInflateUnavailableError,
+      );
+    },
+  );
+
   // backgroundが実際に通る経路。ここが塞がっていたら保存ができなくなる
   test('非圧縮データはdocumentがなくても読める', async (): Promise<void> => {
     await expect(
@@ -58,14 +72,25 @@ describe('blockService service worker環境', (): void => {
   });
 
   // 書き込み経路(deflateBlock)はv3のCompressionStreamだけを使う。
-  // zlibに触れないことが、backgroundからzlibを外せる前提になっている
-  test('ブロックの書き込みはzlibに触れずに済む', async (): Promise<void> => {
-    const stored = await blockService.deflateBlock({
+  // zlibに触れないことが、backgroundからzlibを外せる前提になっている。
+  // 圧縮した内容が元に戻るところまで見る（版数だけだと非圧縮でも通る）
+  test('ブロックの書き込みはzlibに触れずに往復できる', async (): Promise<void> => {
+    const block = {
       indexNum: 0,
       createdAt: new Date(1609556645678),
-      tabs: [{ url: 'https://example.com/a', title: 'a' }],
-    });
+      // 圧縮したほうが短くなるよう、繰り返しの多い内容にする
+      tabs: Array.from({ length: 30 }, () => ({
+        url: 'https://example.com/same-page',
+        title: 'おなじタイトルのタブ',
+      })),
+    };
 
-    expect(JSON.parse(stored).v).toBe(blockService.CURRENT_SCHEMA_VERSION);
+    const stored = await blockService.deflateBlock(block);
+
+    // 圧縮側が選ばれている
+    expect(JSON.parse(stored).d).toEqual(expect.any(String));
+    await expect(blockService.inflateJson(stored, 0)).resolves.toStrictEqual(
+      block,
+    );
   });
 });

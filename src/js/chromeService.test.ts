@@ -206,6 +206,40 @@ describe('chromeService.storage.getAllBlock', (): void => {
     },
   );
 
+  // 解凍器を読み込めなかっただけの場合、保存データは無事なので
+  // 壊れたデータと区別する。区別しないと確認なしで削除できるカードになり、
+  // 読めたはずのブロックを全同期端末から消せてしまう(#237)
+  test('解凍器を読み込めなかったブロックはunreadableとして返る', async (): Promise<void> => {
+    const inflateJsonSpy = jest
+      .spyOn(blockService, 'inflateJson')
+      .mockRejectedValue(
+        new blockService.LegacyInflateUnavailableError('no chunk loader'),
+      );
+    syncData['td_0'] = validJson(1609556645678, 'legacy');
+
+    try {
+      const res = await chromeService.storage.getAllBlock();
+
+      expect(res).toStrictEqual([
+        { indexNum: 0, broken: true, unsupported: false, unreadable: true },
+      ]);
+    } finally {
+      inflateJsonSpy.mockRestore();
+    }
+  });
+
+  // 本当に壊れているデータにはunreadableを付けない。
+  // 付けると「読めるはず」の警告が出て、実際には直らないものを待たせる
+  test('本当に壊れているブロックにunreadableは付かない', async (): Promise<void> => {
+    syncData['td_0'] = '{"v":2,"created_at":1';
+
+    const res = await chromeService.storage.getAllBlock();
+
+    expect(res).toStrictEqual([
+      { indexNum: 0, broken: true, unsupported: false },
+    ]);
+  });
+
   test('復元できないブロックが複数あってもすべてBrokenBlockとして返る', async (): Promise<void> => {
     syncData['t_len'] = '3';
     syncData['td_0'] = '{"v":2,"created_at":1';

@@ -83,6 +83,12 @@
   "content_msg_unsupported_block_delete_confirm": {
     "message": "This data may become readable after updating the extension. Deleting it removes the data from all synced devices. Delete it?"
   },
+  "content_msg_unreadable_block": {
+    "message": "This block could not be prepared for reading. Reloading the page may make it appear."
+  },
+  "content_msg_unreadable_block_delete_confirm": {
+    "message": "This data may still be intact and simply could not be loaded. Deleting it removes it from every synced device. Delete it?"
+  },
   "content_msg_broken_tab": {
     "message": "Failed to load the data of this tab."
   },

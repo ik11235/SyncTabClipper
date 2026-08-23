@@ -23,3 +23,12 @@ jobs:
         run: npm test
       - name: build check
         run: npm run build:prod
+      # zlibはv1/v2の読み取り専用で、書き込みしかしないservice workerには
+      # 要らない(#237)。静的importが復活すると91KBが黙って戻り、
+      # ビルドもテストも通ってしまうのでここで止める
+      - name: service workerにzlibが入っていないことの確認
+        run: |
+          if grep -q 'ZLIB' dist/js/background.js; then
+            echo '::error::dist/js/background.js に zlib が含まれています。zlib-wrapper への静的importが復活していないか確認してください (#237)'
+            exit 1
+          fi

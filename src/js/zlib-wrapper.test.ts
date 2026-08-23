@@ -1,3 +1,9 @@
+/**
+ * @jest-environment jsdom
+ *
+ * inflateはブラウザで動くコードで、base64の復号にWHATWGのatobを使う。
+ * nodeのatobは別実装で投げる例外も違うため、jsdomで検証する
+ */
 import { zlibWrapper } from './zlib-wrapper';
 
 // Manifest V2時点(master)のzlib実装で生成した圧縮データ。
