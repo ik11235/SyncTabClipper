@@ -10,6 +10,10 @@ module.exports = {
   output: {
     path: path.join(__dirname, 'dist/js'),
     filename: '[name].js',
+    // 動的importで切り出したチャンク(#237)に、数字のidではなく
+    // webpackChunkNameで付けた名前を使う。dist/jsに素性の分からない
+    // 900.jsのようなファイルが並ぶのを避ける
+    chunkFilename: '[name].chunk.js',
   },
   module: {
     rules: [

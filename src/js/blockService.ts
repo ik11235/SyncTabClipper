@@ -1,5 +1,4 @@
 import { model } from './types/interface';
-import { zlibWrapper } from './zlib-wrapper';
 import { compression } from './compression';
 import { chromeService } from './chromeService';
 
@@ -43,6 +42,35 @@ export namespace blockService {
    * （sync経由で新しい端末から降りてくる）ため、呼び出し側で区別できるようにする
    */
   export class UnsupportedVersionError extends Error {}
+
+  /**
+   * v1/v2の圧縮データを解凍する。zlibは必要になったときだけ読み込む(#237)。
+   *
+   * zlib.js + zlib-inflate.jsは生ソースで約92KBあり、静的にimportすると
+   * 読み取りを一切しないservice worker(background)のバンドルにも同梱される。
+   * blockServiceはbackgroundからも使われるうえ、export namespaceは
+   * tree-shakingが効かないため、動的importで切り離すしかない。
+   *
+   * その代わり、webpackはbackground側にもチャンク読み込みのランタイムを
+   * 吐く。それはdocumentを使う実装でservice workerでは動かない。
+   * backgroundがこの経路に到達しないこと（書き込みしかせず、inflateを呼ぶ
+   * getAllBlockを使わないこと）が前提なので、到達したら理由の分かる形で
+   * 止める。ここを消してReferenceErrorに任せると、原因がバンドル構成に
+   * あることに気付けない
+   * @param {string} compressed 圧縮された文字列
+   * @return {Promise<string>} 解凍した文字列
+   */
+  async function inflateLegacy(compressed: string): Promise<string> {
+    if (typeof document === 'undefined') {
+      throw new Error(
+        'Legacy zlib data cannot be read here: the chunk loader needs a document (see #237)',
+      );
+    }
+    const { zlibWrapper } = await import(
+      /* webpackChunkName: "zlib-inflate" */ './zlib-wrapper'
+    );
+    return zlibWrapper.inflate(compressed);
+  }
 
   /**
    * 一覧の要素が復元できなかったブロックかを判定する
@@ -244,7 +272,7 @@ export namespace blockService {
     } catch (e) {
       if (e instanceof SyntaxError) {
         // v1の圧縮データは素のzlib+base64文字列でJSONとして解釈できない
-        return jsonToBlock(zlibWrapper.inflate(jsonStr), indexNum);
+        return jsonToBlock(await inflateLegacy(jsonStr), indexNum);
       } else {
         throw e;
       }
@@ -259,7 +287,7 @@ export namespace blockService {
         // v2は圧縮時のみエンベロープ形式({v, ev, d})になる
         return js.d == null
           ? jsonObjToBlock(js, indexNum)
-          : jsonToBlock(zlibWrapper.inflate(js.d), indexNum);
+          : jsonToBlock(await inflateLegacy(js.d), indexNum);
       case 3:
         // v3はdフィールドがdeflate-raw+UTF-8+base64の圧縮ペイロード
         return js.d == null
