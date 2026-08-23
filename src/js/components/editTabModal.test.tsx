@@ -176,7 +176,13 @@ describe('EditTabModal', (): void => {
     );
 
     await act(async () => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      // ダイアログの中で拾う。documentで拾うとモーダルが2枚開いたときに
+      // 1回のEscで両方閉じてしまう
+      container
+        .querySelector('.edit-tab-modal')!
+        .dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+        );
     });
 
     expect(onCancel).toHaveBeenCalledTimes(1);
@@ -234,7 +240,13 @@ describe('EditTabModal', (): void => {
 
     await submit();
     await act(async () => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      // ダイアログの中で拾う。documentで拾うとモーダルが2枚開いたときに
+      // 1回のEscで両方閉じてしまう
+      container
+        .querySelector('.edit-tab-modal')!
+        .dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+        );
     });
 
     expect(onSave).toHaveBeenCalledTimes(1);
@@ -288,5 +300,87 @@ describe('EditTabModal', (): void => {
     await submit();
 
     expect(onSave).toHaveBeenCalledTimes(2);
+  });
+  // aria-modalを名乗る以上、キーボードでも背後へ出られてはいけない。
+  // 出られると背後のカードの導線を操作してモーダルを重ねて開けてしまう
+  // （オーバーレイはポインタしか塞がない）
+  describe('フォーカスの閉じ込め', (): void => {
+    const focusables = (): HTMLElement[] =>
+      Array.from(
+        container.querySelectorAll<HTMLElement>(
+          '.edit-tab-modal input, .edit-tab-modal button',
+        ),
+      );
+
+    const pressTab = async (shiftKey: boolean): Promise<void> => {
+      await act(async () => {
+        container.querySelector('.edit-tab-modal')!.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'Tab',
+            shiftKey: shiftKey,
+            bubbles: true,
+          }),
+        );
+      });
+    };
+
+    test('最後の要素からTabで先頭へ戻る', async (): Promise<void> => {
+      await mount(
+        { url: 'https://example.com/', title: 'old title' },
+        jest.fn().mockResolvedValue(undefined),
+        jest.fn(),
+      );
+      const all = focusables();
+      all[all.length - 1]!.focus();
+
+      await pressTab(false);
+
+      expect(document.activeElement).toBe(all[0]);
+    });
+
+    test('先頭の要素からShift+Tabで最後へ回る', async (): Promise<void> => {
+      await mount(
+        { url: 'https://example.com/', title: 'old title' },
+        jest.fn().mockResolvedValue(undefined),
+        jest.fn(),
+      );
+      const all = focusables();
+      all[0]!.focus();
+
+      await pressTab(true);
+
+      expect(document.activeElement).toBe(all[all.length - 1]);
+    });
+
+    test('途中の要素ではブラウザの既定に任せる', async (): Promise<void> => {
+      await mount(
+        { url: 'https://example.com/', title: 'old title' },
+        jest.fn().mockResolvedValue(undefined),
+        jest.fn(),
+      );
+      const all = focusables();
+      all[0]!.focus();
+
+      await pressTab(false);
+
+      // preventDefaultしないので、jsdomではフォーカスが動かない
+      expect(document.activeElement).toBe(all[0]);
+    });
+  });
+
+  // modeを省いたときに追加の文言へ倒れると、編集が「追加」に見える
+  test('modeを省くと編集の文言になる', async (): Promise<void> => {
+    await mount(
+      { url: 'https://example.com/', title: 'old title' },
+      jest.fn().mockResolvedValue(undefined),
+      jest.fn(),
+    );
+
+    expect(container.querySelector('.uk-modal-title')!.textContent).toBe(
+      'content_msg_edit_tab_heading',
+    );
+    expect(container.querySelector('.edit-tab-save')!.textContent).toBe(
+      'content_msg_edit_tab_save',
+    );
   });
 });

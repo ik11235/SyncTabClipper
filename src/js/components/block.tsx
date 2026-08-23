@@ -367,7 +367,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // 末尾に足す。既存のタブの並びは触らない
   const saveAddedTab = (newTab: model.Tab): Promise<void> =>
     updateTabs((current) => [...current.tabs, newTab]).then(() => {
-      setAddingTab(false);
+      closeTabAdd();
     });
 
   const startTabAdd = () => {
@@ -381,6 +381,10 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
 
   const closeTabAdd = () => {
     setAddingTab(false);
+    // モーダルが消えるとフォーカスがbodyまで落ちる。キーボードで開いた
+    // 場合にページ先頭からやり直しになるため、開いたボタンへ戻す
+    // （名前の編集が閉じたときと同じ扱い）
+    addTabButton.current?.focus();
   };
 
   const closeTabEdit = () => {
@@ -451,6 +455,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // キーボード操作の現在位置が失われる。開いたときのボタンへ戻す
   const cardRoot = useRef<HTMLDivElement>(null);
   const titleEditButton = useRef<HTMLButtonElement>(null);
+  const addTabButton = useRef<HTMLButtonElement>(null);
   const titleWasEditing = useRef(false);
   useEffect(() => {
     if (titleWasEditing.current && titleDraft == null) {
@@ -749,6 +754,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
                 押せない理由をtitleで読ませるためフォーカスは残す */}
             <button
               type="button"
+              ref={addTabButton}
               className="add_tab uk-link"
               title={
                 locked
@@ -756,6 +762,10 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
                   : undefined
               }
               aria-disabled={locked}
+              // 書き込みが飛行中に開かせない。着地でタブが全部消えると
+              // カードごとアンマウントされ、入力が何の通知もなく消える
+              // （名前の編集ボタンと同じ扱い）
+              disabled={tabsWriting}
               onClick={locked ? undefined : startTabAdd}
             >
               {chrome.i18n.getMessage('content_msg_add_tab')}
@@ -811,6 +821,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           mode="add"
           // 空欄から始める。既存のタブを指していないのでtargetLostもない
           tab={{ url: '', title: '' }}
+          locked={locked}
           onSave={saveAddedTab}
           onCancel={closeTabAdd}
         />
@@ -822,6 +833,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           // 読まれないため、読み直しで入れ替わったタブを渡す意味はない
           tab={editTarget}
           targetLost={editTargetLost}
+          locked={locked}
           onSave={saveEditedTab}
           onCancel={closeTabEdit}
         />
