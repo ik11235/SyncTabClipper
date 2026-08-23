@@ -372,9 +372,9 @@ export namespace blockService {
       throw new Error('Invalid data: block has no tabs array');
     }
     // タブが1件もないブロックはsetBlockが削除として扱うため、書き込んだ
-    // つもりでstorageには何も入らない。ただし0タブ自体は壊れたデータでは
-    // なく一覧に「0件」のカードとして出せる扱い(#197)なので、インポート
-    // 全体を止めずにこの1件だけ書き込めなかったものとして数える
+    // つもりでstorageには何も入らない。ただし空のtabsは読み込み側が許容する
+    // 有効なデータ(#197)でスキーマ不正ではないので、上のチェックでは弾かず、
+    // インポート全体を止めずにこの1件だけ書き込めなかったものとして数える
     const writableObjs = blockObjs.filter((obj) => obj.tabs.length > 0);
     const emptyCount = blockObjs.length - writableObjs.length;
     if (emptyCount > 0) {
