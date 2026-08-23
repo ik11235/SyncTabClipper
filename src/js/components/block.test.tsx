@@ -2395,7 +2395,7 @@ describe('Block リンクの追加', (): void => {
       container.querySelector<HTMLInputElement>('.edit-tab-url')!.value,
     ).toBe('');
     expect(container.querySelector('.uk-modal-title')!.textContent).toBe(
-      'content_msg_add_tab_heading',
+      'content_msg_add_tab',
     );
     expect(container.querySelector('.edit-tab-save')!.textContent).toBe(
       'content_msg_add_tab_save',
@@ -2494,5 +2494,73 @@ describe('Block リンクの追加', (): void => {
     expect(
       container.querySelector('.uk-card-body')!.hasAttribute('inert'),
     ).toBe(true);
+    // 追加ボタン自身やロック・名前編集の置き場も止める
+    expect(
+      container.querySelector('.block-card-header')!.hasAttribute('inert'),
+    ).toBe(true);
+  });
+
+  // モーダルが消えるとフォーカスがbodyまで落ちる。キーボードで開いた場合に
+  // ページ先頭からやり直しになる
+  test('閉じたら開いたボタンへフォーカスを戻す', async (): Promise<void> => {
+    await mount(jest.fn().mockResolvedValue(undefined));
+
+    await clickAddTab();
+    await act(async () => {
+      container.querySelector<HTMLElement>('.edit-tab-cancel')!.click();
+    });
+
+    expect(document.activeElement).toBe(container.querySelector('.add_tab'));
+  });
+
+  // 着地でタブが全部消えるとカードごとアンマウントされ、
+  // 入力が何の通知もなく消える
+  test('書き込みが飛行中は追加を始められない', async (): Promise<void> => {
+    const createTabsSpy = jest
+      .spyOn(chromeService.tab, 'createTabs')
+      .mockReturnValue(new Promise<chrome.tabs.Tab>(() => undefined));
+
+    try {
+      await mount(jest.fn().mockResolvedValue(undefined));
+
+      await act(async () => {
+        container.querySelectorAll<HTMLElement>('.tab_link')[0]!.click();
+      });
+
+      expect(
+        container
+          .querySelector<HTMLButtonElement>('.add_tab')!
+          .hasAttribute('disabled'),
+      ).toBe(true);
+    } finally {
+      createTabsSpy.mockRestore();
+    }
+  });
+
+  // 書きにいっても必ず弾かれるので、「保存に失敗しました」を
+  // 繰り返させず理由を出して止める
+  test('開いている間にロックされたら理由を出して保存を止める', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await clickAddTab();
+    await type('.edit-tab-title', 'title-new');
+    await type('.edit-tab-url', 'https://example.com/new');
+    // 他のページ・他端末でロックされた状態を、propsの差し替えで再現する
+    renderedBlock = { ...renderedBlock, locked: true };
+    await act(async () => {
+      root.render(<Block block={renderedBlock} updateBlock={updateBlock} />);
+    });
+
+    expect(container.querySelector('.edit-tab-locked')).not.toBeNull();
+    expect(
+      container.querySelector<HTMLButtonElement>('.edit-tab-save')!.disabled,
+    ).toBe(true);
+    await save();
+    expect(updateBlock).not.toHaveBeenCalled();
+    // 入力は残したまま。書いていた内容を自分で拾える
+    expect(
+      container.querySelector<HTMLInputElement>('.edit-tab-title')!.value,
+    ).toBe('title-new');
   });
 });
