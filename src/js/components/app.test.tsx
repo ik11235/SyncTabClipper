@@ -1900,3 +1900,451 @@ describe('App', (): void => {
     }
   });
 });
+
+// chrome.tabs.createを待っている間、カード内の他の操作は止まっていない。
+// クリック時のpropsを閉じ込めたまま書き戻すと、その間に消したはずの
+// ブロックやタブが復活する(#248)
+describe('App ブロックへの書き込みが重なったとき', (): void => {
+  let container: HTMLDivElement;
+  let root: Root;
+  let getAllBlockSpy: jest.SpyInstance;
+  let setBlockSpy: jest.SpyInstance;
+  let createTabsSpy: jest.SpyInstance;
+  // タブが開き終わるタイミングを操作するため、解決を手元に持つ
+  let resolveCreateTabs: () => void;
+  let onChangedListeners: Array<
+    (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string,
+    ) => void
+  >;
+
+  const mount = async (): Promise<void> => {
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+    });
+  };
+
+  const click = async (selector: string, index = 0): Promise<void> => {
+    await act(async () => {
+      container.querySelectorAll<HTMLElement>(selector)[index]!.click();
+    });
+  };
+
+  // storageへ書かれたブロックのタブ配列。削除は空配列として現れる
+  const writtenTabs = (): (string | undefined)[][] =>
+    setBlockSpy.mock.calls.map((call) =>
+      (call[0] as model.Block).tabs.map((tab) => tab?.title),
+    );
+
+  // storage.syncの変更をChromeと同様に購読側へ通知する
+  const notifySync = async (changes: {
+    [key: string]: chrome.storage.StorageChange;
+  }): Promise<void> => {
+    await act(async () => {
+      for (const listener of onChangedListeners) {
+        listener(changes, 'sync');
+      }
+    });
+  };
+
+  beforeEach((): void => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    onChangedListeners = [];
+    getAllBlockSpy = jest
+      .spyOn(chromeService.storage, 'getAllBlock')
+      .mockResolvedValue([
+        {
+          indexNum: 0,
+          createdAt: new Date('2021-01-02T03:04:05.678Z'),
+          tabs: [
+            { url: 'https://example.com/a', title: 'title-a' },
+            { url: 'https://example.com/b', title: 'title-b' },
+          ],
+        },
+      ]);
+    setBlockSpy = jest
+      .spyOn(chromeService.storage, 'setBlock')
+      .mockResolvedValue(undefined);
+    resolveCreateTabs = () => {};
+    createTabsSpy = jest.spyOn(chromeService.tab, 'createTabs').mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveCreateTabs = resolve;
+      }),
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      runtime: {
+        getManifest: () => ({ name: 'SyncTabClipper', version: '9.9.9' }),
+      },
+      i18n: { getMessage: (key: string): string => key },
+      storage: {
+        local: {
+          set: (): Promise<void> => Promise.resolve(),
+          get: (): Promise<{ [key: string]: string }> => Promise.resolve({}),
+          remove: (): Promise<void> => Promise.resolve(),
+        },
+        sync: {
+          QUOTA_BYTES: 102400,
+          getBytesInUse: (): Promise<number> => Promise.resolve(0),
+          get: (): Promise<{ [key: string]: unknown }> => Promise.resolve({}),
+        },
+        onChanged: {
+          addListener: (
+            listener: (
+              changes: { [key: string]: chrome.storage.StorageChange },
+              areaName: string,
+            ) => void,
+          ): void => {
+            onChangedListeners.push(listener);
+          },
+          removeListener: jest.fn(),
+        },
+      },
+      action: { setBadgeText: jest.fn(), setBadgeBackgroundColor: jest.fn() },
+    };
+  });
+
+  afterEach((): void => {
+    act(() => root.unmount());
+    container.remove();
+    getAllBlockSpy.mockRestore();
+    setBlockSpy.mockRestore();
+    createTabsSpy.mockRestore();
+  });
+
+  // ケース1: リンクを開いている最中にブロックごと削除する。
+  // 書き戻すとremoveBlockで消したtd_0が1タブ入りで復活し、画面からは
+  // 消えて見えているのでユーザーは気付けない
+  test('リンクを開いている間にブロックを削除したら書き戻さない', async (): Promise<void> => {
+    await mount();
+
+    await click('.tab_link');
+    await click('.all_tab_delete');
+    // ここまでで削除の書き込み（空配列）だけが起きている
+    expect(writtenTabs()).toStrictEqual([[]]);
+
+    await act(async () => {
+      resolveCreateTabs();
+    });
+
+    // 開き終わっても、消えたブロックへは書き戻さない
+    expect(writtenTabs()).toStrictEqual([[]]);
+  });
+
+  // ケース2: 2件の削除が重なる。ブロックを丸ごと書き戻すため、
+  // 後から着地した側が相手の削除を打ち消し、消したタブが復活していた
+  test('タブの削除が重なっても両方の削除が残る', async (): Promise<void> => {
+    createTabsSpy.mockResolvedValue(undefined);
+    // 1件目の書き込みを飛行中のままにして、着地する前に2件目を始めさせる
+    let resolveFirstWrite: () => void = () => {};
+    setBlockSpy.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFirstWrite = () => resolve();
+        }),
+    );
+    await mount();
+
+    // 1件目の書き込みが着地していないので、一覧はまだ2件のまま表示される
+    await click('.tab_close', 0);
+    await click('.tab_close', 1);
+    await act(async () => {
+      resolveFirstWrite();
+    });
+
+    // 2件目は1件目の結果の上に積まれる。
+    // クリック時のpropsから書き戻すと、2件目がtitle-aを復活させる
+    expect(writtenTabs()).toStrictEqual([['title-b'], []]);
+  });
+
+  // 3件以上積んだときも必ず直前の結果の上に載せる。cleanupが最後尾以外を
+  // 消すと、あとから積んだ書き込みが並行して打ち消し合う
+  test('同じブロックへ3件積んでも順に直前の結果の上に載せる', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [
+          { url: 'https://example.com/a', title: 'title-a' },
+          { url: 'https://example.com/b', title: 'title-b' },
+          { url: 'https://example.com/c', title: 'title-c' },
+        ],
+      },
+    ]);
+    createTabsSpy.mockResolvedValue(undefined);
+    const resolvers: (() => void)[] = [];
+    setBlockSpy.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvers.push(() => resolve());
+        }),
+    );
+    await mount();
+
+    // 3件とも着地を待たずに押す
+    await click('.tab_close', 0);
+    await click('.tab_close', 1);
+    await click('.tab_close', 2);
+    // 1件目だけが走っており、2・3件目は積まれて待っている
+    expect(writtenTabs()).toStrictEqual([['title-b', 'title-c']]);
+
+    await act(async () => {
+      resolvers[0]!();
+    });
+    await act(async () => {
+      resolvers[1]!();
+    });
+    await act(async () => {
+      resolvers[2]!();
+    });
+
+    expect(writtenTabs()).toStrictEqual([
+      ['title-b', 'title-c'],
+      ['title-c'],
+      [],
+    ]);
+  });
+
+  // 先に積んだ書き込みが着地したあとに積む場合。cleanupが最後尾かどうかを
+  // 見ないと、まだ飛行中の2件目を残したままキューが空と見なされ、
+  // 3件目が並行して走って2件目の削除を打ち消す
+  test('先の書き込みが着地したあとに積んでも並行させない', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        tabs: [
+          { url: 'https://example.com/a', title: 'title-a' },
+          { url: 'https://example.com/b', title: 'title-b' },
+          { url: 'https://example.com/c', title: 'title-c' },
+        ],
+      },
+    ]);
+    createTabsSpy.mockResolvedValue(undefined);
+    const resolvers: (() => void)[] = [];
+    setBlockSpy.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvers.push(() => resolve());
+        }),
+    );
+    await mount();
+
+    await click('.tab_close', 0);
+    await click('.tab_close', 1);
+    // 1件目だけを着地させる。2件目はまだ飛行中
+    await act(async () => {
+      resolvers[0]!();
+    });
+
+    // 一覧は[title-b, title-c]になっている。ここでtitle-cを消す
+    await click('.tab_close', 1);
+    await act(async () => {
+      resolvers[1]!();
+    });
+    await act(async () => {
+      resolvers[2]!();
+    });
+
+    expect(writtenTabs()).toStrictEqual([
+      ['title-b', 'title-c'],
+      ['title-c'],
+      [],
+    ]);
+  });
+
+  // 失敗した書き込みでキューを止めると、以降そのブロックを操作できなくなる
+  test('直前の書き込みが失敗しても次の書き込みは走る', async (): Promise<void> => {
+    createTabsSpy.mockResolvedValue(undefined);
+    let rejectFirstWrite: () => void = () => {};
+    setBlockSpy.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectFirstWrite = () => reject(new Error('quota exceeded'));
+        }),
+    );
+    await mount();
+
+    await click('.tab_close', 0);
+    await click('.tab_close', 1);
+    await act(async () => {
+      rejectFirstWrite();
+    });
+
+    // 1件目が失敗しても2件目は走る。1件目は反映されていないので、
+    // 2件目は2件のままの一覧からtitle-bだけを消す
+    expect(writtenTabs()).toStrictEqual([['title-b'], ['title-a']]);
+  });
+
+  // updateBlockのガードは書き込みを始める前にしか効かない。
+  // 飛行中の書き込みを待たずにstorageを空にすると、あとから着地した
+  // 書き込みが消したはずのブロックを書き戻し、画面が0件のまま復活する
+  test('全データ削除は飛行中の書き込みが着地してから消す', async (): Promise<void> => {
+    createTabsSpy.mockResolvedValue(undefined);
+    let resolveWrite: () => void = () => {};
+    setBlockSpy.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWrite = () => resolve();
+        }),
+    );
+    const allClearSpy = jest
+      .spyOn(chromeService.storage, 'allClear')
+      .mockResolvedValue(undefined);
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    const alertSpy = jest
+      .spyOn(window, 'alert')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      // タブの削除が飛行中のまま全データ削除を押す
+      await click('.tab_close', 0);
+      await click('#all_clear');
+
+      // 飛行中の書き込みが着地するまでstorageは空にしない
+      expect(allClearSpy).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveWrite();
+      });
+
+      expect(allClearSpy).toHaveBeenCalledTimes(1);
+      // 空にしたあとに書き戻しは起きない
+      expect(setBlockSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      allClearSpy.mockRestore();
+      confirmSpy.mockRestore();
+      alertSpy.mockRestore();
+    }
+  });
+
+  // allClearが着地するまでblocksRefは削除前のままなので、この間に始まった
+  // 書き込みは「消えたブロックには書き戻さない」ガードをすり抜ける
+  test('全データ削除の最中に始まった書き込みは書き戻さない', async (): Promise<void> => {
+    createTabsSpy.mockResolvedValue(undefined);
+    let resolveAllClear: () => void = () => {};
+    const allClearSpy = jest
+      .spyOn(chromeService.storage, 'allClear')
+      .mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveAllClear = () => resolve();
+        }),
+      );
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    const alertSpy = jest
+      .spyOn(window, 'alert')
+      .mockImplementation(() => undefined);
+
+    try {
+      await mount();
+
+      // 飛行中の書き込みはないのでallClearはすぐ始まる
+      await click('#all_clear');
+      expect(allClearSpy).toHaveBeenCalledTimes(1);
+
+      // allClearの着地前にカード内のタブを消す
+      await click('.tab_close', 0);
+      expect(setBlockSpy).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveAllClear();
+      });
+
+      expect(setBlockSpy).not.toHaveBeenCalled();
+    } finally {
+      allClearSpy.mockRestore();
+      confirmSpy.mockRestore();
+      alertSpy.mockRestore();
+    }
+  });
+
+  // 開いたタブが待っている間に全部消えていたら、書き戻す内容が変わらない。
+  // storage.syncの書き込みクォータを空振りで消費するだけになる
+  test('開いたタブが先に消えていたら書き戻さない', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      {
+        indexNum: 0,
+        createdAt: new Date('2021-01-02T03:04:05.678Z'),
+        // 壊れたタブは開けないので、ブロックごと消えずに残る
+        tabs: [
+          { url: 'https://example.com/a', title: 'title-a' },
+          null as unknown as model.Tab,
+        ],
+      },
+    ]);
+    await mount();
+
+    // 「すべてのリンクを開く」の書き戻しを待たせている間にtitle-aを消す
+    await click('.all_tab_link');
+    createTabsSpy.mockResolvedValue(undefined);
+    await click('.tab_close', 0);
+    await act(async () => {
+      resolveCreateTabs();
+    });
+
+    // 消えるのはtitle-aの1回だけ。開いた分の書き戻しは行わない
+    expect(writtenTabs()).toStrictEqual([[undefined]]);
+  });
+
+  // 壊れたブロックの削除も同じキューに乗せないと、飛行中の書き込みが
+  // あとから着地して、消したブロックがstorageに戻る
+  test('壊れたブロックの削除は飛行中の書き込みの後に行う', async (): Promise<void> => {
+    createTabsSpy.mockResolvedValue(undefined);
+    let resolveWrite: () => void = () => {};
+    setBlockSpy.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWrite = () => resolve();
+        }),
+    );
+    const removeBlockSpy = jest
+      .spyOn(chromeService.storage, 'removeBlock')
+      .mockResolvedValue(undefined);
+
+    try {
+      await mount();
+
+      // タブの削除が飛行中のまま、読み直しで同じブロックが
+      // 復元できないものに変わる（他端末が壊れたデータを書いた場合など）
+      await click('.tab_close', 0);
+      getAllBlockSpy.mockResolvedValue([
+        { indexNum: 0, broken: true, unsupported: false },
+      ]);
+      await notifySync({ td_0: { newValue: 'broken' } });
+
+      await click('.broken_block_delete');
+      // 飛行中の書き込みが着地するまで消さない
+      expect(removeBlockSpy).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveWrite();
+      });
+
+      expect(removeBlockSpy).toHaveBeenCalledWith(0);
+    } finally {
+      removeBlockSpy.mockRestore();
+    }
+  });
+
+  // 待っている間に並びが変わると、indexで指した書き戻しは
+  // 開いてもいないタブを消してしまう
+  test('待っている間に並びが変わっても開いたタブだけを消す', async (): Promise<void> => {
+    await mount();
+
+    // 2件目のリンクを開く。開き終わるまでの間に1件目を削除して並びをずらす
+    await click('.tab_link', 1);
+    createTabsSpy.mockResolvedValue(undefined);
+    await click('.tab_close', 0);
+    await act(async () => {
+      resolveCreateTabs();
+    });
+
+    // 1件目の削除に続いて、開いたタブ（title-b）だけが消える
+    expect(writtenTabs()).toStrictEqual([['title-b'], []]);
+  });
+});
