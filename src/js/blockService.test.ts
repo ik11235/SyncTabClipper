@@ -1119,3 +1119,190 @@ describe('blockService import/export', (): void => {
     },
   );
 });
+
+// Chromeのタブグループを保持したまま保存・復元する(#191)。
+// グループはブロック単位に持ち、タブからは添字で参照する
+describe('blockService タブグループ', (): void => {
+  const chromeTab = (
+    url: string,
+    title: string,
+    groupId: number,
+  ): chrome.tabs.Tab =>
+    ({ url: url, title: title, groupId: groupId }) as chrome.tabs.Tab;
+
+  const chromeGroup = (
+    id: number,
+    title: string | undefined,
+    color: string,
+  ): chrome.tabGroups.TabGroup =>
+    ({ id: id, title: title, color: color }) as chrome.tabGroups.TabGroup;
+
+  const createdAt = new Date('2021-01-02T03:04:05.678Z');
+
+  test('createBlock グループの名前と色をブロックに持ち、タブは添字で指す', (): void => {
+    const block = blockService.createBlock(
+      [
+        chromeTab('https://example.com/a', 'a', 7),
+        chromeTab('https://example.com/b', 'b', -1),
+        chromeTab('https://example.com/c', 'c', 7),
+      ],
+      createdAt,
+      0,
+      [chromeGroup(7, '調査中', 'blue')],
+    );
+
+    expect(block.groups).toStrictEqual([{ title: '調査中', color: 'blue' }]);
+    expect(block.tabs).toStrictEqual([
+      { url: 'https://example.com/a', title: 'a', group: 0 },
+      // グループに属していないタブにキーを増やさない
+      { url: 'https://example.com/b', title: 'b' },
+      { url: 'https://example.com/c', title: 'c', group: 0 },
+    ]);
+  });
+
+  // Chromeでは名前を付けずに色だけのグループを作れる
+  test('createBlock 名前のないグループは色だけを持つ', (): void => {
+    const block = blockService.createBlock(
+      [chromeTab('https://example.com/a', 'a', 7)],
+      createdAt,
+      0,
+      [chromeGroup(7, '', 'red')],
+    );
+
+    expect(block.groups).toStrictEqual([{ color: 'red' }]);
+  });
+
+  // 空のグループまで持つと、復元しても中身のないグループができる
+  test('createBlock タブが属していないグループは持たない', (): void => {
+    const block = blockService.createBlock(
+      [chromeTab('https://example.com/a', 'a', -1)],
+      createdAt,
+      0,
+      [chromeGroup(7, '使っていない', 'blue')],
+    );
+
+    expect(block.groups).toBeUndefined();
+    expect(block.tabs).toStrictEqual([
+      { url: 'https://example.com/a', title: 'a' },
+    ]);
+  });
+
+  test('createBlock グループを渡さなくても従来どおり保存できる', (): void => {
+    const block = blockService.createBlock(
+      [chromeTab('https://example.com/a', 'a', -1)],
+      createdAt,
+      0,
+    );
+
+    expect(block.groups).toBeUndefined();
+  });
+
+  // グループを使っていないブロックにキーを増やさない
+  // （storage.syncの8KB/item制限を圧迫しないため）
+  test('blockToJson グループのないブロックにgroupsキーを作らない', (): void => {
+    const json = blockService.blockToJson({
+      indexNum: 0,
+      createdAt: createdAt,
+      tabs: [{ url: 'https://example.com/a', title: 'a' }],
+    });
+
+    expect(JSON.parse(json)).not.toHaveProperty('groups');
+  });
+
+  test('blockToJson/jsonToBlock グループを往復できる', (): void => {
+    const block: model.Block = {
+      indexNum: 0,
+      createdAt: createdAt,
+      tabs: [
+        { url: 'https://example.com/a', title: 'a', group: 0 },
+        { url: 'https://example.com/b', title: 'b' },
+      ],
+      groups: [{ title: '調査中', color: 'blue' }],
+    };
+
+    expect(
+      blockService.jsonToBlock(blockService.blockToJson(block), 0),
+    ).toStrictEqual(block);
+  });
+
+  // 保存データは型検証がないので、壊れた値が入りうる
+  test.each([
+    ['範囲外の添字', 5],
+    ['負の数', -1],
+    ['小数', 0.5],
+    ['文字列', '0'],
+    ['null', null],
+  ])(
+    'jsonToBlock 参照先のないグループの添字(%s)は落とす',
+    (_name: string, group: unknown): void => {
+      const json = JSON.stringify({
+        created_at: createdAt.getTime(),
+        tabs: [{ url: 'https://example.com/a', title: 'a', group: group }],
+        groups: [{ title: '調査中', color: 'blue' }],
+      });
+
+      expect(blockService.jsonToBlock(json, 0).tabs).toStrictEqual([
+        { url: 'https://example.com/a', title: 'a' },
+      ]);
+    },
+  );
+
+  // 知らない色をそのままchrome.tabGroups.updateへ渡すと復元ごと失敗する
+  test('jsonToBlock 知らない色は既定値へ寄せる', (): void => {
+    const json = JSON.stringify({
+      created_at: createdAt.getTime(),
+      tabs: [{ url: 'https://example.com/a', title: 'a', group: 0 }],
+      groups: [{ title: '調査中', color: 'chartreuse' }],
+    });
+
+    expect(blockService.jsonToBlock(json, 0).groups).toStrictEqual([
+      { title: '調査中', color: 'grey' },
+    ]);
+  });
+
+  // 添字で参照する以上、途中の要素だけを捨てると後続の参照がずれる
+  test('jsonToBlock 壊れたグループがあっても並びと長さは保つ', (): void => {
+    const json = JSON.stringify({
+      created_at: createdAt.getTime(),
+      tabs: [{ url: 'https://example.com/a', title: 'a', group: 1 }],
+      groups: [null, { title: '調査中', color: 'blue' }],
+    });
+
+    const block = blockService.jsonToBlock(json, 0);
+    expect(block.groups).toStrictEqual([
+      { color: 'grey' },
+      { title: '調査中', color: 'blue' },
+    ]);
+    expect(block.tabs[0]!.group).toBe(1);
+  });
+
+  test('jsonToBlock groupsを持たない従来のデータはそのまま読める', (): void => {
+    const json =
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a"}]}';
+
+    const block = blockService.jsonToBlock(json, 0);
+    expect(block.groups).toBeUndefined();
+    expect(block.tabs).toStrictEqual([
+      { url: 'https://example.com/a', title: 'a' },
+    ]);
+  });
+
+  // v3の圧縮を通しても失われないこと。保存はdeflateBlock経由で行われる
+  test('deflateBlock/inflateJson グループを保ったまま往復できる', async (): Promise<void> => {
+    // 圧縮はafterEachでmockResetされるため、実装を戻してから通す
+    compressSpy.mockImplementationOnce(actualCompress);
+    decompressSpy.mockImplementationOnce(actualDecompress);
+    const block: model.Block = {
+      indexNum: 0,
+      createdAt: createdAt,
+      tabs: [{ url: 'https://example.com/a', title: 'a', group: 0 }],
+      groups: [{ title: '調査中', color: 'blue' }],
+    };
+
+    const stored = await blockService.deflateBlock(block);
+
+    await expect(blockService.inflateJson(stored, 0)).resolves.toStrictEqual(
+      block,
+    );
+  });
+});

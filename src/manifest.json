@@ -5,7 +5,7 @@
   "minimum_chrome_version": "120",
   "description": "__MSG_Description__",
   "default_locale": "en",
-  "permissions": ["tabs", "storage", "contextMenus"],
+  "permissions": ["tabs", "tabGroups", "storage", "contextMenus"],
   "background": {
     "service_worker": "js/background.js"
   },

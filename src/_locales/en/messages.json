@@ -24,6 +24,9 @@
   "content_msg_all_tab_open": {
     "message": "Open all links"
   },
+  "content_msg_tab_group_unnamed": {
+    "message": "Unnamed group"
+  },
   "content_msg_delete_block": {
     "message": "Delete block"
   },

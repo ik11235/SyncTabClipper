@@ -12,6 +12,11 @@ import { model } from '../types/interface';
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+// createTabsは開いたタブを返す（タブグループの再構成にidが要る #191）。
+// テストではidだけが意味を持つので、最小限のTabを組み立てる
+const openedTab = (id = 1): chrome.tabs.Tab =>
+  ({ id: id, groupId: -1 }) as chrome.tabs.Tab;
+
 describe('App', (): void => {
   let localData: { [key: string]: string };
   let syncData: { [key: string]: string };
@@ -1256,7 +1261,7 @@ describe('App', (): void => {
       '{"v":2,"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a"},null,{"url":"https://example.com/b","title":"b"}]}';
     const createTabsSpy = jest
       .spyOn(chromeService.tab, 'createTabs')
-      .mockResolvedValue(undefined);
+      .mockResolvedValue(openedTab());
     const setBlockSpy = jest
       .spyOn(chromeService.storage, 'setBlock')
       .mockResolvedValue(undefined);
@@ -1351,7 +1356,7 @@ describe('App', (): void => {
       '{"v":2,"created_at":1609556645678,"tabs":[null,{"url":"","title":"title-empty"}]}';
     const createTabsSpy = jest
       .spyOn(chromeService.tab, 'createTabs')
-      .mockResolvedValue(undefined);
+      .mockResolvedValue(openedTab());
     const setBlockSpy = jest
       .spyOn(chromeService.storage, 'setBlock')
       .mockResolvedValue(undefined);
@@ -1388,7 +1393,7 @@ describe('App', (): void => {
       '{"v":2,"created_at":1609556645678,"tabs":[{"url":"","title":"title-empty"},{"url":"https://example.com/ok","title":"title-ok"}]}';
     const createTabsSpy = jest
       .spyOn(chromeService.tab, 'createTabs')
-      .mockResolvedValue(undefined);
+      .mockResolvedValue(openedTab());
     const setBlockSpy = jest
       .spyOn(chromeService.storage, 'setBlock')
       .mockResolvedValue(undefined);
@@ -1975,8 +1980,8 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
       .mockResolvedValue(undefined);
     resolveCreateTabs = () => {};
     createTabsSpy = jest.spyOn(chromeService.tab, 'createTabs').mockReturnValue(
-      new Promise<void>((resolve) => {
-        resolveCreateTabs = resolve;
+      new Promise<chrome.tabs.Tab>((resolve) => {
+        resolveCreateTabs = () => resolve(openedTab());
       }),
     );
     // ブロックの削除は確認を挟む(#252)。ここでの関心は書き込みの重なりなので
@@ -2046,7 +2051,7 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
   // ケース2: 2件の削除が重なる。ブロックを丸ごと書き戻すため、
   // 後から着地した側が相手の削除を打ち消し、消したタブが復活していた
   test('タブの削除が重なっても両方の削除が残る', async (): Promise<void> => {
-    createTabsSpy.mockResolvedValue(undefined);
+    createTabsSpy.mockResolvedValue(openedTab());
     // 1件目の書き込みを飛行中のままにして、着地する前に2件目を始めさせる
     let resolveFirstWrite: () => void = () => {};
     setBlockSpy.mockImplementationOnce(
@@ -2083,7 +2088,7 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
         ],
       },
     ]);
-    createTabsSpy.mockResolvedValue(undefined);
+    createTabsSpy.mockResolvedValue(openedTab());
     const resolvers: (() => void)[] = [];
     setBlockSpy.mockImplementation(
       () =>
@@ -2132,7 +2137,7 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
         ],
       },
     ]);
-    createTabsSpy.mockResolvedValue(undefined);
+    createTabsSpy.mockResolvedValue(openedTab());
     const resolvers: (() => void)[] = [];
     setBlockSpy.mockImplementation(
       () =>
@@ -2167,7 +2172,7 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
 
   // 失敗した書き込みでキューを止めると、以降そのブロックを操作できなくなる
   test('直前の書き込みが失敗しても次の書き込みは走る', async (): Promise<void> => {
-    createTabsSpy.mockResolvedValue(undefined);
+    createTabsSpy.mockResolvedValue(openedTab());
     let rejectFirstWrite: () => void = () => {};
     setBlockSpy.mockImplementationOnce(
       () =>
@@ -2192,7 +2197,7 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
   // 飛行中の書き込みを待たずにstorageを空にすると、あとから着地した
   // 書き込みが消したはずのブロックを書き戻し、画面が0件のまま復活する
   test('全データ削除は飛行中の書き込みが着地してから消す', async (): Promise<void> => {
-    createTabsSpy.mockResolvedValue(undefined);
+    createTabsSpy.mockResolvedValue(openedTab());
     let resolveWrite: () => void = () => {};
     setBlockSpy.mockImplementation(
       () =>
@@ -2235,7 +2240,7 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
   // allClearが着地するまでblocksRefは削除前のままなので、この間に始まった
   // 書き込みは「消えたブロックには書き戻さない」ガードをすり抜ける
   test('全データ削除の最中に始まった書き込みは書き戻さない', async (): Promise<void> => {
-    createTabsSpy.mockResolvedValue(undefined);
+    createTabsSpy.mockResolvedValue(openedTab());
     let resolveAllClear: () => void = () => {};
     const allClearSpy = jest
       .spyOn(chromeService.storage, 'allClear')
@@ -2290,7 +2295,7 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
 
     // 「すべてのリンクを開く」の書き戻しを待たせている間にtitle-aを消す
     await click('.all_tab_link');
-    createTabsSpy.mockResolvedValue(undefined);
+    createTabsSpy.mockResolvedValue(openedTab());
     await click('.tab_close', 0);
     await act(async () => {
       resolveCreateTabs();
@@ -2303,7 +2308,7 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
   // 壊れたブロックの削除も同じキューに乗せないと、飛行中の書き込みが
   // あとから着地して、消したブロックがstorageに戻る
   test('壊れたブロックの削除は飛行中の書き込みの後に行う', async (): Promise<void> => {
-    createTabsSpy.mockResolvedValue(undefined);
+    createTabsSpy.mockResolvedValue(openedTab());
     let resolveWrite: () => void = () => {};
     setBlockSpy.mockImplementation(
       () =>
@@ -2347,7 +2352,7 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
 
     // 2件目のリンクを開く。開き終わるまでの間に1件目を削除して並びをずらす
     await click('.tab_link', 1);
-    createTabsSpy.mockResolvedValue(undefined);
+    createTabsSpy.mockResolvedValue(openedTab());
     await click('.tab_close', 0);
     await act(async () => {
       resolveCreateTabs();
