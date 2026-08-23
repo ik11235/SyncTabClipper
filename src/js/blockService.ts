@@ -333,7 +333,22 @@ export namespace blockService {
     return json.map((obj, i) => jsonObjToBlock(obj, startIndex + i));
   }
 
-  export async function importAllDataJson(jsonStr: string): Promise<void> {
+  /**
+   * インポート結果。書き込めなかったブロックがあっても書き込めた分は残すため、
+   * 何件入って何件落ちたかを呼び出し側へ返し、通知の文面と
+   * ページの読み込み直しは呼び出し側に任せる
+   */
+  export type ImportResult = {
+    // storageへ書き込めたブロックの件数
+    importedCount: number;
+    // 書き込めなかったブロックの件数。8KB制限超過や書き込み回数の
+    // クォータ超過で落ちる
+    failedCount: number;
+  };
+
+  export async function importAllDataJson(
+    jsonStr: string,
+  ): Promise<ImportResult> {
     const nextIndex = await chromeService.storage.getNextBlockIndex();
 
     const json = JSON.parse(jsonStr);
@@ -347,23 +362,62 @@ export namespace blockService {
       }
       blockObjs = json.blocks;
     }
-    // 1件でも書き込めないブロックが混ざっていると一部だけ書き込まれた状態になる。
-    // 書き込めた分は一覧に出るようになった（採番も保存済みindexの最大値+1なので
-    // 次回保存で上書きされない）が、途中で例外になると残りが書き込まれないため、
-    // スキーマ由来のものは書き込む前にまとめて弾く。
-    // 書き込み自体の失敗（8KB制限超過など）による部分書き込みは別課題
+    // スキーマ由来の不正は、1件でも混ざっていれば書き込む前にまとめて弾く。
+    // 書き込みを始めてから気付くと、一部だけ書き込まれた状態で
+    // 中断することになる
     if (!Array.isArray(blockObjs)) {
       throw new Error('Invalid data: blocks is not an array');
     }
     if (blockObjs.some((obj) => !Array.isArray(obj?.tabs))) {
       throw new Error('Invalid data: block has no tabs array');
     }
-    const blocks = blockListForJsonObject(blockObjs, nextIndex);
+    // タブが1件もないブロックはsetBlockが削除として扱うため、書き込んだ
+    // つもりでstorageには何も入らない。ただし空のtabsは読み込み側が許容する
+    // 有効なデータ(#197)でスキーマ不正ではないので、上のチェックでは弾かず、
+    // インポート全体を止めずにこの1件だけ書き込めなかったものとして数える
+    const writableObjs = blockObjs.filter((obj) => obj.tabs.length > 0);
+    const emptyCount = blockObjs.length - writableObjs.length;
+    if (emptyCount > 0) {
+      console.error(
+        `Skipped ${emptyCount}/${blockObjs.length} block(s) with no tabs`,
+      );
+    }
+    const blocks = blockListForJsonObject(writableObjs, nextIndex);
 
-    await Promise.all(
+    // 8KB制限超過などで書き込めないブロックが混ざっていても、
+    // 書き込めた分は残す。Promise.allで打ち切ると、書き込み済みのブロックを
+    // 残したまま例外だけが上がり、ユーザーには全部失敗したようにしか見えない
+    const results = await Promise.allSettled(
       blocks.map((block) => chromeService.storage.setBlock(block)),
     );
-    await chromeService.storage.setTabLength(nextIndex + blockObjs.length);
-    chrome.tabs.reload({ bypassCache: true });
+    const reasons = results
+      .filter((result) => result.status === 'rejected')
+      .map((result) => result.reason);
+    if (reasons.length > 0) {
+      // クォータ超過では同じ理由が件数ぶん並ぶだけなので、まとめて1回出す
+      console.error(
+        `Failed to import ${reasons.length}/${blocks.length} block(s)`,
+        reasons,
+      );
+    }
+    const importedCount = blocks.length - reasons.length;
+    if (importedCount > 0) {
+      // t_lenは互換のために書くだけで、一覧はtd_Nキーの集合から作る。
+      // ここで失敗しても書き込めたブロックは見えるので、
+      // 件数を返せなくなるほうが痛い。
+      // 進める先はnextIndex+blocks.lengthで、書き込めた件数ではない。
+      // 途中の1件が失敗しても採番済みの最大indexは変わらないため、
+      // ここを詰めると次のブロックが書き込み済みのキーを上書きする
+      await chromeService.storage
+        .setTabLength(nextIndex + blocks.length)
+        .catch(console.error);
+    }
+    // 1件も書き込めていないならt_lenも触らない。採番を進めても
+    // 対応するブロックがなく、呼び出し側が「storageは何も変わっていない」
+    // として読み込み直しを省けなくなるだけ
+    return {
+      importedCount,
+      failedCount: reasons.length + emptyCount,
+    };
   }
 }

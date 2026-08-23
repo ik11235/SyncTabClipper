@@ -39,13 +39,50 @@ const SideBar: React.FC<SideBarProps> = (props) => {
   const importJson = () => {
     blockService
       .importAllDataJson(importRef.current!.value)
-      .catch((error) =>
+      // catchはインポート自体の失敗だけを受ける。通知や読み込み直しまで
+      // 巻き込むと、書き込みは済んでいるのに
+      // 「インポートに失敗しました」と出て再インポートを促してしまう
+      .catch((error) => {
         notifyError(
           chrome.i18n.getMessage('content_msg_failed_import') +
             ' ' +
             (error instanceof Error ? error.message : String(error)),
-        ),
-      );
+        );
+        return null;
+      })
+      .then((result) => {
+        if (result == null) {
+          return;
+        }
+        if (result.importedCount === 0) {
+          // 1件も書き込めていないならstorageは何も変わっていないので、
+          // 読み込み直しても貼り付けた内容とエクスポート結果を捨てるだけ。
+          // 読み込み直さないならerrorLogが読み込み直しで消えることもなく、
+          // インポート自体が失敗したとき(上のcatch)と結末は同じなので、
+          // 赤バッジが残るerrorLogに通知を揃える
+          if (result.failedCount > 0) {
+            notifyError(
+              chrome.i18n.getMessage('content_msg_import_all_failed', [
+                String(result.failedCount),
+              ]),
+            );
+          }
+          return;
+        }
+        if (result.failedCount > 0) {
+          // errorLogに流すと、可視ページのErrorDisplayがその場で
+          // 確認済みとして消してしまい、読み込み直した先には残らない。
+          // alertは閉じるまで同期的に止まるので、読み込み直しの前に必ず届く
+          alert(
+            chrome.i18n.getMessage('content_msg_import_partial_failure', [
+              String(result.importedCount + result.failedCount),
+              String(result.failedCount),
+            ]),
+          );
+        }
+        chrome.tabs.reload({ bypassCache: true });
+      })
+      .catch(console.error);
   };
 
   const deleteAllData = () => {
