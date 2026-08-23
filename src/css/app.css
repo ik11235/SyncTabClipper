@@ -364,7 +364,16 @@
   line-height: 1.6;
   /* 長いグループ名でタブのリンクが押し出されないようにする */
   max-width: 12rem;
+}
+
+/*
+ * 省略記号はブロックコンテナにしか効かないため、inline-flexのチップ自体では
+ * なく中の要素に当てる。チップに書くと、はみ出した名前が
+ * 「…」なしでグリフの途中から切れて、途中までが本当の名前に見える
+ */
+.tab-group-name {
   overflow: hidden;
+  min-width: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

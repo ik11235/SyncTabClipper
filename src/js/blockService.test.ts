@@ -1276,6 +1276,95 @@ describe('blockService タブグループ', (): void => {
     expect(block.tabs[0]!.group).toBe(1);
   });
 
+  // groupsが配列でない・要素が壊れている場合。インポートしたJSONには
+  // 型の検証がないので何でも入りうる
+  test.each([
+    ['文字列', '"oops"'],
+    ['オブジェクト', '{"a":1}'],
+    ['数値', '3'],
+    ['空配列', '[]'],
+  ])(
+    'jsonToBlock groupsが配列でない(%s)ときはグループなしとして読む',
+    (_name: string, groupsJson: string): void => {
+      const json = `{"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a","group":0}],"groups":${groupsJson}}`;
+
+      const block = blockService.jsonToBlock(json, 0);
+      expect(block.groups).toBeUndefined();
+      // 参照先がないので添字も落ちる
+      expect(block.tabs).toStrictEqual([
+        { url: 'https://example.com/a', title: 'a' },
+      ]);
+    },
+  );
+
+  // 同じ復元可能な情報をフィールドによって残したり捨てたりしない
+  // （ブロック名は数値を文字列として残す）
+  test('jsonToBlock 数値のグループ名は文字列として残す', (): void => {
+    const json =
+      '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a","group":0}],"groups":[{"title":2026,"color":"blue"}]}';
+
+    expect(blockService.jsonToBlock(json, 0).groups).toStrictEqual([
+      { title: '2026', color: 'blue' },
+    ]);
+  });
+
+  // jsonObjToBlockとjsonToBlockが同じヘルパを共有していることの担保。
+  // 片方だけ検証していると、共有が崩れたときに気づけない
+  test('inflateJson(v2の非圧縮)でも同じように正規化する', async (): Promise<void> => {
+    const stored = JSON.stringify({
+      v: 2,
+      created_at: 1609556645678,
+      tabs: [
+        { url: 'https://example.com/a', title: 'a', group: 9 },
+        { url: 'https://example.com/b', title: 'b', group: 0 },
+      ],
+      groups: [{ title: '  調査中  ', color: 'chartreuse' }],
+    });
+
+    const block = await blockService.inflateJson(stored, 0);
+    expect(block.groups).toStrictEqual([{ title: '調査中', color: 'grey' }]);
+    expect(block.tabs).toStrictEqual([
+      // 範囲外の添字は落ちる
+      { url: 'https://example.com/a', title: 'a' },
+      { url: 'https://example.com/b', title: 'b', group: 0 },
+    ]);
+  });
+
+  // 読み込みで元のオブジェクトを書き換えると、呼び出し側が持っている
+  // 参照の中身が変わる
+  test('jsonToBlock 入力のタブを書き換えない', (): void => {
+    const tabs = [{ url: 'https://example.com/a', title: 'a', group: 9 }];
+    const json = JSON.stringify({ created_at: 1609556645678, tabs: tabs });
+
+    blockService.jsonToBlock(json, 0);
+
+    expect(tabs[0]!.group).toBe(9);
+  });
+
+  // v1のzlib経路もjsonToBlockを通る。かつてタブを{url,title}に
+  // 組み立て直しており、nullのタブでTypeErrorになってブロックごと落ちていた
+  test('jsonToBlock 壊れたタブはそのまま通す', (): void => {
+    const json =
+      '{"created_at":1609556645678,"tabs":[null,{"url":"https://example.com/a","title":"a"}]}';
+
+    expect(blockService.jsonToBlock(json, 0).tabs).toStrictEqual([
+      null,
+      { url: 'https://example.com/a', title: 'a' },
+    ]);
+  });
+
+  // 同じidのグループが複数あっても、最初の1件だけを採る
+  test('createBlock 同じidのグループが重複していても1件にまとめる', (): void => {
+    const block = blockService.createBlock(
+      [chromeTab('https://example.com/a', 'a', 7)],
+      createdAt,
+      0,
+      [chromeGroup(7, '先勝ち', 'blue'), chromeGroup(7, '後', 'red')],
+    );
+
+    expect(block.groups).toStrictEqual([{ title: '先勝ち', color: 'blue' }]);
+  });
+
   test('jsonToBlock groupsを持たない従来のデータはそのまま読める', (): void => {
     const json =
       '{"created_at":1609556645678,"tabs":[{"url":"https://example.com/a","title":"a"}]}';
