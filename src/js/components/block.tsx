@@ -65,6 +65,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // 別のタブを指しうる。開いたタブと突き合わせて、無関係なタブを
   // 上書きしないための控え
   const [editTarget, setEditTarget] = useState<model.Tab | null>(null);
+  // 手動でタブを足すモーダルを開いているか(#253)。編集と違って
+  // 対象のタブがないので、indexも控えも持たない
+  const [addingTab, setAddingTab] = useState(false);
   // 名前の編集中かどうか。編集を始めたときの名前をdraftの初期値にする
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [titleSaving, setTitleSaving] = useState(false);
@@ -418,6 +421,25 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     setEditTarget(target);
   };
 
+  // 末尾に足す。既存のタブの並びは触らない
+  const saveAddedTab = (newTab: model.Tab): Promise<void> =>
+    updateTabs((current) => [...current.tabs, newTab]).then(() => {
+      setAddingTab(false);
+    });
+
+  const startTabAdd = () => {
+    // 呼び出し元の導線はロック中に塞いであるが、不変条件をUIの分岐だけに
+    // 預けると導線が増えたときに保護が黙って外れる
+    if (locked) {
+      return;
+    }
+    setAddingTab(true);
+  };
+
+  const closeTabAdd = () => {
+    setAddingTab(false);
+  };
+
   const closeTabEdit = () => {
     setEditIndex(null);
     setEditTarget(null);
@@ -525,7 +547,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // 到達できてしまう。開いている間にこのブロックのタブが増減すると、
   // 後から着地した保存が消したはずのタブを書き戻す。背後を操作不能にして塞ぐ
   // （aria-modalを名乗る以上、支援技術に対しても背後は無効であるべき）
-  const editing = editTarget != null && editIndex != null;
+  // モーダルを開いている間はカードの背後を触らせない。足すモーダルも
+  // 開いている間にタブが増減すると、後から着地した保存が打ち消し合う
+  const editing = (editTarget != null && editIndex != null) || addingTab;
   const titleEditing = titleDraft != null;
   // 名前もタブもブロックごと書き戻すため、両者が並行すると後から着地した側が
   // 相手の変更を打ち消す（名前が消える・開いたタブが一覧に戻る）。
@@ -774,6 +798,26 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
               {chrome.i18n.getMessage('content_msg_all_tab_open')}
             </span>
           </div>
+          <div className="uk-width-auto">
+            {/* 手動でリンクを足す(#253)。隣の「すべてのリンクを開く」は
+                spanのままだが、新しい導線はボタンにする。spanだと
+                キーボードのタブ順に入らず、支援技術からもボタンとして
+                扱われない。ロック中に押せないのは他の編集導線と同じで、
+                押せない理由をtitleで読ませるためフォーカスは残す */}
+            <button
+              type="button"
+              className="add_tab uk-link"
+              title={
+                locked
+                  ? chrome.i18n.getMessage('content_msg_locked_action_disabled')
+                  : undefined
+              }
+              aria-disabled={locked}
+              onClick={locked ? undefined : startTabAdd}
+            >
+              {chrome.i18n.getMessage('content_msg_add_tab')}
+            </button>
+          </div>
           <div className="uk-width-expand" />
         </div>
       </div>
@@ -822,7 +866,15 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           )}
         </ul>
       </div>
-      {editTarget != null && editIndex != null ? (
+      {addingTab ? (
+        <EditTabModal
+          mode="add"
+          // 空欄から始める。既存のタブを指していないのでtargetLostもない
+          tab={{ url: '', title: '' }}
+          onSave={saveAddedTab}
+          onCancel={closeTabAdd}
+        />
+      ) : editTarget != null && editIndex != null ? (
         <EditTabModal
           // 編集対象が変わったときに前のタブの入力が残らないようにする
           key={editIndex}

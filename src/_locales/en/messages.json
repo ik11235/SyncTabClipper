@@ -95,6 +95,15 @@
   "content_msg_delete_tab": {
     "message": "Delete"
   },
+  "content_msg_add_tab": {
+    "message": "Add link"
+  },
+  "content_msg_add_tab_heading": {
+    "message": "Add link"
+  },
+  "content_msg_add_tab_save": {
+    "message": "Add"
+  },
   "content_msg_edit_tab_heading": {
     "message": "Edit link"
   },

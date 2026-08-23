@@ -318,6 +318,7 @@
  */
 .tab_edit[aria-disabled='true'],
 .tab_close[aria-disabled='true'],
+.add_tab[aria-disabled='true'],
 .block-delete[aria-disabled='true'] {
   opacity: 0.5;
   cursor: default;
@@ -326,6 +327,7 @@
 /* uk-linkのhoverが残ると、押せないのに色が変わって押せるように見える */
 .tab_edit[aria-disabled='true']:hover,
 .tab_close[aria-disabled='true']:hover,
+.add_tab[aria-disabled='true']:hover,
 .block-delete[aria-disabled='true']:hover {
   color: inherit;
   text-decoration: none;
@@ -421,4 +423,19 @@
 
 .tab-group-chip[data-tab-group-color='orange'] .tab-group-dot {
   background-color: #fa903e;
+}
+
+/*
+ * 手動でリンクを足す導線 (#253)
+ *
+ * 隣の「すべてのリンクを開く」と同じ行に並ぶので見た目はリンクに揃えるが、
+ * 要素はbuttonにする（spanだとキーボードのタブ順に入らない）。
+ * ブラウザ既定のボタンの装飾を落として、uk-linkの見た目だけを借りる
+ */
+.add_tab {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
 }

@@ -5,6 +5,12 @@ import { util } from '../util';
 interface EditTabModalProps {
   tab: model.Tab;
   /**
+   * 既存のタブを直すのか、新しいタブを足すのか(#253)。
+   * 入力欄・検証・保存の流れは同じなので、見出しと保存ボタンの文言だけを
+   * 切り替える。省略したときは従来どおり編集として扱う
+   */
+  mode?: 'edit' | 'add';
+  /**
    * 編集を始めたタブが、外からの変更（一覧の読み直し）で入れ替わったか。
    * trueのときは保存できない。indexで指した先が別のタブになっているため、
    * そのまま書くと無関係なタブを上書きする
@@ -51,6 +57,7 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
   const [url, setUrl] = useState(toInputValue(props.tab.url));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const adding = props.mode === 'add';
   const headingId = useId();
   const titleFieldId = useId();
   const urlFieldId = useId();
@@ -108,7 +115,11 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
     >
       <div className="uk-modal-dialog uk-modal-body">
         <h2 className="uk-modal-title" id={headingId}>
-          {chrome.i18n.getMessage('content_msg_edit_tab_heading')}
+          {chrome.i18n.getMessage(
+            adding
+              ? 'content_msg_add_tab_heading'
+              : 'content_msg_edit_tab_heading',
+          )}
         </h2>
         <form onSubmit={submit}>
           <div className="uk-margin">
@@ -164,7 +175,11 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
               className="uk-button uk-button-primary uk-margin-small-left edit-tab-save"
               disabled={saving || props.targetLost === true}
             >
-              {chrome.i18n.getMessage('content_msg_edit_tab_save')}
+              {chrome.i18n.getMessage(
+                adding
+                  ? 'content_msg_add_tab_save'
+                  : 'content_msg_edit_tab_save',
+              )}
             </button>
           </div>
         </form>

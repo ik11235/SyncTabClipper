@@ -2312,3 +2312,187 @@ describe('Block タブグループの復元', (): void => {
     expect(groupTabsSpy).toHaveBeenCalledTimes(2);
   });
 });
+
+// 既存のブロックへ手動でリンクを足す(#253)。
+// 入力欄・検証・保存の流れは編集モーダルと同じものを使う
+describe('Block リンクの追加', (): void => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  const mount = async (
+    updateBlock: UpdateBlock,
+    block?: Partial<model.Block>,
+  ): Promise<void> => {
+    renderedBlock = {
+      indexNum: 0,
+      createdAt: new Date('2021-01-02T03:04:05.678Z'),
+      tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+      ...block,
+    };
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<Block block={renderedBlock} updateBlock={updateBlock} />);
+    });
+  };
+
+  const clickAddTab = async (): Promise<void> => {
+    await act(async () => {
+      container.querySelector<HTMLElement>('.add_tab')!.click();
+    });
+  };
+
+  const type = async (selector: string, value: string): Promise<void> => {
+    const input = container.querySelector<HTMLInputElement>(selector)!;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!;
+    await act(async () => {
+      setter.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+
+  const save = async (): Promise<void> => {
+    await act(async () => {
+      container.querySelector<HTMLElement>('.edit-tab-save')!.click();
+    });
+  };
+
+  beforeEach((): void => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      i18n: { getMessage: (key: string): string => key },
+    };
+  });
+
+  afterEach((): void => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  // spanだとキーボードのタブ順に入らず、支援技術からもボタンとして扱われない
+  test('追加の導線はボタンとして出す', async (): Promise<void> => {
+    await mount(jest.fn().mockResolvedValue(undefined));
+
+    const button = container.querySelector('.add_tab')!;
+    expect(button.tagName).toBe('BUTTON');
+    expect(button.getAttribute('type')).toBe('button');
+  });
+
+  test('空欄のモーダルが開き、追加の文言になる', async (): Promise<void> => {
+    await mount(jest.fn().mockResolvedValue(undefined));
+
+    await clickAddTab();
+
+    expect(container.querySelector('.edit-tab-modal')).not.toBeNull();
+    expect(
+      container.querySelector<HTMLInputElement>('.edit-tab-title')!.value,
+    ).toBe('');
+    expect(
+      container.querySelector<HTMLInputElement>('.edit-tab-url')!.value,
+    ).toBe('');
+    expect(container.querySelector('.uk-modal-title')!.textContent).toBe(
+      'content_msg_add_tab_heading',
+    );
+    expect(container.querySelector('.edit-tab-save')!.textContent).toBe(
+      'content_msg_add_tab_save',
+    );
+  });
+
+  test('入力して保存すると末尾に足される', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await clickAddTab();
+    await type('.edit-tab-title', 'title-new');
+    await type('.edit-tab-url', 'https://example.com/new');
+    await save();
+
+    expect(savedBlock(updateBlock).tabs).toStrictEqual([
+      { url: 'https://example.com/a', title: 'title-a' },
+      { url: 'https://example.com/new', title: 'title-new' },
+    ]);
+    // 保存できたらモーダルは閉じる
+    expect(container.querySelector('.edit-tab-modal')).toBeNull();
+  });
+
+  // 検証は編集モーダルと同じものが効く
+  test.each([
+    ['名前が空', '', 'https://example.com/new'],
+    ['URLが不正', 'title-new', 'not a url'],
+  ])(
+    '%sなら保存せずモーダルも閉じない',
+    async (_name: string, title: string, url: string): Promise<void> => {
+      const updateBlock = jest.fn().mockResolvedValue(undefined);
+      await mount(updateBlock);
+
+      await clickAddTab();
+      await type('.edit-tab-title', title);
+      await type('.edit-tab-url', url);
+      await save();
+
+      expect(updateBlock).not.toHaveBeenCalled();
+      expect(container.querySelector('.edit-tab-modal')).not.toBeNull();
+      expect(container.querySelector('.edit-tab-error')).not.toBeNull();
+    },
+  );
+
+  test('キャンセルすると追加しない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await clickAddTab();
+    await type('.edit-tab-title', 'title-new');
+    await type('.edit-tab-url', 'https://example.com/new');
+    await act(async () => {
+      container.querySelector<HTMLElement>('.edit-tab-cancel')!.click();
+    });
+
+    expect(updateBlock).not.toHaveBeenCalled();
+    expect(container.querySelector('.edit-tab-modal')).toBeNull();
+  });
+
+  // 保存に失敗したら入力を残したまま再試行できる状態に戻す
+  test('保存に失敗したらモーダルを閉じない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockRejectedValue(new Error('save failed'));
+    await mount(updateBlock);
+
+    await clickAddTab();
+    await type('.edit-tab-title', 'title-new');
+    await type('.edit-tab-url', 'https://example.com/new');
+    await save();
+
+    expect(container.querySelector('.edit-tab-modal')).not.toBeNull();
+    expect(
+      container.querySelector<HTMLInputElement>('.edit-tab-title')!.value,
+    ).toBe('title-new');
+  });
+
+  test('ロック中は追加できない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock, { locked: true });
+
+    await clickAddTab();
+
+    expect(container.querySelector('.edit-tab-modal')).toBeNull();
+    const button = container.querySelector('.add_tab')!;
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.getAttribute('title')).toBe(
+      'content_msg_locked_action_disabled',
+    );
+  });
+
+  // 開いている間にタブが増減すると、後から着地した保存が打ち消し合う
+  test('追加モーダルを開いている間は背後のタブ一覧を操作できない', async (): Promise<void> => {
+    await mount(jest.fn().mockResolvedValue(undefined));
+
+    await clickAddTab();
+
+    expect(
+      container.querySelector('.uk-card-body')!.hasAttribute('inert'),
+    ).toBe(true);
+  });
+});
