@@ -111,16 +111,43 @@
  * 見出しの下へ回り込ませたくないため絶対配置にし、
  * 長い名前がボタンの下へ潜り込まないようヘッダに右余白を確保する。
  * お気に入りボタン (#196) がロックの左隣に並ぶため、右余白は2つ分を確保する。
+ * 削除ボタン (#252) はさらに右端へ置き、間にボタン1つ分の空きを挟むため、
+ * 右余白は4つ分を確保する。
+ * 一覧とサイドバーは幅で縦積みにならない構成なので、この右余白がそのまま
+ * 見出しに使える幅を削る。狭い幅や拡大時に名前が折り返しやすくなる代わりに、
+ * 破壊的操作を隣の操作から離すことを採った。
  */
 .block-card-header {
   position: relative;
-  padding-right: 76px;
+  padding-right: 140px;
+}
+
+/*
+ * ブロックの削除 (#252)
+ *
+ * 取り消せない操作なので右端に置き、ロック・お気に入りとの間に
+ * ボタン1つ分（32px）の空きを挟んで押し間違えを防ぐ。
+ * 大きさと当たり判定はロック・お気に入りに揃える。
+ */
+.block-delete {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
 }
 
 .block-lock-toggle {
   position: absolute;
   top: 12px;
-  right: 12px;
+  /* 削除ボタン(12px)から、ボタン1つ分を空けた位置 */
+  right: 76px;
   /* アイコン(ratio 0.9で約18px)だけではクリックの的が小さいので、
      ブロックを守る操作として押しやすい大きさを確保する */
   display: inline-flex;
@@ -146,7 +173,7 @@
 .block-star-toggle {
   position: absolute;
   top: 12px;
-  right: 44px;
+  right: 108px;
   /* ロックボタンと同じく、アイコンだけではクリックの的が小さい */
   display: inline-flex;
   align-items: center;
@@ -165,6 +192,7 @@
  * （アイコンが2つ横に並ぶようになり、ずれが目に付くようになった）。
  */
 @media (min-width: 1200px) {
+  .block-delete,
   .block-lock-toggle,
   .block-star-toggle {
     top: 17px;
@@ -265,6 +293,7 @@
  * いるためブラウザ既定のdisabled表現は出ず、有効時と同じ見た目になる。
  * hoverの色と下線も残るので明示的に打ち消す
  */
+.block-delete:disabled,
 .block-lock-toggle:disabled,
 .block-star-toggle:disabled,
 .block-title-edit:disabled {
@@ -272,6 +301,7 @@
   cursor: default;
 }
 
+.block-delete:disabled:hover,
 .block-lock-toggle:disabled:hover,
 .block-star-toggle:disabled:hover,
 .block-title-edit:disabled:hover {
@@ -288,7 +318,7 @@
  */
 .tab_edit[aria-disabled='true'],
 .tab_close[aria-disabled='true'],
-.all_tab_delete[aria-disabled='true'] {
+.block-delete[aria-disabled='true'] {
   opacity: 0.5;
   cursor: default;
 }
@@ -296,7 +326,7 @@
 /* uk-linkのhoverが残ると、押せないのに色が変わって押せるように見える */
 .tab_edit[aria-disabled='true']:hover,
 .tab_close[aria-disabled='true']:hover,
-.all_tab_delete[aria-disabled='true']:hover {
+.block-delete[aria-disabled='true']:hover {
   color: inherit;
   text-decoration: none;
 }

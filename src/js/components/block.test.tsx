@@ -819,7 +819,7 @@ describe('Block 編集のロック', (): void => {
     expect(updateBlock).not.toHaveBeenCalled();
   });
 
-  test('ロック中は「すべてのリンクを閉じる」と名前の編集を止める', async (): Promise<void> => {
+  test('ロック中はブロックの削除と名前の編集を止める', async (): Promise<void> => {
     const updateBlock = jest.fn().mockResolvedValue(undefined);
     await mount(
       [{ url: 'https://example.com/a', title: 'title-a' }],
@@ -828,7 +828,7 @@ describe('Block 編集のロック', (): void => {
     );
 
     await act(async () => {
-      container.querySelector<HTMLElement>('.all_tab_delete')!.click();
+      container.querySelector<HTMLElement>('.block-delete')!.click();
       container.querySelector<HTMLButtonElement>('.block-title-edit')!.click();
     });
 
@@ -841,7 +841,7 @@ describe('Block 編集のロック', (): void => {
     ).toBe(true);
     expect(
       container
-        .querySelector<HTMLElement>('.all_tab_delete')!
+        .querySelector<HTMLElement>('.block-delete')!
         .getAttribute('aria-disabled'),
     ).toBe('true');
   });
@@ -1942,5 +1942,154 @@ describe('Block 書き込む直前に内容が変わっていたとき', (): voi
         },
       }),
     ).toThrow('edit target lost');
+  });
+});
+
+// 「すべてのリンクを閉じる」はブロックの削除そのものだったが、
+// リンクの見た目で他の操作に紛れており、確認もなく消えていた(#252)
+describe('Block ブロックの削除', (): void => {
+  let container: HTMLDivElement;
+  let root: Root;
+  let confirmSpy: jest.SpyInstance;
+
+  const mount = async (
+    updateBlock: UpdateBlock,
+    block?: Partial<model.Block>,
+  ): Promise<void> => {
+    renderedBlock = {
+      indexNum: 0,
+      createdAt: new Date('2021-01-02T03:04:05.678Z'),
+      tabs: [
+        { url: 'https://example.com/a', title: 'title-a' },
+        { url: 'https://example.com/b', title: 'title-b' },
+      ],
+      ...block,
+    };
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<Block block={renderedBlock} updateBlock={updateBlock} />);
+    });
+  };
+
+  const clickDelete = async (): Promise<void> => {
+    await act(async () => {
+      container.querySelector<HTMLElement>('.block-delete')!.click();
+    });
+  };
+
+  beforeEach((): void => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      i18n: {
+        // 引数の確認ができるよう、キーと置換引数を連結して返す
+        getMessage: (key: string, substitutions?: string[]): string =>
+          substitutions == null ? key : `${key}:${substitutions.join('/')}`,
+      },
+    };
+  });
+
+  afterEach((): void => {
+    act(() => root.unmount());
+    container.remove();
+    confirmSpy.mockRestore();
+  });
+
+  // リンクのままだとキーボードやスクリーンリーダーからボタンとして
+  // 扱われず、他の操作リンクと区別も付かない
+  test('カードの右上にボタンとして出す', async (): Promise<void> => {
+    await mount(jest.fn().mockResolvedValue(undefined));
+
+    const button = container.querySelector('.block-delete')!;
+    expect(button.tagName).toBe('BUTTON');
+    expect(button.getAttribute('type')).toBe('button');
+    // アイコンだけでは何のボタンか分からないので名前を持たせる
+    expect(button.getAttribute('aria-label')).toBe('content_msg_delete_block');
+    // ロック・お気に入りと同じ右上の行にいる
+    expect(
+      container.querySelector('.block-card-header')!.contains(button),
+    ).toBe(true);
+  });
+
+  // 絶対配置で右端に出しているので、JSXでも最後に置かないと
+  // カードへTabで入って最初に止まるのがいちばん右の破壊的操作になり、
+  // 見た目の並びとフォーカス順が逆転する
+  test('フォーカス順は見た目の並びと同じで、削除が最後に来る', async (): Promise<void> => {
+    await mount(jest.fn().mockResolvedValue(undefined));
+
+    const buttons = Array.from(
+      container
+        .querySelector('.block-card-header')!
+        .querySelectorAll<HTMLElement>('button'),
+    ).map((element) => element.className);
+
+    expect(buttons[0]).toContain('block-star-toggle');
+    expect(buttons[1]).toContain('block-lock-toggle');
+    expect(buttons[2]).toContain('block-delete');
+  });
+
+  test('確認してから削除する', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await clickDelete();
+
+    // 何件失うのかは押す前に分からないとまずいので件数を出す
+    expect(confirmSpy).toHaveBeenCalledWith(
+      'content_msg_delete_block_confirm:2',
+    );
+    expect(savedBlock(updateBlock).tabs).toStrictEqual([]);
+  });
+
+  test('確認を取り消したら削除しない', async (): Promise<void> => {
+    confirmSpy.mockReturnValue(false);
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock);
+
+    await clickDelete();
+
+    expect(updateBlock).not.toHaveBeenCalled();
+  });
+
+  // ロック中に削除できないのはリンクだったときと同じ
+  test('ロック中は確認も出さず削除しない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    await mount(updateBlock, { locked: true });
+
+    await clickDelete();
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(updateBlock).not.toHaveBeenCalled();
+    const button = container.querySelector('.block-delete')!;
+    // 淡色になるだけでは押せない理由が伝わらないためtitleで補う。
+    // disabledにするとフォーカスできずtitleを読めない
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.getAttribute('title')).toBe(
+      'content_msg_locked_action_disabled',
+    );
+  });
+
+  // リンクを開いている最中にブロックごと消せる導線は元からあり、
+  // 書き込みが打ち消し合わないことはApp側の直列化(#248)が担保する
+  test('リンクを開いている最中でも押せる', async (): Promise<void> => {
+    const createTabsSpy = jest
+      .spyOn(chromeService.tab, 'createTabs')
+      .mockReturnValue(new Promise<void>(() => undefined));
+
+    try {
+      const updateBlock = jest.fn().mockResolvedValue(undefined);
+      await mount(updateBlock);
+
+      await act(async () => {
+        container.querySelectorAll<HTMLElement>('.tab_link')[0]!.click();
+      });
+      await clickDelete();
+
+      expect(savedBlock(updateBlock).tabs).toStrictEqual([]);
+    } finally {
+      createTabsSpy.mockRestore();
+    }
   });
 });

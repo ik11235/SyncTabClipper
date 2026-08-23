@@ -165,15 +165,18 @@ describe('App', (): void => {
       .spyOn(chromeService.storage, 'setBlock')
       .mockResolvedValue(undefined);
 
+    // 削除は確認を挟むようになった(#252)
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+
     try {
       await mount();
       expect(container.textContent).toContain('title-test');
 
-      const deleteLink = container.querySelector(
-        '.all_tab_delete',
+      const deleteButton = container.querySelector(
+        '.block-delete',
       ) as HTMLElement;
       await act(async () => {
-        deleteLink.click();
+        deleteButton.click();
       });
 
       // storageへ空タブのブロックとして永続化され、一覧からも消える
@@ -184,6 +187,7 @@ describe('App', (): void => {
       expect(container.textContent).toContain('content_msg_not_tab');
     } finally {
       setBlockSpy.mockRestore();
+      confirmSpy.mockRestore();
     }
   });
 
@@ -1918,6 +1922,7 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
       areaName: string,
     ) => void
   >;
+  let confirmSpy: jest.SpyInstance;
 
   const mount = async (): Promise<void> => {
     await act(async () => {
@@ -1974,6 +1979,9 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
         resolveCreateTabs = resolve;
       }),
     );
+    // ブロックの削除は確認を挟む(#252)。ここでの関心は書き込みの重なりなので
+    // 常にOKで進める
+    confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (global as any).chrome = {
       runtime: {
@@ -2013,6 +2021,7 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
     getAllBlockSpy.mockRestore();
     setBlockSpy.mockRestore();
     createTabsSpy.mockRestore();
+    confirmSpy.mockRestore();
   });
 
   // ケース1: リンクを開いている最中にブロックごと削除する。
@@ -2022,7 +2031,7 @@ describe('App ブロックへの書き込みが重なったとき', (): void => 
     await mount();
 
     await click('.tab_link');
-    await click('.all_tab_delete');
+    await click('.block-delete');
     // ここまでで削除の書き込み（空配列）だけが起きている
     expect(writtenTabs()).toStrictEqual([[]]);
 
