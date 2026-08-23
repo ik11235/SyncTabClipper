@@ -131,7 +131,10 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
       return;
     }
     // URLとして解釈できない文字列を弾く。スキームまでは見ないため、
-    // これを通っても開けるURLとは限らない
+    // これを通っても開けるURLとは限らない。
+    // 手入力の導線(#253)ができてchrome.tabs.createが受け付けないURLを
+    // 入れやすくなったが、許可リストで絞るとchrome://newtabのような
+    // 使い方まで奪うため、スキームは見ない方針のままとする
     if (!util.isValidUrl(newUrl)) {
       setError(chrome.i18n.getMessage('content_msg_edit_tab_url_invalid'));
       return;
