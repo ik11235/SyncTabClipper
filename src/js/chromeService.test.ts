@@ -169,6 +169,11 @@ describe('chromeService.storage.getAllBlock', (): void => {
     // v3の圧縮ペイロードが壊れている場合。DecompressionStreamのrejectが
     // BrokenBlockに落ちること（=呼び出し側をすり抜けないこと）を担保する
     ['v3のdがbase64として壊れている', '{"v":3,"d":"!!!not base64!!!"}', false],
+    // v1/v2のbase64はatobで戻す(#237)。bufferのポリフィルは不正な文字を
+    // 黙って読み飛ばしていたが、atobは例外を投げる。どちらでも
+    // BrokenBlockに落ちること（呼び出し側をすり抜けないこと）を担保する
+    ['v2のdがbase64として壊れている', '{"v":2,"d":"!!!not base64!!!"}', false],
+    ['v1の素の文字列がbase64として壊れている', '!!!not base64!!!', false],
     ['v3のdがdeflateデータでない', '{"v":3,"d":"bm90IGEgZGVmbGF0ZQ=="}', false],
     ['v3のdが途中で切れている', '{"v":3,"d":"q1ZKLkpNLElNiU8s"}', false],
   ])(
@@ -200,6 +205,40 @@ describe('chromeService.storage.getAllBlock', (): void => {
       });
     },
   );
+
+  // 解凍器を読み込めなかっただけの場合、保存データは無事なので
+  // 壊れたデータと区別する。区別しないと確認なしで削除できるカードになり、
+  // 読めたはずのブロックを全同期端末から消せてしまう(#237)
+  test('解凍器を読み込めなかったブロックはunreadableとして返る', async (): Promise<void> => {
+    const inflateJsonSpy = jest
+      .spyOn(blockService, 'inflateJson')
+      .mockRejectedValue(
+        new blockService.LegacyInflateUnavailableError('no chunk loader'),
+      );
+    syncData['td_0'] = validJson(1609556645678, 'legacy');
+
+    try {
+      const res = await chromeService.storage.getAllBlock();
+
+      expect(res).toStrictEqual([
+        { indexNum: 0, broken: true, unsupported: false, unreadable: true },
+      ]);
+    } finally {
+      inflateJsonSpy.mockRestore();
+    }
+  });
+
+  // 本当に壊れているデータにはunreadableを付けない。
+  // 付けると「読めるはず」の警告が出て、実際には直らないものを待たせる
+  test('本当に壊れているブロックにunreadableは付かない', async (): Promise<void> => {
+    syncData['td_0'] = '{"v":2,"created_at":1';
+
+    const res = await chromeService.storage.getAllBlock();
+
+    expect(res).toStrictEqual([
+      { indexNum: 0, broken: true, unsupported: false },
+    ]);
+  });
 
   test('復元できないブロックが複数あってもすべてBrokenBlockとして返る', async (): Promise<void> => {
     syncData['t_len'] = '3';

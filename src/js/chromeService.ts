@@ -237,6 +237,11 @@ export namespace chromeService {
           indexNum: indexNum,
           broken: true,
           unsupported: e instanceof blockService.UnsupportedVersionError,
+          // 読めるはずのデータを壊れたものとして扱わない。
+          // キーを常に作らないのは、壊れたブロックの形を変えないため
+          ...(e instanceof blockService.LegacyInflateUnavailableError
+            ? { unreadable: true }
+            : {}),
         };
       }
     }

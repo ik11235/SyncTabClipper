@@ -1174,6 +1174,49 @@ describe('App', (): void => {
   // 新しいバージョンで保存されただけのデータは実データが生きている可能性があり、
   // 削除するとすべての同期端末から消える。ただし削除自体を塞ぐと
   // 「すべてのデータを削除」以外に消す手段がなくなるため、警告して委ねる
+  // v1/v2の解凍器(zlib)は必要になったときだけ読み込む(#237)。
+  // 読み込めなかっただけの場合、保存データは無事なので、
+  // 壊れたデータと同じ「確認なしで消せるカード」にしてはいけない
+  test('解凍器を読み込めなかったブロックは削除前に警告する', async (): Promise<void> => {
+    getAllBlockSpy.mockResolvedValue([
+      { indexNum: 0, broken: true, unsupported: false, unreadable: true },
+    ]);
+    const removeBlockSpy = jest
+      .spyOn(chromeService.storage, 'removeBlock')
+      .mockResolvedValue(undefined);
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+
+    try {
+      await mount();
+      // 「読み込めませんでした」ではなく、読めるはずである旨を出す
+      expect(container.querySelector('.uk-card-title')!.textContent).toBe(
+        'content_msg_unreadable_block',
+      );
+
+      const deleteLink = container.querySelector(
+        '.broken_block_delete',
+      ) as HTMLElement;
+      await act(async () => {
+        deleteLink.click();
+      });
+
+      expect(confirmSpy).toHaveBeenCalledWith(
+        'content_msg_unreadable_block_delete_confirm',
+      );
+      expect(removeBlockSpy).not.toHaveBeenCalled();
+
+      // 同意すれば削除できる（袋小路にしない）
+      confirmSpy.mockReturnValue(true);
+      await act(async () => {
+        deleteLink.click();
+      });
+      expect(removeBlockSpy).toHaveBeenCalledWith(0);
+    } finally {
+      removeBlockSpy.mockRestore();
+      confirmSpy.mockRestore();
+    }
+  });
+
   test('未対応バージョンのブロックは警告に同意しないと削除されない', async (): Promise<void> => {
     getAllBlockSpy.mockRestore();
     syncData['t_len'] = '1';

@@ -10,6 +10,15 @@ module.exports = {
   output: {
     path: path.join(__dirname, 'dist/js'),
     filename: '[name].js',
+    // 動的importで切り出したチャンク(#237)に、数字のidではなく
+    // webpackChunkNameで付けた名前を使う。dist/jsに素性の分からない
+    // 900.jsのようなファイルが並ぶのを避ける
+    chunkFilename: '[name].chunk.js',
+    // チャンクの置き場を明示する。既定の'auto'はimportScriptsやdocumentから
+    // 実行時に推測するランタイムを吐き、どちらも無い環境（module service
+    // worker）ではバンドルの読み込み時点でthrowする。拡張のページも
+    // service workerも同じオリジンなので、固定で指せる
+    publicPath: '/js/',
   },
   module: {
     rules: [

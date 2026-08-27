@@ -6,11 +6,18 @@ import './zlib.js';
 import './zlib-inflate.js';
 
 export namespace zlibWrapper {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- webpackのbuffer polyfill解決に依存
-  const Buffer = require('buffer').Buffer;
-
+  /**
+   * base64をlatin1の文字列へ戻す。
+   * zlib.jsのinflateはバイト列を1文字1バイトの文字列で受け取るため、
+   * UTF-8として解釈させずコードポイントをそのままバイトとして渡す。
+   * bufferのポリフィル(Buffer.from(...).toString('latin1'))でも同じことが
+   * できるが、それだけのためにbuffer/base64-js/ieee754の3つが
+   * 両バンドルへ入る（minify前で約64KB）ので、atobで済ませる
+   * @param {string} b64Encoded base64の文字列
+   * @return {string} 1文字1バイトの文字列
+   */
   const atobLatin1 = function (b64Encoded: string): string {
-    return Buffer.from(b64Encoded, 'base64').toString('latin1');
+    return atob(b64Encoded);
   };
 
   /**
