@@ -38,6 +38,11 @@ const savedBlock = (
 const savedIndexNum = (updateBlock: jest.Mock, callIndex = 0): number =>
   updateBlock.mock.calls[callIndex]![0] as number;
 
+// createTabsは開いたタブを返す（タブグループの再構成にidが要る #191）。
+// テストではidだけが意味を持つので、最小限のTabを組み立てる
+const openedTab = (id = 1): chrome.tabs.Tab =>
+  ({ id: id, groupId: -1 }) as chrome.tabs.Tab;
+
 describe('Block', (): void => {
   let container: HTMLDivElement;
   let root: Root;
@@ -608,8 +613,8 @@ describe('Block タブ操作と名前の編集の排他', (): void => {
     };
     resolveCreateTabs = () => {};
     createTabsSpy = jest.spyOn(chromeService.tab, 'createTabs').mockReturnValue(
-      new Promise<void>((resolve) => {
-        resolveCreateTabs = resolve;
+      new Promise<chrome.tabs.Tab>((resolve) => {
+        resolveCreateTabs = () => resolve(openedTab());
       }),
     );
   });
@@ -771,7 +776,7 @@ describe('Block 編集のロック', (): void => {
     };
     createTabsSpy = jest
       .spyOn(chromeService.tab, 'createTabs')
-      .mockResolvedValue(undefined);
+      .mockResolvedValue(openedTab());
   });
 
   afterEach((): void => {
@@ -2076,7 +2081,7 @@ describe('Block ブロックの削除', (): void => {
   test('リンクを開いている最中でも押せる', async (): Promise<void> => {
     const createTabsSpy = jest
       .spyOn(chromeService.tab, 'createTabs')
-      .mockReturnValue(new Promise<void>(() => undefined));
+      .mockReturnValue(new Promise<chrome.tabs.Tab>(() => undefined));
 
     try {
       const updateBlock = jest.fn().mockResolvedValue(undefined);
@@ -2091,5 +2096,219 @@ describe('Block ブロックの削除', (): void => {
     } finally {
       createTabsSpy.mockRestore();
     }
+  });
+});
+
+// 保存したタブグループを「すべてのリンクを開く」で再構成する(#191)。
+// 個別のリンクではグループ化しない（1本だけのグループを作っても嬉しくない）
+describe('Block タブグループの復元', (): void => {
+  let container: HTMLDivElement;
+  let root: Root;
+  let createTabsSpy: jest.SpyInstance;
+  let groupTabsSpy: jest.SpyInstance;
+  let errorLogSetSpy: jest.SpyInstance;
+
+  const grouped: model.Block = {
+    indexNum: 0,
+    createdAt: new Date('2021-01-02T03:04:05.678Z'),
+    tabs: [
+      { url: 'https://example.com/a', title: 'title-a', group: 0 },
+      { url: 'https://example.com/b', title: 'title-b' },
+      { url: 'https://example.com/c', title: 'title-c', group: 1 },
+      { url: 'https://example.com/d', title: 'title-d', group: 0 },
+    ],
+    groups: [
+      { title: '調査中', color: 'blue' },
+      { title: '読みもの', color: 'red' },
+    ],
+  };
+
+  const mount = async (block: model.Block = grouped): Promise<void> => {
+    renderedBlock = block;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <Block
+          block={renderedBlock}
+          updateBlock={jest.fn().mockResolvedValue(undefined)}
+        />,
+      );
+    });
+  };
+
+  const click = async (selector: string, index = 0): Promise<void> => {
+    await act(async () => {
+      container.querySelectorAll<HTMLElement>(selector)[index]!.click();
+    });
+  };
+
+  beforeEach((): void => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    // 開いたタブのidは呼ばれた順に振る。どのタブがどのグループに入ったかを
+    // idで見分けられるようにする
+    let nextTabId = 100;
+    createTabsSpy = jest
+      .spyOn(chromeService.tab, 'createTabs')
+      .mockImplementation(() =>
+        Promise.resolve({ id: nextTabId++ } as chrome.tabs.Tab),
+      );
+    groupTabsSpy = jest
+      .spyOn(chromeService.tab, 'groupTabs')
+      .mockResolvedValue(undefined);
+    errorLogSetSpy = jest
+      .spyOn(chromeService.errorLog, 'set')
+      .mockResolvedValue(undefined);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      i18n: { getMessage: (key: string): string => key },
+    };
+  });
+
+  afterEach((): void => {
+    act(() => root.unmount());
+    container.remove();
+    createTabsSpy.mockRestore();
+    groupTabsSpy.mockRestore();
+    errorLogSetSpy.mockRestore();
+  });
+
+  test('すべてのリンクを開くとグループを名前と色ごと再構成する', async (): Promise<void> => {
+    await mount();
+
+    await click('.all_tab_link');
+
+    expect(groupTabsSpy).toHaveBeenCalledTimes(2);
+    // 同じグループのタブがまとまり、属していないタブは巻き込まない
+    expect(groupTabsSpy).toHaveBeenCalledWith([100, 103], {
+      title: '調査中',
+      color: 'blue',
+    });
+    expect(groupTabsSpy).toHaveBeenCalledWith([102], {
+      title: '読みもの',
+      color: 'red',
+    });
+  });
+
+  test('グループを持たないブロックではグループ化しない', async (): Promise<void> => {
+    await mount({
+      indexNum: 0,
+      createdAt: new Date('2021-01-02T03:04:05.678Z'),
+      tabs: [{ url: 'https://example.com/a', title: 'title-a' }],
+    });
+
+    await click('.all_tab_link');
+
+    expect(createTabsSpy).toHaveBeenCalledTimes(1);
+    expect(groupTabsSpy).not.toHaveBeenCalled();
+  });
+
+  // 1本だけのグループを作っても嬉しくない
+  test('個別のリンクを開いてもグループ化しない', async (): Promise<void> => {
+    await mount();
+
+    await click('.tab_link');
+
+    expect(createTabsSpy).toHaveBeenCalledTimes(1);
+    expect(groupTabsSpy).not.toHaveBeenCalled();
+  });
+
+  // タブは既に開かれているので、ここで中断すると一覧にも残って二重になる
+  test('グループ化に失敗しても書き戻しは行う', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    groupTabsSpy.mockRejectedValue(new Error('group failed'));
+    renderedBlock = grouped;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<Block block={renderedBlock} updateBlock={updateBlock} />);
+    });
+
+    await click('.all_tab_link');
+
+    expect(errorLogSetSpy).toHaveBeenCalled();
+    // 開いた4件すべてが一覧から消える
+    expect(savedBlock(updateBlock).tabs).toStrictEqual([]);
+  });
+
+  // 1つのグループの失敗で残りのグループまで諦めない
+  test('片方のグループ化が失敗しても他方は作る', async (): Promise<void> => {
+    groupTabsSpy.mockImplementation((tabIds: number[]) =>
+      tabIds.includes(102)
+        ? Promise.reject(new Error('group failed'))
+        : Promise.resolve(undefined),
+    );
+    await mount();
+
+    await click('.all_tab_link');
+
+    expect(groupTabsSpy).toHaveBeenCalledTimes(2);
+    expect(errorLogSetSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // モーダルは{title,url}しか知らない。差し替えにすると、名前を直しただけで
+  // タブがグループから外れる
+  test('タブを編集してもグループから外れない', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    renderedBlock = grouped;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<Block block={renderedBlock} updateBlock={updateBlock} />);
+    });
+
+    await click('.tab_edit');
+    const input = container.querySelector<HTMLInputElement>('.edit-tab-title')!;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!;
+    await act(async () => {
+      setter.call(input, 'renamed-a');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      container.querySelector<HTMLElement>('.edit-tab-save')!.click();
+    });
+
+    expect(savedBlock(updateBlock).tabs[0]).toStrictEqual({
+      url: 'https://example.com/a',
+      title: 'renamed-a',
+      group: 0,
+    });
+  });
+
+  // 開けたタブが素のまま残ることまで巻き添えにする理由はない
+  test('1件開けなくても開けた分はグループ化する', async (): Promise<void> => {
+    const updateBlock = jest.fn().mockResolvedValue(undefined);
+    let nextTabId = 100;
+    createTabsSpy.mockImplementation((properties: { url: string }) =>
+      properties.url === 'https://example.com/d'
+        ? Promise.reject(new Error('cannot open'))
+        : Promise.resolve({ id: nextTabId++ } as chrome.tabs.Tab),
+    );
+    renderedBlock = grouped;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<Block block={renderedBlock} updateBlock={updateBlock} />);
+    });
+
+    await click('.all_tab_link');
+
+    // 開けたタブだけでグループを作る
+    expect(groupTabsSpy).toHaveBeenCalledWith([100], {
+      title: '調査中',
+      color: 'blue',
+    });
+    // 1件でも開けなかったら1本も消さない（土台からの方針）
+    expect(updateBlock).not.toHaveBeenCalled();
+    expect(errorLogSetSpy).toHaveBeenCalled();
+  });
+
+  // ロック中は開くだけで一覧から消さないが、グループは戻す
+  test('ロック中でもグループを再構成する', async (): Promise<void> => {
+    await mount({ ...grouped, locked: true });
+
+    await click('.all_tab_link');
+
+    expect(groupTabsSpy).toHaveBeenCalledTimes(2);
   });
 });

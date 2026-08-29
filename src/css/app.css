@@ -341,3 +341,84 @@
 .uk-card-body[inert] {
   opacity: 0.5;
 }
+
+/*
+ * 保存時のタブグループ (#191)
+ *
+ * 「すべてのリンクを開く」で名前と色ごと戻ることが一覧で分かるように、
+ * タブ1行の先頭へ小さく出す。色だけで区別させると色覚特性によっては
+ * 読み取れないため、名前も併記して色は補助にとどめる。
+ * 色の値はChromeのタブグループが取りうる9色で、
+ * Chromeのグループ表示に寄せた彩度の低い色を使う。
+ */
+.tab-group-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background-color: #f0f0f0;
+  color: #333;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  /* 長いグループ名でタブのリンクが押し出されないようにする */
+  max-width: 12rem;
+}
+
+/*
+ * 省略記号はブロックコンテナにしか効かないため、inline-flexのチップ自体では
+ * なく中の要素に当てる。チップに書くと、はみ出した名前が
+ * 「…」なしでグリフの途中から切れて、途中までが本当の名前に見える
+ */
+.tab-group-name {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-group-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  /* 知らない色が保存データに入っていても、点が消えて詰まって見えないようにする */
+  background-color: #5f6368;
+}
+
+.tab-group-chip[data-tab-group-color='grey'] .tab-group-dot {
+  background-color: #5f6368;
+}
+
+.tab-group-chip[data-tab-group-color='blue'] .tab-group-dot {
+  background-color: #1a73e8;
+}
+
+.tab-group-chip[data-tab-group-color='red'] .tab-group-dot {
+  background-color: #d93025;
+}
+
+.tab-group-chip[data-tab-group-color='yellow'] .tab-group-dot {
+  background-color: #f9ab00;
+}
+
+.tab-group-chip[data-tab-group-color='green'] .tab-group-dot {
+  background-color: #1e8e3e;
+}
+
+.tab-group-chip[data-tab-group-color='pink'] .tab-group-dot {
+  background-color: #d01884;
+}
+
+.tab-group-chip[data-tab-group-color='purple'] .tab-group-dot {
+  background-color: #9334e6;
+}
+
+.tab-group-chip[data-tab-group-color='cyan'] .tab-group-dot {
+  background-color: #007b83;
+}
+
+.tab-group-chip[data-tab-group-color='orange'] .tab-group-dot {
+  background-color: #fa903e;
+}

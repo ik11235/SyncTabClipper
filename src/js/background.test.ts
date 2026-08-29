@@ -11,6 +11,8 @@ describe('background action.onClicked', (): void => {
   // ユーザーが別のウィンドウへ移っても、保存も終了もこのウィンドウを指す
   const CURRENT_WINDOW_ID = 1;
   let openedTabs: chrome.tabs.Tab[];
+  // 保存時のタブグループ(#191)。queryTabGroupsが投げる状況も作れるようにする
+  let tabGroups: chrome.tabGroups.TabGroup[] | Error;
   let clickAction: (tab: chrome.tabs.Tab) => void;
   const create = jest.fn();
   const update = jest.fn();
@@ -29,8 +31,15 @@ describe('background action.onClicked', (): void => {
     id: number,
     url: string,
     windowId: number = CURRENT_WINDOW_ID,
+    groupId = -1,
   ): chrome.tabs.Tab =>
-    ({ id: id, windowId: windowId, url: url, title: url }) as chrome.tabs.Tab;
+    ({
+      id: id,
+      windowId: windowId,
+      url: url,
+      title: url,
+      groupId: groupId,
+    }) as chrome.tabs.Tab;
 
   /**
    * chromeのAPIを差し替えたうえでbackgroundを読み込み、
@@ -73,6 +82,12 @@ describe('background action.onClicked', (): void => {
         remove: remove,
       },
       windows: { update: jest.fn() },
+      tabGroups: {
+        query: (): Promise<chrome.tabGroups.TabGroup[]> =>
+          tabGroups instanceof Error
+            ? Promise.reject(tabGroups)
+            : Promise.resolve(tabGroups),
+      },
     };
     const { chromeService } = await import('./chromeService');
     jest.spyOn(chromeService.storage, 'getNextBlockIndex').mockResolvedValue(3);
@@ -93,6 +108,7 @@ describe('background action.onClicked', (): void => {
 
   beforeEach((): void => {
     openedTabs = [];
+    tabGroups = [];
     create.mockClear();
     update.mockClear();
     move.mockClear();
@@ -112,6 +128,59 @@ describe('background action.onClicked', (): void => {
       await Promise.resolve();
     }
   };
+
+  // Chromeのタブグループを保持したまま保存する(#191)
+  test('タブグループの名前と色も保存する', async (): Promise<void> => {
+    openedTabs = [
+      tab(1, 'https://example.com/a', CURRENT_WINDOW_ID, 7),
+      tab(2, 'https://example.com/b'),
+    ];
+    tabGroups = [
+      { id: 7, title: '調査中', color: 'blue' } as chrome.tabGroups.TabGroup,
+    ];
+    await loadBackground();
+
+    await click();
+
+    expect(setBlock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groups: [{ title: '調査中', color: 'blue' }],
+        tabs: [
+          expect.objectContaining({ url: 'https://example.com/a', group: 0 }),
+          // グループに属していないタブにキーを増やさない
+          { url: 'https://example.com/b', title: 'https://example.com/b' },
+        ],
+      }),
+    );
+  });
+
+  // グループが取れないことと、タブを保存できないことは別。
+  // ここで止めるとタブごと失う
+  test('タブグループの取得に失敗してもタブは保存する', async (): Promise<void> => {
+    openedTabs = [tab(1, 'https://example.com/a', CURRENT_WINDOW_ID, 7)];
+    tabGroups = new Error('no permission');
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    await loadBackground();
+
+    try {
+      await click();
+
+      expect(setBlock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tabs: [
+            { url: 'https://example.com/a', title: 'https://example.com/a' },
+          ],
+        }),
+      );
+      expect(setBlock.mock.calls[0][0].groups).toBeUndefined();
+      // 閉じる・tabsページを開くところまで従来どおり進む
+      expect(remove).toHaveBeenCalled();
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
 
   test('現在のウィンドウの全タブを保存して閉じ、tabsページを開く', async (): Promise<void> => {
     openedTabs = [

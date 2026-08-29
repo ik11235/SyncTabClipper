@@ -24,6 +24,9 @@
   "content_msg_all_tab_open": {
     "message": "すべてのリンクを開く"
   },
+  "content_msg_tab_group_unnamed": {
+    "message": "名前のないグループ"
+  },
   "content_msg_delete_block": {
     "message": "ブロックを削除"
   },

@@ -34,7 +34,15 @@ async function saveWindowTabs(windowId: number): Promise<void> {
   // 空のブロックを書くとindexだけ進んで無駄な欠番が増えるため、
   // tabsページへの切り替えだけを行う
   if (currentTabs.length > 0) {
-    const block = blockService.createBlock(currentTabs, new Date(), nextIndex);
+    // タブグループの名前と色を保存に含める(#191)。取得に失敗しても
+    // グループなしとして保存を続ける（ここで止めるとタブごと失う）
+    const tabGroups = await chromeService.tab.queryTabGroups(windowId);
+    const block = blockService.createBlock(
+      currentTabs,
+      new Date(),
+      nextIndex,
+      tabGroups,
+    );
     await chromeService.storage.setBlock(block);
     await chromeService.storage.setTabLength(nextIndex + 1);
   }
