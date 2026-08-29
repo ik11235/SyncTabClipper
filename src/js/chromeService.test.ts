@@ -777,3 +777,86 @@ describe('chromeService.storage.isBlockDataKey', (): void => {
     expect(chromeService.storage.isBlockDataKey(key)).toBe(expected);
   });
 });
+
+describe('chromeService.ContextMenus.recreateMenus', (): void => {
+  // Chromeが拡張ごとに保持しているメニューを、idをキーに再現する
+  let registered: Map<string | number, chrome.contextMenus.CreateProperties>;
+  let calls: string[];
+
+  beforeEach((): void => {
+    registered = new Map();
+    calls = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).chrome = {
+      runtime: {
+        getManifest: () => ({ name: 'SyncTabClipper', version: '9.9.9' }),
+        lastError: undefined,
+      },
+      i18n: { getMessage: (key: string): string => key },
+      contextMenus: {
+        removeAll: (): Promise<void> => {
+          calls.push('removeAll');
+          registered.clear();
+          return Promise.resolve();
+        },
+        create: (
+          props: chrome.contextMenus.CreateProperties,
+          callback: () => void,
+        ): void => {
+          calls.push(`create:${String(props.id)}`);
+          if (props.id != null && registered.has(props.id)) {
+            // 実物はlastErrorをセットしたうえでcallbackを呼ぶ
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const runtime = chrome.runtime as any;
+            runtime.lastError = {
+              message: `Cannot create item with duplicate id ${String(props.id)}`,
+            };
+            callback();
+            runtime.lastError = undefined;
+            return;
+          }
+          if (props.id != null) {
+            registered.set(props.id, props);
+          }
+          callback();
+        },
+      },
+    };
+  });
+
+  test('親メニューとtabsページを開くメニューを登録する', async (): Promise<void> => {
+    await chromeService.ContextMenus.recreateMenus();
+
+    expect(calls).toEqual([
+      'removeAll',
+      'create:SyncTabClipper.mainMenu',
+      'create:gotoTabsPage',
+    ]);
+    expect(registered.get('gotoTabsPage')?.parentId).toBe(
+      'SyncTabClipper.mainMenu',
+    );
+  });
+
+  test('前回分のメニューが残っていても重複エラーにならない', async (): Promise<void> => {
+    // 拡張の更新や再読み込みでonInstalledが再発火した状況
+    await chromeService.ContextMenus.recreateMenus();
+    calls = [];
+
+    await expect(
+      chromeService.ContextMenus.recreateMenus(),
+    ).resolves.toBeUndefined();
+    expect(calls[0]).toBe('removeAll');
+    expect(registered.size).toBe(2);
+  });
+
+  test('createが失敗したときはlastErrorの内容で失敗する', async (): Promise<void> => {
+    // removeAllが効かなかった場合でも、エラーがUnchecked runtime.lastErrorとして
+    // 握りつぶされずに呼び出し側へ届く
+    chrome.contextMenus.removeAll = (): Promise<void> => Promise.resolve();
+    registered.set('SyncTabClipper.mainMenu', {});
+
+    await expect(chromeService.ContextMenus.recreateMenus()).rejects.toThrow(
+      'Cannot create item with duplicate id SyncTabClipper.mainMenu',
+    );
+  });
+});

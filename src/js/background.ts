@@ -45,8 +45,7 @@ async function saveWindowTabs(windowId: number): Promise<void> {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  chromeService.ContextMenus.createParentMenu();
-  chromeService.ContextMenus.createGotoTabsPageMenu();
+  chromeService.ContextMenus.recreateMenus().catch(handleError);
 });
 
 chrome.contextMenus.onClicked.addListener((info) => {

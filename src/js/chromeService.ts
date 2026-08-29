@@ -420,17 +420,43 @@ export namespace chromeService {
     const parentMenuId = () => `${appName()}.mainMenu`;
     export const gotoTabsPageMenuId = 'gotoTabsPage';
 
-    export function createParentMenu(): void {
-      chrome.contextMenus.create({
+    /**
+     * contextMenus.createをPromiseに包む。createはPromiseを返さず、
+     * 失敗はcallback内のruntime.lastErrorでしか分からないため、
+     * 見に行かないと「Unchecked runtime.lastError」として握りつぶされる
+     * @param {chrome.contextMenus.CreateProperties} props 登録するメニュー
+     * @return {Promise<void>}
+     */
+    function create(
+      props: chrome.contextMenus.CreateProperties,
+    ): Promise<void> {
+      return new Promise((resolve, reject) => {
+        chrome.contextMenus.create(props, () => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+
+    /**
+     * コンテキストメニューを作り直す。
+     * メニューはChromeが拡張ごとに永続化しているため、更新や再読み込みで
+     * onInstalledが再び発火したときに前回分が残っている。そのまま作ると
+     * 「Cannot create item with duplicate id」になるので、いったん全消しする
+     * @return {Promise<void>}
+     */
+    export async function recreateMenus(): Promise<void> {
+      await chrome.contextMenus.removeAll();
+      await create({
         id: parentMenuId(),
         title: appName(),
         type: 'normal',
         contexts: ['all'],
       });
-    }
-
-    export function createGotoTabsPageMenu(): void {
-      chrome.contextMenus.create({
+      await create({
         id: gotoTabsPageMenuId,
         title: chrome.i18n.getMessage('content_msg_open_tab_page'),
         parentId: parentMenuId(),
