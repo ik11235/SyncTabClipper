@@ -4,6 +4,7 @@
 import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { Tab } from './tab';
+import { model } from '../types/interface';
 
 // テスティングライブラリを介さず素のactを使うため必要
 (
@@ -14,12 +15,16 @@ describe('Tab', (): void => {
   let container: HTMLDivElement;
   let root: Root;
 
-  const mount = async (tab: { url: string; title: string }): Promise<void> => {
+  const mount = async (
+    tab: { url: string; title: string },
+    group?: model.TabGroup,
+  ): Promise<void> => {
     await act(async () => {
       root = createRoot(container);
       root.render(
         <Tab
           tab={tab}
+          group={group}
           deleteClick={jest.fn()}
           editClick={jest.fn()}
           openLinkClick={jest.fn()}
@@ -187,5 +192,34 @@ describe('Tab', (): void => {
     expect(link.getAttribute('href')).toBe('https://example.com/?a=1&b=2');
     expect(link.getAttribute('data-url')).toBe('https://example.com/?a=1&b=2');
     expect(link.getAttribute('data-title')).toBe('A & B');
+  });
+  // 保存時のタブグループ(#191)。「すべてのリンクを開く」で名前と色ごと
+  // 戻ることが一覧で分かるように出す
+  describe('タブグループ', (): void => {
+    const tab = { url: 'https://example.com/a', title: 'title-a' };
+
+    test('グループのないタブにはチップを出さない', async (): Promise<void> => {
+      await mount(tab);
+
+      expect(container.querySelector('.tab-group-chip')).toBeNull();
+    });
+
+    test('グループ名と色をチップで出す', async (): Promise<void> => {
+      await mount(tab, { title: '調査中', color: 'blue' });
+
+      const chip = container.querySelector('.tab-group-chip')!;
+      expect(chip.textContent).toBe('調査中');
+      // 色だけで区別させず、色は補助にとどめる
+      expect(chip.getAttribute('data-tab-group-color')).toBe('blue');
+    });
+
+    // Chromeでは名前を付けずに色だけのグループを作れる
+    test('名前のないグループはその旨を出す', async (): Promise<void> => {
+      await mount(tab, { color: 'red' });
+
+      const chip = container.querySelector('.tab-group-chip')!;
+      expect(chip.textContent).toBe('content_msg_tab_group_unnamed');
+      expect(chip.getAttribute('data-tab-group-color')).toBe('red');
+    });
   });
 });

@@ -269,10 +269,75 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       if (at < 0) {
         throw new Error('edit target lost');
       }
-      return current.tabs.map((tab, i) => (i == at ? newTab : tab));
+      // モーダルは{title,url}しか知らないので、残りのフィールドは引き継ぐ。
+      // 差し替えにするとタブ側のフィールド（グループ #191）が
+      // 名前を直しただけで消える
+      return current.tabs.map((tab, i) =>
+        i == at ? { ...tab, ...newTab } : tab,
+      );
     }).then(() => {
       closeTabEdit();
     });
+  };
+
+  /**
+   * タブをまとめて開き、保存時のタブグループを再構成する(#191)。
+   * グループ化そのものの失敗は握って解決する。タブは既に開かれているので、
+   * ここで中断すると呼び出し側が書き戻しをやめ、一覧にも残って二重になる。
+   * タブを開くのに失敗したときは、開けた分をグループ化してからrejectする。
+   * 「1件でも開けなかったら1本も消さない」のは呼び出し側の判断だが、
+   * 開けたタブが素のまま残ることまで巻き添えにする理由はない
+   * @param {model.Tab[]} tabs 開くタブ
+   * @return {Promise<void>} 1件でも開けなかったらreject
+   */
+  const openTabsWithGroups = async (tabs: model.Tab[]): Promise<void> => {
+    const results = await Promise.allSettled(
+      tabs.map((tab) =>
+        chromeService.tab
+          .createTabs({ url: tab.url, active: false })
+          .then((created) => ({ tab: tab, id: created.id })),
+      ),
+    );
+    const opened = results.flatMap((result) =>
+      result.status === 'fulfilled' ? [result.value] : [],
+    );
+    const failed = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    );
+    const groups = block.groups;
+    if (groups == null) {
+      if (failed.length > 0) {
+        throw failed[0];
+      }
+      return;
+    }
+    // グループごとに開いたタブのidを集める。保存時に同じグループだった
+    // タブだけがまとまるので、グループに属していなかったタブは素のまま残る
+    const tabIdsByGroup = new Map<number, number[]>();
+    for (const { tab, id } of opened) {
+      if (tab.group == null || id == null) {
+        continue;
+      }
+      const tabIds = tabIdsByGroup.get(tab.group) ?? [];
+      tabIds.push(id);
+      tabIdsByGroup.set(tab.group, tabIds);
+    }
+    // 1つのグループの失敗で残りのグループまで諦めない
+    await Promise.all(
+      [...tabIdsByGroup].map(([groupIndex, tabIds]) => {
+        const group = groups[groupIndex];
+        if (group == null) {
+          return Promise.resolve();
+        }
+        return chromeService.tab
+          .groupTabs(tabIds, group)
+          .catch((error) => chromeService.errorLog.set(error))
+          .catch(console.error);
+      }),
+    );
+    if (failed.length > 0) {
+      throw failed[0];
+    }
   };
 
   const openAllTab = () => {
@@ -286,11 +351,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     }
     if (locked) {
       // ロック中は開くだけで一覧から消さない
-      Promise.all(
-        openTabs.map((tab) =>
-          chromeService.tab.createTabs({ url: tab.url, active: false }),
-        ),
-      ).catch((error) => {
+      openTabsWithGroups(openTabs).catch((error) => {
         chromeService.errorLog.set(error).catch(console.error);
       });
       return;
@@ -301,11 +362,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     // 開けた分だけ消すと、失敗したタブだけが残ったのか
     // 全部残ったのかをユーザーが見分けられない
     trackTabWrite(
-      Promise.all(
-        openTabs.map((tab) =>
-          chromeService.tab.createTabs({ url: tab.url, active: false }),
-        ),
-      ).then(() => {
+      openTabsWithGroups(openTabs).then(() => {
         // 開いたタブだけを消す。開けなかったタブまでブロックごと消すと、
         // 一覧に見えていたタブが開かれもせず失われる
         removeTabs(openTabs).catch(() => {});
@@ -752,6 +809,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
               >
                 <Tab
                   tab={tab}
+                  group={
+                    tab.group == null ? undefined : block.groups?.[tab.group]
+                  }
                   deleteClick={() => deleteClick(index)}
                   editClick={() => startTabEdit(index)}
                   openLinkClick={() => openLink(index)}

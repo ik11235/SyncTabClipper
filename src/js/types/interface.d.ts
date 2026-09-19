@@ -26,11 +26,35 @@ export namespace model {
      * undefinedになる
      */
     starred?: boolean;
+    /**
+     * 保存したときにタブが属していたChromeのタブグループ。
+     * タブ側はこの配列への添字(Tab.group)で参照する。名前と色をタブごとに
+     * 複製するより小さく、同じグループの実体が1つに定まる。
+     * グループを使っていないブロック（タブグループを知らなかった頃に
+     * 保存されたデータを含む）はundefinedになる
+     */
+    groups?: TabGroup[];
+  }
+
+  /**
+   * 保存したときのタブグループ。名前は付けていないことがある
+   * （Chromeでは色だけのグループを作れる）
+   */
+  interface TabGroup {
+    title?: string;
+    // chrome.tabGroups.Colorの値。知らない色が降ってきたら既定値へ寄せる
+    color: string;
   }
 
   interface Tab {
     url: string;
     title: string;
+    /**
+     * 属していたタブグループのBlock.groupsへの添字。
+     * グループに属していなかったタブと、タブグループを知らなかった頃に
+     * 保存されたタブはundefinedになる
+     */
+    group?: number;
   }
 
   /**

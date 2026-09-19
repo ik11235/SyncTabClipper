@@ -248,10 +248,63 @@ export namespace chromeService {
   }
 
   export namespace tab {
+    /**
+     * タブを開く。
+     * 作成したタブを返すのは、タブグループの再構成(#191)にidが要るため
+     * @param {chrome.tabs.CreateProperties} properties 開くタブ
+     * @return {Promise<chrome.tabs.Tab>} 開いたタブ
+     */
     export async function createTabs(
       properties: chrome.tabs.CreateProperties,
+    ): Promise<chrome.tabs.Tab> {
+      return chrome.tabs.create(properties);
+    }
+
+    /**
+     * 保存時のタブグループを、開いたタブに対して再構成する(#191)。
+     * 名前と色まで戻すのが目的なので、グループを作るところで終わらせず
+     * tabGroups.updateまで行う
+     * @param {number[]} tabIds まとめるタブのid
+     * @param {model.TabGroup} group 復元するグループの名前と色
+     * @return {Promise<void>}
+     */
+    export async function groupTabs(
+      tabIds: number[],
+      group: model.TabGroup,
     ): Promise<void> {
-      await chrome.tabs.create(properties);
+      if (tabIds.length <= 0) {
+        return;
+      }
+      // tabIdsの型は空でないタプル。空配列を渡すとChromeも例外にするため、
+      // 上で弾いたうえでタプルとして渡す。
+      // createPropertiesを省くとタブのあるウィンドウにグループができる。
+      // 開く側(createTabs)もwindowIdを指定していないので現在のウィンドウで
+      // 揃う。片方だけウィンドウを指すようにすると食い違う
+      const groupId = await chrome.tabs.group({
+        tabIds: tabIds as [number, ...number[]],
+      });
+      await chrome.tabGroups.update(groupId, {
+        ...(group.title == null ? {} : { title: group.title }),
+        color: group.color as chrome.tabGroups.Color,
+      });
+    }
+
+    /**
+     * ウィンドウのタブグループを取得する。
+     * グループが取れないことと、タブを保存できないことは別なので、
+     * 失敗しても例外にせず空で返す（ここでthrowするとタブごと失う）
+     * @param {number} windowId 対象のウィンドウ
+     * @return {Promise<chrome.tabGroups.TabGroup[]>} タブグループ。失敗時は空
+     */
+    export async function queryTabGroups(
+      windowId: number,
+    ): Promise<chrome.tabGroups.TabGroup[]> {
+      try {
+        return await chrome.tabGroups.query({ windowId: windowId });
+      } catch (error) {
+        console.error(error);
+        return [];
+      }
     }
 
     async function closeTab(tab: chrome.tabs.Tab): Promise<void> {

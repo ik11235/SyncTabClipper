@@ -4,6 +4,10 @@ import { util } from '../util';
 
 interface TabProps {
   tab: model.Tab;
+  // 保存時にこのタブが属していたタブグループ(#191)。
+  // グループに属していなかったタブと、タブグループを知らなかった頃に
+  // 保存されたタブではundefinedになる
+  group?: model.TabGroup;
   deleteClick: VoidFunction;
   editClick: VoidFunction;
   openLinkClick: VoidFunction;
@@ -27,6 +31,25 @@ export const Tab: React.FC<TabProps> = (props) => {
 
   return (
     <li className="tab-root-dom">
+      {/* 保存時のタブグループ。「すべてのリンクを開く」で名前と色ごと
+          戻ることが一覧で分かるように出す。名前を付けずに色だけの
+          グループも作れるので、名前がないときは色だけを見せる */}
+      {props.group == null ? null : (
+        <span
+          className="tab-group-chip"
+          data-tab-group-color={props.group.color}
+          title={
+            props.group.title ??
+            chrome.i18n.getMessage('content_msg_tab_group_unnamed')
+          }
+        >
+          <span className="tab-group-dot" aria-hidden={true} />
+          <span className="tab-group-name">
+            {props.group.title ??
+              chrome.i18n.getMessage('content_msg_tab_group_unnamed')}
+          </span>
+        </span>
+      )}
       <img
         src={`https://www.google.com/s2/favicons?domain=${encodeDomain}`}
         alt={props.tab.title}
