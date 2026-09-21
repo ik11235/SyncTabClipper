@@ -18,6 +18,15 @@ updates:
           - 'react-dom'
           - '@types/react'
           - '@types/react-dom'
+      # @eslint/js は eslint 本体とメジャーを揃える必要があるため、
+      # eslint 関連は1つのPRにまとめて更新する
+      eslint:
+        patterns:
+          - 'eslint'
+          - '@eslint/*'
+          - 'eslint-config-*'
+          - 'eslint-plugin-*'
+          - 'typescript-eslint'
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
