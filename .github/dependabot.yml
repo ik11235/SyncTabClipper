@@ -9,6 +9,15 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
+    # react と react-dom はバージョンが完全一致している必要があるため、
+    # 型定義も含めて1つのPRにまとめて更新する
+    groups:
+      react:
+        patterns:
+          - 'react'
+          - 'react-dom'
+          - '@types/react'
+          - '@types/react-dom'
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
