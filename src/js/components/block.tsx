@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { model } from '../types/interface';
 import { chromeService } from '../chromeService';
 import { openableTab, Tab } from './tab';
