@@ -353,43 +353,34 @@ describe('EditTabModal', (): void => {
     });
 
     // オーバーレイの背景や、ダイアログ内のラベル文字・余白を押すと、
-    // 押した要素はフォーカスを受け取れずフォーカスがbodyまで落ちる。
-    // キー操作はダイアログのonKeyDownで拾っているので、そのままでは
-    // Escも循環も黙って効かなくなる
-    test('外へ出たフォーカスはダイアログへ連れ戻す', async (): Promise<void> => {
+    // 押した要素はフォーカスを受け取れない。ブラウザは最も近いフォーカス
+    // 可能な祖先を探すので、ルートが受け取れないとフォーカスはbodyまで
+    // 落ち、キー操作をダイアログで拾っている以上Escも循環も効かなくなる
+    test('ルートはフォーカスを受け取れる', async (): Promise<void> => {
       await mount(
         { url: 'https://example.com/', title: 'old title' },
         jest.fn().mockResolvedValue(undefined),
         jest.fn(),
       );
-      const all = focusables();
-      all[0]!.focus();
 
-      await act(async () => {
-        all[0]!.blur();
-      });
-
-      expect(document.activeElement).toBe(
-        container.querySelector('.edit-tab-modal'),
-      );
+      expect(
+        container.querySelector('.edit-tab-modal')!.getAttribute('tabindex'),
+      ).toBe('-1');
     });
 
     // 連れ戻した先でキー操作が効かないと意味がない
-    test('背景を押したあともEscで閉じられる', async (): Promise<void> => {
+    test('ルートにフォーカスがあってもEscで閉じられる', async (): Promise<void> => {
       const onCancel = jest.fn();
       await mount(
         { url: 'https://example.com/', title: 'old title' },
         jest.fn().mockResolvedValue(undefined),
         onCancel,
       );
-      const all = focusables();
-      all[0]!.focus();
-      await act(async () => {
-        all[0]!.blur();
-      });
+      const dialog = container.querySelector<HTMLElement>('.edit-tab-modal')!;
+      dialog.focus();
 
       await act(async () => {
-        document.activeElement!.dispatchEvent(
+        dialog.dispatchEvent(
           new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
         );
       });
@@ -397,22 +388,20 @@ describe('EditTabModal', (): void => {
       expect(onCancel).toHaveBeenCalledTimes(1);
     });
 
-    // 中で移っただけのフォーカスまで奪うと、入力欄から保存ボタンへ
-    // 移れなくなる
-    test('ダイアログの中で移ったフォーカスは奪わない', async (): Promise<void> => {
+    // ルートはfocusableの一覧に入らないため、素通しにすると
+    // ダイアログの手前＝背後のカードへ出てしまう
+    test('ルートからShift+Tabで最後の要素へ回る', async (): Promise<void> => {
       await mount(
         { url: 'https://example.com/', title: 'old title' },
         jest.fn().mockResolvedValue(undefined),
         jest.fn(),
       );
       const all = focusables();
-      all[0]!.focus();
+      container.querySelector<HTMLElement>('.edit-tab-modal')!.focus();
 
-      await act(async () => {
-        all[1]!.focus();
-      });
+      await pressTab(true);
 
-      expect(document.activeElement).toBe(all[1]);
+      expect(document.activeElement).toBe(all[all.length - 1]);
     });
 
     test('途中の要素ではブラウザの既定に任せる', async (): Promise<void> => {

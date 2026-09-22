@@ -109,46 +109,17 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
     }
     const first = focusable[0]!;
     const last = focusable[focusable.length - 1]!;
-    if (event.shiftKey && document.activeElement === first) {
+    // 背景や余白を押すと、ブラウザは最も近いフォーカス可能な祖先＝ルートへ
+    // フォーカスを当てる。ルートはfocusableの一覧に入らないので、そこから
+    // Shift+Tabを押すとダイアログの手前＝背後のカードへ出てしまう
+    const onRoot = document.activeElement === dialog.current;
+    if (event.shiftKey && (document.activeElement === first || onRoot)) {
       event.preventDefault();
       last.focus();
     } else if (!event.shiftKey && document.activeElement === last) {
       event.preventDefault();
       first.focus();
     }
-  };
-
-  /**
-   * ダイアログの外へ出たフォーカスを連れ戻す。
-   *
-   * オーバーレイの背景や、ダイアログの中でもラベルの文字・余白のように
-   * フォーカスを受け取れない場所を押すと、フォーカスはbodyまで落ちる。
-   * キー操作をダイアログのonKeyDownで拾っている以上、そうなるとEscも
-   * Tabの循環も黙って効かなくなる（keydownがダイアログを経由しない）。
-   * documentで拾っていた頃はフォーカスの位置に依存しなかったため、
-   * 中で拾うようにした時点で開いた穴。
-   * @return {void}
-   */
-  const onBlur = (): void => {
-    // focusoutの最中にfocus()を呼んでも、フォーカスの移動が終わった時点で
-    // 上書きされる。移動が決着してから、行き先を見て判断する
-    // （relatedTargetで先回りすると、ダイアログの中で移っただけの場合を
-    // 二重に判定することになる）
-    queueMicrotask(() => {
-      // 閉じたあとなら連れ戻す先がない（refはアンマウントでnullになる）。
-      // 呼び出し元が開いたボタンへ戻すので、ここで触ってはいけない
-      if (dialog.current == null) {
-        return;
-      }
-      if (dialog.current.contains(document.activeElement)) {
-        return;
-      }
-      // ウィンドウごとフォーカスを失った場合もここへ来るが、
-      // 背面のウィンドウのフォーカス位置を直すだけで手前には出ないので
-      // 邪魔にはならない（document.hasFocus()で分岐すると、jsdomが
-      // activeElementのないときfalseを返すためテストの側が嘘になる）
-      dialog.current.focus();
-    });
   };
 
   const submit = (event: React.FormEvent): void => {
@@ -190,11 +161,17 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
       aria-modal="true"
       aria-labelledby={headingId}
       ref={dialog}
-      // 背景を押してフォーカスが落ちたときの受け皿。
+      // 背景や余白を押したときの受け皿。ブラウザは最も近いフォーカス可能な
+      // 祖先へフォーカスを当てるため、これがあればフォーカスはダイアログの
+      // 中に留まり、Escもタブの循環も効き続ける（キー操作をここで拾う以上、
+      // フォーカスが外に落ちると黙って効かなくなる）。
+      // focusoutで連れ戻す形にしてはいけない。Chromeはfocusoutの前に
+      // focused elementをnullにするため、そこでfocus()を呼ぶと本来の移動先
+      // （次の入力欄）への移動ごと捨てられ、ダイアログの中で動けなくなる。
+      // jsdomはfocus()が同期で完結するためこの取りこぼしを再現しない。
       // タブ順には入れないので-1にする
       tabIndex={-1}
       onKeyDown={onKeyDown}
-      onBlur={onBlur}
     >
       <div className="uk-modal-dialog uk-modal-body">
         <h2 className="uk-modal-title" id={headingId}>
