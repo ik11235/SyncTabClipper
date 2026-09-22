@@ -1,15 +1,27 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { model } from '../types/interface';
 import { util } from '../util';
 
 interface EditTabModalProps {
   tab: model.Tab;
   /**
+   * 既存のタブを直すのか、新しいタブを足すのか(#253)。
+   * 入力欄・検証・保存の流れは同じなので、見出しと保存ボタンの文言だけを
+   * 切り替える。省略したときは従来どおり編集として扱う
+   */
+  mode?: 'edit' | 'add';
+  /**
    * 編集を始めたタブが、外からの変更（一覧の読み直し）で入れ替わったか。
    * trueのときは保存できない。indexで指した先が別のタブになっているため、
    * そのまま書くと無関係なタブを上書きする
    */
   targetLost?: boolean;
+  /**
+   * 開いている間にブロックがロックされたか。
+   * trueのときは保存できない。書きにいっても必ず弾かれるので、
+   * 「保存に失敗しました」を繰り返させず理由を出して止める
+   */
+  locked?: boolean;
   // storageへの永続化が終わるまで待つ。失敗時はrejectされるため、
   // モーダルを開いたまま入力を保持して再試行できる
   onSave: (newTab: model.Tab) => Promise<void>;
@@ -51,28 +63,68 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
   const [url, setUrl] = useState(toInputValue(props.tab.url));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const adding = props.mode === 'add';
+  // 保存を止める理由。どちらも書きにいっても弾かれるので、押させない
+  const blocked = props.targetLost === true || props.locked === true;
+  const dialog = useRef<HTMLDivElement>(null);
   const headingId = useId();
   const titleFieldId = useId();
   const urlFieldId = useId();
   const onCancel = props.onCancel;
 
-  // 保存中に閉じられると、書き込みの結果を受け取る相手がいなくなる。
-  // 「キャンセルしたのに保存されていた」「後から着地した保存が次に開いた
-  // モーダルを閉じる」といった状態を作らないため、保存中はEscもキャンセルも
-  // 効かせない（storage.syncの書き込みは必ず成功か失敗で決着する）
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && !saving) {
+  /**
+   * ダイアログの中のキー操作。
+   *
+   * Escapeをdocumentで拾うと、モーダルが2枚開いているときに1回のEscで
+   * 両方が閉じ、書きかけの入力まで一緒に消える。モーダルの中だけで拾う。
+   *
+   * 保存中に閉じられると、書き込みの結果を受け取る相手がいなくなる。
+   * 「キャンセルしたのに保存されていた」「後から着地した保存が次に開いた
+   * モーダルを閉じる」といった状態を作らないため、保存中はEscもキャンセルも
+   * 効かせない（storage.syncの書き込みは必ず成功か失敗で決着する）。
+   *
+   * Tabはダイアログの中で循環させる。aria-modalを名乗る以上キーボードでも
+   * 背後へ出られてはいけないし、出られると背後のカードの導線を操作して
+   * モーダルを重ねて開けてしまう（オーバーレイはポインタしか塞がない）
+   * @param {React.KeyboardEvent} event キーイベント
+   * @return {void}
+   */
+  const onKeyDown = (event: React.KeyboardEvent): void => {
+    if (event.key === 'Escape') {
+      if (!saving) {
         onCancel();
       }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onCancel, saving]);
+      return;
+    }
+    if (event.key !== 'Tab') {
+      return;
+    }
+    const focusable = Array.from(
+      dialog.current?.querySelectorAll<HTMLElement>(
+        'input:not([disabled]), button:not([disabled])',
+      ) ?? [],
+    );
+    if (focusable.length <= 0) {
+      return;
+    }
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    // 背景や余白を押すと、ブラウザは最も近いフォーカス可能な祖先＝ルートへ
+    // フォーカスを当てる。ルートはfocusableの一覧に入らないので、そこから
+    // Shift+Tabを押すとダイアログの手前＝背後のカードへ出てしまう
+    const onRoot = document.activeElement === dialog.current;
+    if (event.shiftKey && (document.activeElement === first || onRoot)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   const submit = (event: React.FormEvent): void => {
     event.preventDefault();
-    if (props.targetLost === true) {
+    if (blocked) {
       return;
     }
     const newTitle = title.trim();
@@ -83,7 +135,10 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
       return;
     }
     // URLとして解釈できない文字列を弾く。スキームまでは見ないため、
-    // これを通っても開けるURLとは限らない
+    // これを通っても開けるURLとは限らない。
+    // 手入力の導線(#253)ができてchrome.tabs.createが受け付けないURLを
+    // 入れやすくなったが、許可リストで絞るとchrome://newtabのような
+    // 使い方まで奪うため、スキームは見ない方針のままとする
     if (!util.isValidUrl(newUrl)) {
       setError(chrome.i18n.getMessage('content_msg_edit_tab_url_invalid'));
       return;
@@ -105,10 +160,24 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
       role="dialog"
       aria-modal="true"
       aria-labelledby={headingId}
+      ref={dialog}
+      // 背景や余白を押したときの受け皿。ブラウザは最も近いフォーカス可能な
+      // 祖先へフォーカスを当てるため、これがあればフォーカスはダイアログの
+      // 中に留まり、Escもタブの循環も効き続ける（キー操作をここで拾う以上、
+      // フォーカスが外に落ちると黙って効かなくなる）。
+      // focusoutで連れ戻す形にしてはいけない。Chromeはfocusoutの前に
+      // focused elementをnullにするため、そこでfocus()を呼ぶと本来の移動先
+      // （次の入力欄）への移動ごと捨てられ、ダイアログの中で動けなくなる。
+      // jsdomはfocus()が同期で完結するためこの取りこぼしを再現しない。
+      // タブ順には入れないので-1にする
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
     >
       <div className="uk-modal-dialog uk-modal-body">
         <h2 className="uk-modal-title" id={headingId}>
-          {chrome.i18n.getMessage('content_msg_edit_tab_heading')}
+          {chrome.i18n.getMessage(
+            adding ? 'content_msg_add_tab' : 'content_msg_edit_tab_heading',
+          )}
         </h2>
         <form onSubmit={submit}>
           <div className="uk-margin">
@@ -150,6 +219,13 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
               {chrome.i18n.getMessage('content_msg_edit_tab_target_lost')}
             </p>
           ) : null}
+          {/* 開いている間にロックされた。理由を出さないと
+              「保存に失敗しました」を永久に繰り返させることになる */}
+          {props.locked === true ? (
+            <p className="uk-text-danger edit-tab-locked" role="alert">
+              {chrome.i18n.getMessage('content_msg_locked_action_disabled')}
+            </p>
+          ) : null}
           <div className="uk-text-right">
             <button
               type="button"
@@ -162,9 +238,13 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
             <button
               type="submit"
               className="uk-button uk-button-primary uk-margin-small-left edit-tab-save"
-              disabled={saving || props.targetLost === true}
+              disabled={saving || blocked}
             >
-              {chrome.i18n.getMessage('content_msg_edit_tab_save')}
+              {chrome.i18n.getMessage(
+                adding
+                  ? 'content_msg_add_tab_save'
+                  : 'content_msg_edit_tab_save',
+              )}
             </button>
           </div>
         </form>

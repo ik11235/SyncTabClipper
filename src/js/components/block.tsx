@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { model } from '../types/interface';
 import { chromeService } from '../chromeService';
 import { openableTab, Tab } from './tab';
@@ -6,6 +6,7 @@ import BrokenTab from './brokenTab';
 import EditTabModal from './editTabModal';
 import { ErrorBoundary } from './errorBoundary';
 import { useBlockFlagToggle } from './useBlockFlagToggle';
+import { useEditorFocusReturn } from './useEditorFocusReturn';
 
 // 名前の入力欄に入れられる長さの上限。カードの見出しに収まる長さに抑えることと、
 // storage.syncの8KB/item制限を名前で圧迫しないことが目的。
@@ -65,6 +66,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // 別のタブを指しうる。開いたタブと突き合わせて、無関係なタブを
   // 上書きしないための控え
   const [editTarget, setEditTarget] = useState<model.Tab | null>(null);
+  // 手動でタブを足すモーダルを開いているか(#253)。編集と違って
+  // 対象のタブがないので、indexも控えも持たない
+  const [addingTab, setAddingTab] = useState(false);
   // 名前の編集中かどうか。編集を始めたときの名前をdraftの初期値にする
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [titleSaving, setTitleSaving] = useState(false);
@@ -361,6 +365,25 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     setEditTarget(target);
   };
 
+  // 末尾に足す。既存のタブの並びは触らない
+  const saveAddedTab = (newTab: model.Tab): Promise<void> =>
+    updateTabs((current) => [...current.tabs, newTab]).then(() => {
+      closeTabAdd();
+    });
+
+  const startTabAdd = () => {
+    // 呼び出し元の導線はロック中に塞いであるが、不変条件をUIの分岐だけに
+    // 預けると導線が増えたときに保護が黙って外れる
+    if (locked) {
+      return;
+    }
+    setAddingTab(true);
+  };
+
+  const closeTabAdd = () => {
+    setAddingTab(false);
+  };
+
   const closeTabEdit = () => {
     setEditIndex(null);
     setEditTarget(null);
@@ -425,27 +448,14 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     }
   };
 
-  // 編集をやめると見出しごとフォームが消えるため、フォーカスがbodyまで落ちて
-  // キーボード操作の現在位置が失われる。開いたときのボタンへ戻す
+  // 閉じたあとのフォーカス復帰。名前の編集も追加モーダルも同型なので
+  // useEditorFocusReturnへ寄せている（戻す先のボタンが、開いている間
+  // inertになる領域の中にあるため、commit後に戻す必要がある）
   const cardRoot = useRef<HTMLDivElement>(null);
   const titleEditButton = useRef<HTMLButtonElement>(null);
-  const titleWasEditing = useRef(false);
-  useEffect(() => {
-    if (titleWasEditing.current && titleDraft == null) {
-      // 保存は非同期なので、待っている間にユーザーが別の要素へフォーカスを
-      // 移していることがある。そこから奪い返すと入力先が飛ぶため、
-      // フォーカスがこのカードの中にあるか失われている場合だけ戻す
-      const active = document.activeElement;
-      if (
-        active == null ||
-        active === document.body ||
-        cardRoot.current?.contains(active) === true
-      ) {
-        titleEditButton.current?.focus();
-      }
-    }
-    titleWasEditing.current = titleDraft != null;
-  }, [titleDraft]);
+  const addTabButton = useRef<HTMLButtonElement>(null);
+  useEditorFocusReturn(titleDraft != null, titleEditButton, cardRoot);
+  useEditorFocusReturn(addingTab, addTabButton, cardRoot);
 
   // 編集対象のいまの位置。開いている間に一覧が読み直されるとindexの指す先が
   // ずれるため、ずれていたときだけ同じ内容のタブを探し直す。
@@ -468,7 +478,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // 到達できてしまう。開いている間にこのブロックのタブが増減すると、
   // 後から着地した保存が消したはずのタブを書き戻す。背後を操作不能にして塞ぐ
   // （aria-modalを名乗る以上、支援技術に対しても背後は無効であるべき）
-  const editing = editTarget != null && editIndex != null;
+  // モーダルを開いている間はカードの背後を触らせない。足すモーダルも
+  // 開いている間にタブが増減すると、後から着地した保存が打ち消し合う
+  const editing = (editTarget != null && editIndex != null) || addingTab;
   const titleEditing = titleDraft != null;
   // 名前もタブもブロックごと書き戻すため、両者が並行すると後から着地した側が
   // 相手の変更を打ち消す（名前が消える・開いたタブが一覧に戻る）。
@@ -717,6 +729,31 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
               {chrome.i18n.getMessage('content_msg_all_tab_open')}
             </span>
           </div>
+          <div className="uk-width-auto">
+            {/* 手動でリンクを足す(#253)。隣の「すべてのリンクを開く」は
+                spanのままだが、新しい導線はボタンにする。spanだと
+                キーボードのタブ順に入らず、支援技術からもボタンとして
+                扱われない。ロック中に押せないのは他の編集導線と同じで、
+                押せない理由をtitleで読ませるためフォーカスは残す */}
+            <button
+              type="button"
+              ref={addTabButton}
+              className="add_tab uk-link"
+              title={
+                locked
+                  ? chrome.i18n.getMessage('content_msg_locked_action_disabled')
+                  : undefined
+              }
+              aria-disabled={locked}
+              // 書き込みが飛行中に開かせない。着地でタブが全部消えると
+              // カードごとアンマウントされ、入力が何の通知もなく消える
+              // （名前の編集ボタンと同じ扱い）
+              disabled={tabsWriting}
+              onClick={locked ? undefined : startTabAdd}
+            >
+              {chrome.i18n.getMessage('content_msg_add_tab')}
+            </button>
+          </div>
           <div className="uk-width-expand" />
         </div>
       </div>
@@ -762,7 +799,16 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           )}
         </ul>
       </div>
-      {editTarget != null && editIndex != null ? (
+      {addingTab ? (
+        <EditTabModal
+          mode="add"
+          // 空欄から始める。既存のタブを指していないのでtargetLostもない
+          tab={{ url: '', title: '' }}
+          locked={locked}
+          onSave={saveAddedTab}
+          onCancel={closeTabAdd}
+        />
+      ) : editTarget != null && editIndex != null ? (
         <EditTabModal
           // 編集対象が変わったときに前のタブの入力が残らないようにする
           key={editIndex}
@@ -770,6 +816,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
           // 読まれないため、読み直しで入れ替わったタブを渡す意味はない
           tab={editTarget}
           targetLost={editTargetLost}
+          locked={locked}
           onSave={saveEditedTab}
           onCancel={closeTabEdit}
         />
