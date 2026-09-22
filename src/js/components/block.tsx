@@ -381,10 +381,6 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
 
   const closeTabAdd = () => {
     setAddingTab(false);
-    // モーダルが消えるとフォーカスがbodyまで落ちる。キーボードで開いた
-    // 場合にページ先頭からやり直しになるため、開いたボタンへ戻す
-    // （名前の編集が閉じたときと同じ扱い）
-    addTabButton.current?.focus();
   };
 
   const closeTabEdit = () => {
@@ -473,6 +469,28 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     }
     titleWasEditing.current = titleDraft != null;
   }, [titleDraft]);
+
+  // 追加モーダルが消えたときも同じ理由でボタンへ戻す。ただしここで
+  // 同期にfocus()を呼んではいけない。追加ボタンはaddingTabでinertになる
+  // ヘッダの中にあり、state更新の直後はDOMがまだ前回のrenderのままなので、
+  // inert配下へのfocus()は実ブラウザでは黙って無視される
+  // （jsdomはinertによるフォーカス遮断を実装していないためテストでは気付けない）。
+  // commit後に走るuseEffectなら、inertが外れたあとのDOMへ当てられる
+  const addTabWasOpen = useRef(false);
+  useEffect(() => {
+    if (addTabWasOpen.current && !addingTab) {
+      // 名前の編集と同じく、保存を待つ間に別の要素へ移っていたら奪い返さない
+      const active = document.activeElement;
+      if (
+        active == null ||
+        active === document.body ||
+        cardRoot.current?.contains(active) === true
+      ) {
+        addTabButton.current?.focus();
+      }
+    }
+    addTabWasOpen.current = addingTab;
+  }, [addingTab]);
 
   // 編集対象のいまの位置。開いている間に一覧が読み直されるとindexの指す先が
   // ずれるため、ずれていたときだけ同じ内容のタブを探し直す。

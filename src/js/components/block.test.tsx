@@ -2294,6 +2294,63 @@ describe('Block リンクの追加', (): void => {
     expect(document.activeElement).toBe(container.querySelector('.add_tab'));
   });
 
+  // 追加ボタンはaddingTabでinertになるヘッダの中にある。閉じる処理の中で
+  // 同期にfocus()を呼ぶと、DOMがまだ前回のrenderのままなのでinert配下への
+  // focus()になり、実ブラウザでは黙って無視される。jsdomはinertによる
+  // フォーカス遮断を実装していないため、activeElementを見るだけでは
+  // この取りこぼしに気付けない。focus()が呼ばれた時点のDOMを直接確かめる
+  test('フォーカスを戻すのはヘッダのinertが外れたあと', async (): Promise<void> => {
+    await mount(jest.fn().mockResolvedValue(undefined));
+
+    await clickAddTab();
+
+    const addButton = container.querySelector<HTMLButtonElement>('.add_tab')!;
+    let inertWhenFocused: boolean | null = null;
+    jest.spyOn(addButton, 'focus').mockImplementation((): void => {
+      inertWhenFocused = container
+        .querySelector('.block-card-header')!
+        .hasAttribute('inert');
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('.edit-tab-cancel')!.click();
+    });
+
+    expect(inertWhenFocused).toBe(false);
+  });
+
+  // 保存は非同期なので、待っている間にユーザーが別の要素へフォーカスを
+  // 移していることがある。そこから奪い返すと入力先が飛ぶ
+  // （名前の編集と同じ扱い）
+  test('保存を待っている間にフォーカスを移していたら奪い返さない', async (): Promise<void> => {
+    let resolveSave: () => void = () => {};
+    const updateBlock = jest.fn().mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+    await mount(updateBlock);
+
+    await clickAddTab();
+    await type('.edit-tab-title', 'title-b');
+    await type('.edit-tab-url', 'https://example.com/b');
+    await save();
+
+    // カードの外にある要素へフォーカスを移す
+    const outside = document.createElement('input');
+    document.body.appendChild(outside);
+    outside.focus();
+    try {
+      await act(async () => {
+        resolveSave();
+      });
+
+      expect(document.activeElement).toBe(outside);
+    } finally {
+      outside.remove();
+    }
+  });
+
   // 着地でタブが全部消えるとカードごとアンマウントされ、
   // 入力が何の通知もなく消える
   test('書き込みが飛行中は追加を始められない', async (): Promise<void> => {
