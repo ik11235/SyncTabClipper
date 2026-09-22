@@ -2319,10 +2319,10 @@ describe('Block リンクの追加', (): void => {
     expect(inertWhenFocused).toBe(false);
   });
 
-  // 保存は非同期なので、待っている間にユーザーが別の要素へフォーカスを
-  // 移していることがある。そこから奪い返すと入力先が飛ぶ
-  // （名前の編集と同じ扱い）
-  test('保存を待っている間にフォーカスを移していたら奪い返さない', async (): Promise<void> => {
+  // モーダルが開いている間、フォーカスはダイアログに閉じ込められる。
+  // 保存を待つ間に外へ移してもモーダルが連れ戻し、閉じたあとに追加ボタンへ
+  // 戻る（外を触れると背後の導線からモーダルを2枚開けてしまう）
+  test('保存を待つ間に外へ移したフォーカスはモーダルが連れ戻す', async (): Promise<void> => {
     let resolveSave: () => void = () => {};
     const updateBlock = jest.fn().mockReturnValue(
       new Promise<void>((resolve) => {
@@ -2339,13 +2339,20 @@ describe('Block リンクの追加', (): void => {
     // カードの外にある要素へフォーカスを移す
     const outside = document.createElement('input');
     document.body.appendChild(outside);
-    outside.focus();
     try {
+      await act(async () => {
+        outside.focus();
+      });
+
+      expect(document.activeElement).toBe(
+        container.querySelector('.edit-tab-modal'),
+      );
+
       await act(async () => {
         resolveSave();
       });
 
-      expect(document.activeElement).toBe(outside);
+      expect(document.activeElement).toBe(container.querySelector('.add_tab'));
     } finally {
       outside.remove();
     }

@@ -118,6 +118,39 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
     }
   };
 
+  /**
+   * ダイアログの外へ出たフォーカスを連れ戻す。
+   *
+   * オーバーレイの背景や、ダイアログの中でもラベルの文字・余白のように
+   * フォーカスを受け取れない場所を押すと、フォーカスはbodyまで落ちる。
+   * キー操作をダイアログのonKeyDownで拾っている以上、そうなるとEscも
+   * Tabの循環も黙って効かなくなる（keydownがダイアログを経由しない）。
+   * documentで拾っていた頃はフォーカスの位置に依存しなかったため、
+   * 中で拾うようにした時点で開いた穴。
+   * @return {void}
+   */
+  const onBlur = (): void => {
+    // focusoutの最中にfocus()を呼んでも、フォーカスの移動が終わった時点で
+    // 上書きされる。移動が決着してから、行き先を見て判断する
+    // （relatedTargetで先回りすると、ダイアログの中で移っただけの場合を
+    // 二重に判定することになる）
+    queueMicrotask(() => {
+      // 閉じたあとなら連れ戻す先がない（refはアンマウントでnullになる）。
+      // 呼び出し元が開いたボタンへ戻すので、ここで触ってはいけない
+      if (dialog.current == null) {
+        return;
+      }
+      if (dialog.current.contains(document.activeElement)) {
+        return;
+      }
+      // ウィンドウごとフォーカスを失った場合もここへ来るが、
+      // 背面のウィンドウのフォーカス位置を直すだけで手前には出ないので
+      // 邪魔にはならない（document.hasFocus()で分岐すると、jsdomが
+      // activeElementのないときfalseを返すためテストの側が嘘になる）
+      dialog.current.focus();
+    });
+  };
+
   const submit = (event: React.FormEvent): void => {
     event.preventDefault();
     if (blocked) {
@@ -157,7 +190,11 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
       aria-modal="true"
       aria-labelledby={headingId}
       ref={dialog}
+      // 背景を押してフォーカスが落ちたときの受け皿。
+      // タブ順には入れないので-1にする
+      tabIndex={-1}
       onKeyDown={onKeyDown}
+      onBlur={onBlur}
     >
       <div className="uk-modal-dialog uk-modal-body">
         <h2 className="uk-modal-title" id={headingId}>

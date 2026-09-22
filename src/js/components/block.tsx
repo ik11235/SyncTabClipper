@@ -6,6 +6,7 @@ import BrokenTab from './brokenTab';
 import EditTabModal from './editTabModal';
 import { ErrorBoundary } from './errorBoundary';
 import { useBlockFlagToggle } from './useBlockFlagToggle';
+import { useEditorFocusReturn } from './useEditorFocusReturn';
 
 // 名前の入力欄に入れられる長さの上限。カードの見出しに収まる長さに抑えることと、
 // storage.syncの8KB/item制限を名前で圧迫しないことが目的。
@@ -447,50 +448,14 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
     }
   };
 
-  // 編集をやめると見出しごとフォームが消えるため、フォーカスがbodyまで落ちて
-  // キーボード操作の現在位置が失われる。開いたときのボタンへ戻す
+  // 閉じたあとのフォーカス復帰。名前の編集も追加モーダルも同型なので
+  // useEditorFocusReturnへ寄せている（戻す先のボタンが、開いている間
+  // inertになる領域の中にあるため、commit後に戻す必要がある）
   const cardRoot = useRef<HTMLDivElement>(null);
   const titleEditButton = useRef<HTMLButtonElement>(null);
   const addTabButton = useRef<HTMLButtonElement>(null);
-  const titleWasEditing = useRef(false);
-  useEffect(() => {
-    if (titleWasEditing.current && titleDraft == null) {
-      // 保存は非同期なので、待っている間にユーザーが別の要素へフォーカスを
-      // 移していることがある。そこから奪い返すと入力先が飛ぶため、
-      // フォーカスがこのカードの中にあるか失われている場合だけ戻す
-      const active = document.activeElement;
-      if (
-        active == null ||
-        active === document.body ||
-        cardRoot.current?.contains(active) === true
-      ) {
-        titleEditButton.current?.focus();
-      }
-    }
-    titleWasEditing.current = titleDraft != null;
-  }, [titleDraft]);
-
-  // 追加モーダルが消えたときも同じ理由でボタンへ戻す。ただしここで
-  // 同期にfocus()を呼んではいけない。追加ボタンはaddingTabでinertになる
-  // ヘッダの中にあり、state更新の直後はDOMがまだ前回のrenderのままなので、
-  // inert配下へのfocus()は実ブラウザでは黙って無視される
-  // （jsdomはinertによるフォーカス遮断を実装していないためテストでは気付けない）。
-  // commit後に走るuseEffectなら、inertが外れたあとのDOMへ当てられる
-  const addTabWasOpen = useRef(false);
-  useEffect(() => {
-    if (addTabWasOpen.current && !addingTab) {
-      // 名前の編集と同じく、保存を待つ間に別の要素へ移っていたら奪い返さない
-      const active = document.activeElement;
-      if (
-        active == null ||
-        active === document.body ||
-        cardRoot.current?.contains(active) === true
-      ) {
-        addTabButton.current?.focus();
-      }
-    }
-    addTabWasOpen.current = addingTab;
-  }, [addingTab]);
+  useEditorFocusReturn(titleDraft != null, titleEditButton, cardRoot);
+  useEditorFocusReturn(addingTab, addTabButton, cardRoot);
 
   // 編集対象のいまの位置。開いている間に一覧が読み直されるとindexの指す先が
   // ずれるため、ずれていたときだけ同じ内容のタブを探し直す。

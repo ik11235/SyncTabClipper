@@ -352,6 +352,69 @@ describe('EditTabModal', (): void => {
       expect(document.activeElement).toBe(all[all.length - 1]);
     });
 
+    // オーバーレイの背景や、ダイアログ内のラベル文字・余白を押すと、
+    // 押した要素はフォーカスを受け取れずフォーカスがbodyまで落ちる。
+    // キー操作はダイアログのonKeyDownで拾っているので、そのままでは
+    // Escも循環も黙って効かなくなる
+    test('外へ出たフォーカスはダイアログへ連れ戻す', async (): Promise<void> => {
+      await mount(
+        { url: 'https://example.com/', title: 'old title' },
+        jest.fn().mockResolvedValue(undefined),
+        jest.fn(),
+      );
+      const all = focusables();
+      all[0]!.focus();
+
+      await act(async () => {
+        all[0]!.blur();
+      });
+
+      expect(document.activeElement).toBe(
+        container.querySelector('.edit-tab-modal'),
+      );
+    });
+
+    // 連れ戻した先でキー操作が効かないと意味がない
+    test('背景を押したあともEscで閉じられる', async (): Promise<void> => {
+      const onCancel = jest.fn();
+      await mount(
+        { url: 'https://example.com/', title: 'old title' },
+        jest.fn().mockResolvedValue(undefined),
+        onCancel,
+      );
+      const all = focusables();
+      all[0]!.focus();
+      await act(async () => {
+        all[0]!.blur();
+      });
+
+      await act(async () => {
+        document.activeElement!.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+        );
+      });
+
+      expect(onCancel).toHaveBeenCalledTimes(1);
+    });
+
+    // 中で移っただけのフォーカスまで奪うと、入力欄から保存ボタンへ
+    // 移れなくなる
+    test('ダイアログの中で移ったフォーカスは奪わない', async (): Promise<void> => {
+      await mount(
+        { url: 'https://example.com/', title: 'old title' },
+        jest.fn().mockResolvedValue(undefined),
+        jest.fn(),
+      );
+      const all = focusables();
+      all[0]!.focus();
+
+      await act(async () => {
+        all[1]!.focus();
+      });
+
+      expect(document.activeElement).toBe(all[1]);
+    });
+
     test('途中の要素ではブラウザの既定に任せる', async (): Promise<void> => {
       await mount(
         { url: 'https://example.com/', title: 'old title' },
