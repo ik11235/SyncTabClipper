@@ -853,7 +853,7 @@ describe('chromeService.ContextMenus.recreateMenus', (): void => {
     // removeAllが効かなかった場合でも、エラーがUnchecked runtime.lastErrorとして
     // 握りつぶされずに呼び出し側へ届く
     chrome.contextMenus.removeAll = (): Promise<void> => Promise.resolve();
-    registered.set('SyncTabClipper.mainMenu', {});
+    registered.set('SyncTabClipper.mainMenu', { title: 'SyncTabClipper' });
 
     await expect(chromeService.ContextMenus.recreateMenus()).rejects.toThrow(
       'Cannot create item with duplicate id SyncTabClipper.mainMenu',
