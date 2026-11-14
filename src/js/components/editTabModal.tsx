@@ -59,8 +59,8 @@ const toInputValue = (value: unknown): string => {
 };
 
 export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
-  const [title, setTitle] = useState(toInputValue(props.tab.title));
-  const [url, setUrl] = useState(toInputValue(props.tab.url));
+  const [title, setTitle] = useState(() => toInputValue(props.tab.title));
+  const [url, setUrl] = useState(() => toInputValue(props.tab.url));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const adding = props.mode === 'add';

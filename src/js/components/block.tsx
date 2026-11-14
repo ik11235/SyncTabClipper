@@ -766,6 +766,9 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
             // titleが読めるので通常のタブとして表示する
             tab?.url == null ? (
               <BrokenTab
+                // タブは保存データにidを持たず、同じurlのタブも並びうるため
+                // 位置で識別するしかない
+                // eslint-disable-next-line @eslint-react/no-array-index-key
                 key={`${index}-broken`}
                 deleteClick={() => deleteClick(index)}
                 locked={locked}
@@ -776,6 +779,8 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
               // 一次防御は上のurlの明示チェックで、この境界は
               // 想定していない壊れ方（titleが文字列でない等）への保険
               <ErrorBoundary
+                // 上のBrokenTabと同じく位置で識別する
+                // eslint-disable-next-line @eslint-react/no-array-index-key
                 key={`${index}-${tab.url}`}
                 // urlが変わればkeyごと変わって再マウントされるが、
                 // 同じurlのままtitleだけ直ったケースはkeyでは拾えない

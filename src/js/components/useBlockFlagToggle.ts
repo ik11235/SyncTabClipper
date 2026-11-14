@@ -159,9 +159,11 @@ export function useBlockFlagToggle(
   // 一覧の読み直し(#249)でも新しいオブジェクトが降りてくるため、他端末の
   // 変更で赤字が消えることはある。失敗自体はerrorLog経由でページ上部の
   // アラートに残るので、消える方に倒している
-  useEffect(() => {
+  const [prevBlock, setPrevBlock] = useState(block);
+  if (prevBlock !== block) {
+    setPrevBlock(block);
     setError(null);
-  }, [block]);
+  }
 
   return {
     active: active,
