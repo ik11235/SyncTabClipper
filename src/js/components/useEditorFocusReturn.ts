@@ -35,9 +35,9 @@ export function useEditorFocusReturn(
   buttonRef: RefObject<HTMLButtonElement | null>,
   cardRootRef: RefObject<HTMLElement | null>,
 ): void {
-  const wasOpen = useRef(false);
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (wasOpen.current && !open) {
+    if (wasOpenRef.current && !open) {
       const active = document.activeElement;
       if (
         active == null ||
@@ -47,6 +47,6 @@ export function useEditorFocusReturn(
         buttonRef.current?.focus();
       }
     }
-    wasOpen.current = open;
+    wasOpenRef.current = open;
   }, [open, buttonRef, cardRootRef]);
 }

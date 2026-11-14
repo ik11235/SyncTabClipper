@@ -21,11 +21,11 @@ interface MainProps {
 const Main: React.FC<MainProps> = (props) => {
   // 並び替えでカードが動いたことを見せるのはこのフックが担う。
   // 外から降ってきた変更では画面を動かさない（読んでいた位置が飛ぶ）
-  const listRoot = useBlockMoveAnimation(props.blocks, !props.fromStorage);
+  const listRootRef = useBlockMoveAnimation(props.blocks, !props.fromStorage);
 
   if (props.blocks.length > 0) {
     return (
-      <div ref={listRoot}>
+      <div ref={listRootRef}>
         {props.blocks.map((entry) =>
           blockService.isBrokenBlock(entry) ? (
             <BrokenBlock

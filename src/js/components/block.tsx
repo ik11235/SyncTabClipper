@@ -77,7 +77,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   const titleHintId = useId();
   // 飛行中のタブ書き換えの本数。propsを見ても決着していない書き込みは
   // 分からないため、名前の編集を始めさせないための判断材料として自前で数える
-  const tabWritesInFlight = useRef(0);
+  const tabWritesInFlightRef = useRef(0);
   const [tabsWriting, setTabsWriting] = useState(false);
 
   /**
@@ -90,11 +90,11 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
    * @return {Promise} workと同じ結果を返すPromise
    */
   const trackTabWrite = <T,>(work: Promise<T>): Promise<T> => {
-    tabWritesInFlight.current += 1;
+    tabWritesInFlightRef.current += 1;
     setTabsWriting(true);
     const settled = (): void => {
-      tabWritesInFlight.current -= 1;
-      if (tabWritesInFlight.current <= 0) {
+      tabWritesInFlightRef.current -= 1;
+      if (tabWritesInFlightRef.current <= 0) {
         setTabsWriting(false);
       }
     };
@@ -451,11 +451,11 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
   // 閉じたあとのフォーカス復帰。名前の編集も追加モーダルも同型なので
   // useEditorFocusReturnへ寄せている（戻す先のボタンが、開いている間
   // inertになる領域の中にあるため、commit後に戻す必要がある）
-  const cardRoot = useRef<HTMLDivElement>(null);
-  const titleEditButton = useRef<HTMLButtonElement>(null);
-  const addTabButton = useRef<HTMLButtonElement>(null);
-  useEditorFocusReturn(titleDraft != null, titleEditButton, cardRoot);
-  useEditorFocusReturn(addingTab, addTabButton, cardRoot);
+  const cardRootRef = useRef<HTMLDivElement>(null);
+  const titleEditButtonRef = useRef<HTMLButtonElement>(null);
+  const addTabButtonRef = useRef<HTMLButtonElement>(null);
+  useEditorFocusReturn(titleDraft != null, titleEditButtonRef, cardRootRef);
+  useEditorFocusReturn(addingTab, addTabButtonRef, cardRootRef);
 
   // 編集対象のいまの位置。開いている間に一覧が読み直されるとindexの指す先が
   // ずれるため、ずれていたときだけ同じ内容のタブを探し直す。
@@ -504,7 +504,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
       // 並び替えで動いたカードを見分けるための印。
       // useBlockMoveAnimationがこれで位置を追跡する
       data-block-index={block.indexNum}
-      ref={cardRoot}
+      ref={cardRootRef}
     >
       {/* お気に入りのリボン。一覧を眺めたときに目を引くのが役目なので、
           カード上端の全幅ではなく左肩に旗のように出す。
@@ -674,7 +674,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
                 加えて支援技術向けにaria-labelでも名前を与える */}
             <button
               type="button"
-              ref={titleEditButton}
+              ref={titleEditButtonRef}
               className="uk-link uk-margin-small-left block-title-edit"
               data-uk-icon="icon: pencil; ratio: 0.9"
               // 押せない理由はタブ行のアイコンと同じ文言で伝える
@@ -737,7 +737,7 @@ const Block: React.FC<BlockProps> = React.memo((props) => {
                 押せない理由をtitleで読ませるためフォーカスは残す */}
             <button
               type="button"
-              ref={addTabButton}
+              ref={addTabButtonRef}
               className="add_tab uk-link"
               title={
                 locked

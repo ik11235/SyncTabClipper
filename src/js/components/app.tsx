@@ -28,8 +28,8 @@ const App: React.FC = () => {
   // 読み直しが飛行中か。並行して走らせると、先に始まった読み込みが後から
   // 着地して古い一覧に戻す。1件ずつ書き込むインポートでは全件の読み直しが
   // 書き込みの回数だけ重なるため、飛行中の変更は1回に畳んで待たせる
-  const reloading = useRef(false);
-  const reloadQueued = useRef(false);
+  const reloadingRef = useRef(false);
+  const reloadQueuedRef = useRef(false);
 
   // 書き込み時点の一覧を読むための写し。書き込みの直列化(#248)では
   // 次の書き込みが再レンダリングを待たずに走るため、stateだけを見ると
@@ -42,11 +42,11 @@ const App: React.FC = () => {
   }, []);
 
   const reload = useCallback((): void => {
-    if (reloading.current) {
-      reloadQueued.current = true;
+    if (reloadingRef.current) {
+      reloadQueuedRef.current = true;
       return;
     }
-    reloading.current = true;
+    reloadingRef.current = true;
     const run = (): void => {
       chromeService.storage
         .getAllBlock()
@@ -59,12 +59,12 @@ const App: React.FC = () => {
         })
         .finally(() => {
           // 待たせていた変更は、いま読んだ内容より新しいので読み直す
-          if (reloadQueued.current) {
-            reloadQueued.current = false;
+          if (reloadQueuedRef.current) {
+            reloadQueuedRef.current = false;
             run();
             return;
           }
-          reloading.current = false;
+          reloadingRef.current = false;
         });
     };
     run();
@@ -94,13 +94,13 @@ const App: React.FC = () => {
   // ブロックごとの書き込みキュー。updateBlockはブロックを丸ごと書き戻すため、
   // 同じブロックへの書き込みが並行すると後から着地した側が相手の変更を
   // 打ち消す。indexNumごとに直列化して、必ず直前の結果の上に積む
-  const writeQueues = useRef(new Map<number, Promise<void>>());
+  const writeQueuesRef = useRef(new Map<number, Promise<void>>());
 
   // 全データ削除の最中かどうか。allClearが着地するまでblocksRefは削除前の
   // ままなので、この間に始まった書き込みはupdateBlockの
   // 「消えたブロックには書き戻さない」ガードをすり抜けて、
   // 消したはずのブロックをstorageへ戻してしまう
-  const clearingAll = useRef(false);
+  const clearingAllRef = useRef(false);
 
   // ブロックの変更をstorageへ永続化し、成功時のみstateへ反映する。
   // 更新内容ではなく更新関数を受け取るのは、chrome.tabs.createを待つ間に
@@ -115,7 +115,7 @@ const App: React.FC = () => {
     (indexNum: number, job: () => Promise<void>): Promise<void> => {
       const start = (): Promise<void> => {
         // これから消える一覧へ書いても意味がないので、書かずに解決する
-        if (clearingAll.current) {
+        if (clearingAllRef.current) {
           return Promise.resolve();
         }
         try {
@@ -126,7 +126,7 @@ const App: React.FC = () => {
           return Promise.reject(error);
         }
       };
-      const inFlight = writeQueues.current.get(indexNum);
+      const inFlight = writeQueuesRef.current.get(indexNum);
       // 飛行中の書き込みがなければその場で始める。待たせるだけの
       // マイクロタスクを挟むと、書き込み中の表示（tabsWriting）が
       // 独立したレンダリングとして一瞬見えてしまう。
@@ -139,11 +139,11 @@ const App: React.FC = () => {
       // 自分が最後尾のときだけ後始末する。あとから積まれていたら
       // そちらが末尾なので消さない
       const cleanup = (): void => {
-        if (writeQueues.current.get(indexNum) === queued) {
-          writeQueues.current.delete(indexNum);
+        if (writeQueuesRef.current.get(indexNum) === queued) {
+          writeQueuesRef.current.delete(indexNum);
         }
       };
-      writeQueues.current.set(indexNum, queued);
+      writeQueuesRef.current.set(indexNum, queued);
       queued.then(cleanup, cleanup);
       return queued;
     },
@@ -242,15 +242,15 @@ const App: React.FC = () => {
     // これ以降に積まれる書き込みはclearingAllで止まるので、
     // いま飛行中のものだけを待てばよい。待たずに消すと、あとから着地した
     // 書き込みが消したはずのブロックをstorageへ戻す
-    clearingAll.current = true;
-    return Promise.allSettled([...writeQueues.current.values()])
+    clearingAllRef.current = true;
+    return Promise.allSettled([...writeQueuesRef.current.values()])
       .then(() => chromeService.storage.allClear())
       .then(() => {
         setFromStorage(false);
         applyBlocks([]);
       })
       .finally(() => {
-        clearingAll.current = false;
+        clearingAllRef.current = false;
       });
   }, [applyBlocks]);
 
