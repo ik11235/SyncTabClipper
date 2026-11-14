@@ -7,6 +7,8 @@ import 'uikit/dist/css/uikit.min.css';
 // UIkitを上書きするため必ずuikitの後に読み込む
 import '../css/app.css';
 
+// UIkitのプラグイン登録でReact Hookではない。use始まりの名前でrules-of-hooksが誤検知する
+// eslint-disable-next-line @eslint-react/rules-of-hooks
 UIkit.use(Icons);
 
 // scriptはdefer読み込みのため、実行時点で#rootは必ず存在する

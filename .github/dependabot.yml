@@ -24,6 +24,7 @@ updates:
         patterns:
           - 'eslint'
           - '@eslint/*'
+          - '@eslint-react/*'
           - 'eslint-config-*'
           - 'eslint-plugin-*'
           - 'typescript-eslint'
