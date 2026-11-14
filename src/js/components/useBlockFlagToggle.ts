@@ -96,7 +96,7 @@ export function useBlockFlagToggle(
   const [error, setError] = useState<string | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   // 切り替えをキーボードから起動したか
-  const keyboardActivated = useRef(false);
+  const keyboardActivatedRef = useRef(false);
 
   const toggle = (event: React.MouseEvent): void => {
     if (!canStart()) {
@@ -105,7 +105,7 @@ export function useBlockFlagToggle(
     // キーボードから起動したクリックはdetailが0になる。
     // ブラウザはmousedownでもボタンにフォーカスを移すため、
     // activeElementを見てもマウス操作と区別できない
-    keyboardActivated.current = event.detail === 0;
+    keyboardActivatedRef.current = event.detail === 0;
     setError(null);
     setSaving(true);
     track(
@@ -136,22 +136,22 @@ export function useBlockFlagToggle(
   // フォーカスが失われている場合だけ戻せば足りる。
   // お気に入りはカードが一覧内を移動するが、ボタンはアンマウントされないので
   // refから同じ要素へ戻せる
-  const wasSaving = useRef(false);
+  const wasSavingRef = useRef(false);
   const preventScroll = options.preventScroll === true;
   useEffect(() => {
-    if (wasSaving.current && !saving) {
+    if (wasSavingRef.current && !saving) {
       // キーボードから押したときだけ戻す。マウスで押してから別の場所を
       // クリックした場合もフォーカスはbodyに落ちるため、bodyかどうかだけで
       // 判断すると、見ている位置から勝手にスクロールが戻ってしまう
       const activeElement = document.activeElement;
       if (
-        keyboardActivated.current &&
+        keyboardActivatedRef.current &&
         (activeElement == null || activeElement === document.body)
       ) {
         buttonRef.current?.focus({ preventScroll: preventScroll });
       }
     }
-    wasSaving.current = saving;
+    wasSavingRef.current = saving;
   }, [saving, preventScroll]);
 
   // 別の操作が成功してブロックが書き換わったら、前の失敗の赤字は現在の状態を
@@ -159,9 +159,11 @@ export function useBlockFlagToggle(
   // 一覧の読み直し(#249)でも新しいオブジェクトが降りてくるため、他端末の
   // 変更で赤字が消えることはある。失敗自体はerrorLog経由でページ上部の
   // アラートに残るので、消える方に倒している
-  useEffect(() => {
+  const [prevBlock, setPrevBlock] = useState(block);
+  if (prevBlock !== block) {
+    setPrevBlock(block);
     setError(null);
-  }, [block]);
+  }
 
   return {
     active: active,

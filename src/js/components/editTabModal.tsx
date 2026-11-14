@@ -59,14 +59,14 @@ const toInputValue = (value: unknown): string => {
 };
 
 export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
-  const [title, setTitle] = useState(toInputValue(props.tab.title));
-  const [url, setUrl] = useState(toInputValue(props.tab.url));
+  const [title, setTitle] = useState(() => toInputValue(props.tab.title));
+  const [url, setUrl] = useState(() => toInputValue(props.tab.url));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const adding = props.mode === 'add';
   // 保存を止める理由。どちらも書きにいっても弾かれるので、押させない
   const blocked = props.targetLost === true || props.locked === true;
-  const dialog = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const headingId = useId();
   const titleFieldId = useId();
   const urlFieldId = useId();
@@ -100,7 +100,7 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
       return;
     }
     const focusable = Array.from(
-      dialog.current?.querySelectorAll<HTMLElement>(
+      dialogRef.current?.querySelectorAll<HTMLElement>(
         'input:not([disabled]), button:not([disabled])',
       ) ?? [],
     );
@@ -112,7 +112,7 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
     // 背景や余白を押すと、ブラウザは最も近いフォーカス可能な祖先＝ルートへ
     // フォーカスを当てる。ルートはfocusableの一覧に入らないので、そこから
     // Shift+Tabを押すとダイアログの手前＝背後のカードへ出てしまう
-    const onRoot = document.activeElement === dialog.current;
+    const onRoot = document.activeElement === dialogRef.current;
     if (event.shiftKey && (document.activeElement === first || onRoot)) {
       event.preventDefault();
       last.focus();
@@ -160,7 +160,7 @@ export const EditTabModal: React.FC<EditTabModalProps> = (props) => {
       role="dialog"
       aria-modal="true"
       aria-labelledby={headingId}
-      ref={dialog}
+      ref={dialogRef}
       // 背景や余白を押したときの受け皿。ブラウザは最も近いフォーカス可能な
       // 祖先へフォーカスを当てるため、これがあればフォーカスはダイアログの
       // 中に留まり、Escもタブの循環も効き続ける（キー操作をここで拾う以上、

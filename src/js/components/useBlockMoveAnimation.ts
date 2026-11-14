@@ -193,32 +193,32 @@ export function useBlockMoveAnimation(
   blocks: model.BlockEntry[],
   cameraEnabled: boolean = true,
 ): RefObject<HTMLDivElement | null> {
-  const listRoot = useRef<HTMLDivElement>(null);
+  const listRootRef = useRef<HTMLDivElement>(null);
   // 直前のコミットでの各カードの位置。getBoundingClientRectはスクロールでも
   // 値が変わり、移動アニメーション中のtransformも拾ってしまうため、
   // レイアウト上の位置(offsetTop)で持つ
-  const previousTops = useRef(new Map<number, number>());
+  const previousTopsRef = useRef(new Map<number, number>());
   // 直前のコミットでのスクロール位置。カードが移動した瞬間はブラウザの
   // スクロールアンカリングが位置を補正するため、押した時点の位置は
   // 自分で覚えておく必要がある
-  const previousScrollY = useRef(0);
-  const previousStarred = useRef(new Map<number, boolean>());
-  const stopRunningMoves = useRef<(() => void) | null>(null);
+  const previousScrollYRef = useRef(0);
+  const previousStarredRef = useRef(new Map<number, boolean>());
+  const stopRunningMovesRef = useRef<(() => void) | null>(null);
 
   // 依存配列を持たないのは、カードの高さが変わる操作（名前の編集など）でも
   // 位置がずれるため。記録が古いままだと、次の並び替えで存在しない位置から
   // 滑り出してしまう
   useLayoutEffect(() => {
-    const list = listRoot.current;
+    const list = listRootRef.current;
     if (list == null) {
       return;
     }
-    const scrollYBefore = previousScrollY.current;
-    previousScrollY.current = window.scrollY;
+    const scrollYBefore = previousScrollYRef.current;
+    previousScrollYRef.current = window.scrollY;
 
     const starred = starredByIndexNum(blocks);
-    const newlyStarred = findNewlyStarred(starred, previousStarred.current);
-    previousStarred.current = starred;
+    const newlyStarred = findNewlyStarred(starred, previousStarredRef.current);
+    previousStarredRef.current = starred;
 
     const nextTops = new Map<number, number>();
     const moves: CardMove[] = [];
@@ -227,7 +227,7 @@ export function useBlockMoveAnimation(
       const indexNum = Number(card.dataset.blockIndex);
       const top = card.offsetTop;
       nextTops.set(indexNum, top);
-      const previousTop = previousTops.current.get(indexNum);
+      const previousTop = previousTopsRef.current.get(indexNum);
       if (previousTop == null || previousTop === top) {
         continue;
       }
@@ -239,15 +239,15 @@ export function useBlockMoveAnimation(
         };
       }
     }
-    previousTops.current = nextTops;
+    previousTopsRef.current = nextTops;
     if (moves.length <= 0) {
       return;
     }
 
     // 前の移動が走っている間に次の移動が始まったら、前のぶんは行き先へ
     // 着かせて終わらせる（transformが残ると位置がずれたままになる）
-    stopRunningMoves.current?.();
-    stopRunningMoves.current = null;
+    stopRunningMovesRef.current?.();
+    stopRunningMovesRef.current = null;
 
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       // アニメーションを控える設定では滑らせない。それでも移動先は見せる。
@@ -257,17 +257,17 @@ export function useBlockMoveAnimation(
       }
       return;
     }
-    stopRunningMoves.current = startCardMoves(moves, camera);
+    stopRunningMovesRef.current = startCardMoves(moves, camera);
   });
 
   // 一覧が消えるときに動かし続けない
   useEffect(
     () => (): void => {
-      stopRunningMoves.current?.();
-      stopRunningMoves.current = null;
+      stopRunningMovesRef.current?.();
+      stopRunningMovesRef.current = null;
     },
     [],
   );
 
-  return listRoot;
+  return listRootRef;
 }
