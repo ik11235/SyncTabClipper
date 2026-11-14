@@ -239,7 +239,7 @@ const App: React.FC = () => {
   // 全データ削除をstorageへ反映し、成功時のみ一覧を空にする。
   // 完了通知（alert）はUIを持つSideBar側で行うためPromiseを返す
   const deleteAllBlocks = useCallback((): Promise<void> => {
-    // これ以降に積まれる書き込みはclearingAllで止まるので、
+    // これ以降に積まれる書き込みはclearingAllRefで止まるので、
     // いま飛行中のものだけを待てばよい。待たずに消すと、あとから着地した
     // 書き込みが消したはずのブロックをstorageへ戻す
     clearingAllRef.current = true;
